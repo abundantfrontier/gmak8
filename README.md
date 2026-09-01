@@ -24,6 +24,8 @@ xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
 
 Open `Apps/gmak8/gmak8.xcodeproj` in Xcode and run the **gmak8** scheme.
 
+CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, Gmak8Kit tests, xcodebuild test).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
