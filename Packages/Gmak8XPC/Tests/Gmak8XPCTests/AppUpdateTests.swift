@@ -80,6 +80,34 @@ struct AppUpdateTests {
         )
     }
 
+    @Test func prepareDoesNotUnregisterWhenSubmitFails() {
+        let agent = MockUpdateLaunchAgent()
+        #expect(throws: AppUpdateError.submitFailed) {
+            try AppUpdateInstall.prepareWillInstall(
+                submitPrepareUpdate: { throw AppUpdateError.submitFailed },
+                wait: { true },
+                unregisterAgent: { try agent.unregister() }
+            )
+        }
+        #expect(agent.unregisterCount == 0)
+        #expect(
+            AppUpdateInstall.waitForCoreExit(
+                submitPrepareUpdate: { throw AppUpdateError.submitFailed },
+                wait: { true }
+            ) == .submitFailed
+        )
+    }
+
+    @Test func restoreOnlyWhenPrepareReachedCoreAndProcessExited() {
+        #expect(!AppUpdateInstall.shouldRestoreCore(after: .submitFailed, socketLive: true))
+        #expect(!AppUpdateInstall.shouldRestoreCore(after: .submitFailed, socketLive: false))
+        #expect(!AppUpdateInstall.shouldRestoreCore(after: .waitTimeout, socketLive: true))
+        #expect(AppUpdateInstall.shouldRestoreCore(after: .waitTimeout, socketLive: false))
+        #expect(!AppUpdateInstall.shouldRestoreCore(after: .ready, socketLive: true))
+        #expect(AppUpdateInstall.shouldRestoreCore(after: .ready, socketLive: false))
+        #expect(AppUpdateCopy.submitFailed != AppUpdateCopy.coreStillRunning)
+    }
+
     @Test func waitSucceedsWhenSocketGoneAndLocksFree() {
         let clock = FakeClock()
         let released = AppUpdateGate.waitUntilCoreReleased(

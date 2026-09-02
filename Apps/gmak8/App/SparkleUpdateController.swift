@@ -80,35 +80,30 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
         }
     }
 
-    private nonisolated static func waitForCoreExit(paths: HostPaths) -> Result<Void, AppUpdateError> {
-        do {
-            try AppUpdateInstall.waitForCoreExit(
-                submitPrepareUpdate: {
-                    do {
-                        try EngineClient.submit(.prepareUpdate, socketURL: paths.engineSocket)
-                        return .accepted
-                    } catch let error as CLIError where error == .engineNotRunning {
-                        return .coreNotRunning
-                    }
-                },
-                wait: {
-                    AppUpdateGate.waitUntilCoreReleased(
-                        socketURL: paths.engineSocket,
-                        lockURLs: paths.diskLockURLs
-                    )
+    private nonisolated static func waitForCoreExit(paths: HostPaths) -> AppUpdatePrepareResult {
+        AppUpdateInstall.waitForCoreExit(
+            submitPrepareUpdate: {
+                do {
+                    try EngineClient.submit(.prepareUpdate, socketURL: paths.engineSocket)
+                    return .accepted
+                } catch let error as CLIError where error == .engineNotRunning {
+                    return .coreNotRunning
                 }
-            )
-            return .success(())
-        } catch {
-            return .failure(.timeoutWaitingForCore)
-        }
+            },
+            wait: {
+                AppUpdateGate.waitUntilCoreReleased(
+                    socketURL: paths.engineSocket,
+                    lockURLs: paths.diskLockURLs
+                )
+            }
+        )
     }
 
-    private func finishPrepare(_ outcome: Result<Void, AppUpdateError>, keepRunning: Bool) {
+    private func finishPrepare(_ outcome: AppUpdatePrepareResult, keepRunning: Bool) {
         let reply = pendingInstallReply
         pendingInstallReply = nil
         switch outcome {
-        case .success:
+        case .ready:
             do {
                 try CoreLaunchAgent.unregister()
                 AppUpdatePendingStart.mark(keepClusterRunningOnQuit: keepRunning)
@@ -116,17 +111,31 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
             } catch {
                 AppUpdatePendingStart.clear()
                 reply?(.skip)
-                restoreCoreAndAlert(error)
+                failPrepare(outcome, error: error)
             }
-        case .failure(let error):
+        case .submitFailed:
             AppUpdatePendingStart.clear()
             reply?(.skip)
-            restoreCoreAndAlert(error)
+            failPrepare(outcome, error: AppUpdateError.submitFailed)
+        case .waitTimeout:
+            AppUpdatePendingStart.clear()
+            reply?(.skip)
+            failPrepare(outcome, error: AppUpdateError.timeoutWaitingForCore)
         }
     }
 
-    private func restoreCoreAndAlert(_ error: any Error) {
+    private func failPrepare(_ outcome: AppUpdatePrepareResult, error: any Error) {
         Gmak8Log.ui.error("update prepare failed: \(error.localizedDescription, privacy: .public)")
+        let socketURL = HostPaths.current().engineSocket
+        let socketLive = EngineSocketProbe.isLive(socketURL)
+        if AppUpdateInstall.shouldRestoreCore(after: outcome, socketLive: socketLive) {
+            restoreCoreAndAlert(error)
+            return
+        }
+        presentUpdateFailure(error)
+    }
+
+    private func restoreCoreAndAlert(_ error: any Error) {
         let bundleURL = Bundle.main.bundleURL
         let socketURL = HostPaths.current().engineSocket
         Task { @MainActor in
@@ -144,11 +153,15 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
                     "failed to restore gmak8-core: \(error.localizedDescription, privacy: .public)"
                 )
             }
-            let alert = NSAlert()
-            alert.messageText = "Update failed"
-            alert.informativeText = error.localizedDescription
-            alert.runModal()
+            presentUpdateFailure(error)
         }
+    }
+
+    private func presentUpdateFailure(_ error: any Error) {
+        let alert = NSAlert()
+        alert.messageText = "Update failed"
+        alert.informativeText = error.localizedDescription
+        alert.runModal()
     }
 }
 

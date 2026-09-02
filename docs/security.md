@@ -24,15 +24,15 @@ Do not commit Cosign private keys, Sparkle EdDSA private keys, or Notary `.p8` f
 
 An app update **quits gmak8-core** and **restarts the cluster**. Do not replace `gmak8.app` while `gmak8-core` is alive.
 
-Sparkle 2 uses EdDSA over an HTTPS appcast. Install path:
+Sparkle 2 uses EdDSA over an HTTPS appcast. Install path (skip-before-Install; do not `exit` the host):
 
-1. `willInstallUpdate` sends engine `prepareUpdate`.
+1. Before Sparkle receives `Install`, the UI sends engine `prepareUpdate`.
 2. `gmak8-core` ACPI-stops the guest, closes disk flocks, unlinks `engine.sock`, and exits 0.
-3. The UI unregisters the `gmak8-core` LaunchAgent (`SMAppService` agent only — not the menu extra) so KeepAlive cannot respawn from the old bundle.
-4. Wait until `engine.sock` is gone and `os.img` / `data.img` sidecar flocks are released (60 s). Fail the update if not.
-5. Sparkle swaps `gmak8.app`.
-6. Register the agent and launch `gmak8-core` from the new bundle (Helpers / `Contents/MacOS`, never `PATH`).
-7. If Settings “keep cluster running” is on, `start`.
+3. Wait until `connect(2)` on `engine.sock` fails (a leftover inode is not live) and `os.img` / `data.img` sidecar flocks are released (60 s).
+4. Unregister the `gmak8-core` LaunchAgent (`SMAppService` agent only — not the menu extra) so KeepAlive cannot respawn from the old bundle.
+5. Reply Sparkle `Install`. On any failure, reply `Skip` (`SPUCancelInstallation`) and leave the app running. Unregister/restore the agent only if `prepareUpdate` reached the core (or it was already gone) **and** the socket is not live.
+6. Sparkle swaps `gmak8.app`.
+7. Register the agent and launch `gmak8-core` from the new bundle (`Contents/MacOS`, never `PATH`) only if `engine.sock` is not live. If Settings “keep cluster running” is on, `start`.
 
 Updates require **`/Applications`**. Translocation (Downloads, quarantine) already refuses `SMAppService` register.
 

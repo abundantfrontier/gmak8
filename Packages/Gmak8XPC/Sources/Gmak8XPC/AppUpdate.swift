@@ -12,17 +12,27 @@ public enum AppUpdateCopy {
     public static let restartsCluster = "Updates restart the cluster."
     public static let coreStillRunning =
         "gmak8-core is still running. Do not replace gmak8.app while gmak8-core is alive."
+    public static let submitFailed = "Could not ask gmak8-core to stop for the update."
 }
 
-public enum AppUpdateError: Error, Equatable, LocalizedError {
+public enum AppUpdateError: Error, Equatable, LocalizedError, Sendable {
     case timeoutWaitingForCore
+    case submitFailed
 
     public var errorDescription: String? {
         switch self {
         case .timeoutWaitingForCore:
             return AppUpdateCopy.coreStillRunning
+        case .submitFailed:
+            return AppUpdateCopy.submitFailed
         }
     }
+}
+
+public enum AppUpdatePrepareResult: Equatable, Sendable {
+    case ready
+    case submitFailed
+    case waitTimeout
 }
 
 public enum AppUpdatePrepareSubmit: Equatable, Sendable {
@@ -90,11 +100,16 @@ public enum AppUpdateInstall {
     public static func waitForCoreExit(
         submitPrepareUpdate: () throws -> AppUpdatePrepareSubmit,
         wait: () -> Bool
-    ) throws {
-        _ = try submitPrepareUpdate()
-        if !wait() {
-            throw AppUpdateError.timeoutWaitingForCore
+    ) -> AppUpdatePrepareResult {
+        do {
+            _ = try submitPrepareUpdate()
+        } catch {
+            return .submitFailed
         }
+        if wait() {
+            return .ready
+        }
+        return .waitTimeout
     }
 
     /// Unregister only after sock+flocks are gone so launchd does not SIGTERM a still-stopping core.
@@ -103,8 +118,27 @@ public enum AppUpdateInstall {
         wait: () -> Bool,
         unregisterAgent: () throws -> Void
     ) throws {
-        try waitForCoreExit(submitPrepareUpdate: submitPrepareUpdate, wait: wait)
-        try unregisterAgent()
+        switch waitForCoreExit(submitPrepareUpdate: submitPrepareUpdate, wait: wait) {
+        case .ready:
+            try unregisterAgent()
+        case .submitFailed:
+            throw AppUpdateError.submitFailed
+        case .waitTimeout:
+            throw AppUpdateError.timeoutWaitingForCore
+        }
+    }
+
+    /// Unregister/restore only after prepare reached the core (or it was already gone) and it has exited.
+    public static func shouldRestoreCore(after result: AppUpdatePrepareResult, socketLive: Bool) -> Bool {
+        if socketLive {
+            return false
+        }
+        switch result {
+        case .submitFailed:
+            return false
+        case .ready, .waitTimeout:
+            return true
+        }
     }
 
     public static func finishAfterSwap(
