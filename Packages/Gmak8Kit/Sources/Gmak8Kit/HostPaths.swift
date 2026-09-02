@@ -79,6 +79,18 @@ public struct HostPaths: Equatable, Sendable {
         vmDirectory.appending(path: "data.img")
     }
 
+    public var osImageLock: URL {
+        URL(fileURLWithPath: osImage.path(percentEncoded: false) + ".lock")
+    }
+
+    public var dataImageLock: URL {
+        URL(fileURLWithPath: dataImage.path(percentEncoded: false) + ".lock")
+    }
+
+    public var diskLockURLs: [URL] {
+        [osImageLock, dataImageLock]
+    }
+
     public var efiNVRAM: URL {
         vmDirectory.appending(path: "efi-nvram.bin")
     }

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var appDelegate: Gmak8AppDelegate
 
     var body: some View {
         Form {
@@ -30,9 +31,10 @@ struct SettingsView: View {
                 Text("General")
             }
             Section {
-                Button("Check for Updates…") {}
-                    .disabled(true)
-                Text("Updates restart the cluster.")
+                Button(AppUpdateCopy.checkForUpdates) {
+                    appDelegate.checkForUpdates()
+                }
+                Text(AppUpdateCopy.restartsCluster)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {

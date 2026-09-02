@@ -22,6 +22,15 @@ public enum CoreLaunchAgent {
     public static let label = "dev.gmak8.core"
     public static let plistName = "dev.gmak8.core.plist"
     public static let bundleProgram = "Contents/MacOS/gmak8-core"
+    /// `KeepAlive.SuccessfulExit` in the LaunchAgent plist. `prepareUpdate` exits 0.
+    public static let keepAliveSuccessfulExit = false
+
+    public static func executableURL(bundleURL: URL) -> URL {
+        bundleURL
+            .appending(path: "Contents", directoryHint: .isDirectory)
+            .appending(path: "MacOS", directoryHint: .isDirectory)
+            .appending(path: "gmak8-core")
+    }
 
     /// Settings copy for the two Login Items rows.
     public static let twoLoginItemsExplanation =

@@ -84,6 +84,43 @@ struct ClusterEngineTests {
         #expect(engine.currentStatus().state == .stopped)
     }
 
+    @Test func prepareUpdateExitsCoreAfterStop() {
+        let scheduler = ManualEngineScheduler()
+        let processExit = RecordingProcessExit()
+        let engine = ClusterEngine(scheduler: scheduler, processExit: processExit)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.submit(.prepareUpdate) == .ok)
+        #expect(processExit.codes.isEmpty)
+        #expect(engine.currentStatus().state == .stopping)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(processExit.codes == [0])
+    }
+
+    @Test func prepareUpdateFromStoppedExitsCore() {
+        let scheduler = ManualEngineScheduler()
+        let processExit = RecordingProcessExit()
+        let engine = ClusterEngine(scheduler: scheduler, processExit: processExit)
+        #expect(engine.submit(.prepareUpdate) == .ok)
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(processExit.codes.isEmpty)
+        scheduler.runNext()
+        #expect(processExit.codes == [0])
+    }
+
+    @Test func stopDoesNotExitCore() {
+        let scheduler = ManualEngineScheduler()
+        let processExit = RecordingProcessExit()
+        let engine = ClusterEngine(scheduler: scheduler, processExit: processExit)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.submit(.stop) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(processExit.codes.isEmpty)
+    }
+
     @Test func subscribeStreamsStatusAndLogs() {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler)
@@ -455,6 +492,14 @@ private final class DeferredStartRuntime: VirtualMachineRuntime, @unchecked Send
         }
         let completion = startCompletions.removeFirst()
         completion(result)
+    }
+}
+
+private final class RecordingProcessExit: ProcessExiting, @unchecked Sendable {
+    var codes: [Int32] = []
+
+    func exitProcess(code: Int32) {
+        codes.append(code)
     }
 }
 

@@ -7,6 +7,16 @@ struct Gmak8AppTests {
         #expect(Gmak8Kit.version == "0.0.1")
     }
 
+    @Test func updateCopyWarnsThatClusterRestarts() {
+        #expect(AppUpdateCopy.checkForUpdates == "Check for Updates…")
+        #expect(AppUpdateCopy.restartsCluster == "Updates restart the cluster.")
+        #expect(AppUpdatePolicy.shouldStartAfterSwap(keepClusterRunningOnQuit: true))
+        #expect(!AppUpdatePolicy.shouldStartAfterSwap(keepClusterRunningOnQuit: false))
+        #expect(AppUpdatePolicy.duringSwap().agent == .unregister)
+        #expect(AppUpdatePolicy.duringSwap().extra == .keep)
+        #expect(AppUpdatePolicy.waitTimeout == 60)
+    }
+
     @Test func iconMapsEachClusterState() {
         #expect(MenuBarIconAppearance(state: .stopped) == .grayStopped)
         #expect(MenuBarIconAppearance(state: .stopping) == .grayStopped)

@@ -45,6 +45,13 @@ ThirdParty/gvproxy/src/
 .vscode/
 .env
 
+# Packaged artifacts (the cask formula stays in-tree)
+dist/*.dmg
+dist/*.app
+dist/*.pkg
+dist/*.zip
+dist/appcast.xml
+
 # Guest agent build product (linux/arm64). Installed into mkosi.extra at image build.
 guest/agent/gmak8-agent
 guest/mkosi/mkosi.extra/usr/local/bin/gmak8-agent

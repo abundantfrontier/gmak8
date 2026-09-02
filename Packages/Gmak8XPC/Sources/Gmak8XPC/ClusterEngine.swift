@@ -71,6 +71,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private let bringUp: any ClusterBringUp
     private let publisher: any PortPublisher
     private let diskReset: any ClusterDiskResetting
+    private let processExit: any ProcessExiting
 
     private var state: ClusterState = .stopped
     private var step: String?
@@ -78,6 +79,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private var apiEndpoint: String?
     private var failAfterStop: String?
     private var wipeDisksAfterStop = false
+    private var exitAfterStop = false
     private var generation: UInt64 = 0
     private var imageJob: ImageJobStatus?
     private var subscribers: [UUID: @Sendable (EngineEvent) -> Void] = [:]
@@ -88,7 +90,8 @@ public final class ClusterEngine: @unchecked Sendable {
         runtime: any VirtualMachineRuntime = FakeVirtualMachineRuntime(),
         bringUp: any ClusterBringUp = NoOpClusterBringUp(),
         publisher: any PortPublisher = NoOpPortPublisher(),
-        diskReset: any ClusterDiskResetting = NoOpClusterDiskReset()
+        diskReset: any ClusterDiskResetting = NoOpClusterDiskReset(),
+        processExit: any ProcessExiting = NoProcessExit()
     ) {
         self.scheduler = scheduler
         self.nestedVirt = nestedVirt
@@ -96,6 +99,7 @@ public final class ClusterEngine: @unchecked Sendable {
         self.bringUp = bringUp
         self.publisher = publisher
         self.diskReset = diskReset
+        self.processExit = processExit
         self.runtime.setUnexpectedStopHandler { [weak self] error in
             self?.handleUnexpectedStop(error)
         }
@@ -151,6 +155,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 apiEndpoint = nil
                 failAfterStop = nil
                 wipeDisksAfterStop = false
+                exitAfterStop = false
                 imageJob = nil
                 generation += 1
                 claimedGeneration = generation
@@ -209,9 +214,17 @@ public final class ClusterEngine: @unchecked Sendable {
         switch request {
         case .start:
             return .error(.invalidRequest)
-        case .stop, .prepareUpdate:
-            let logLine = request == .prepareUpdate ? "prepareUpdate" : "stop accepted"
-            return requestStopLocked(logLine: logLine, work: &work, events: &events)
+        case .stop:
+            return requestStopLocked(logLine: "stop accepted", work: &work, events: &events)
+        case .prepareUpdate:
+            exitAfterStop = true
+            let reply = requestStopLocked(logLine: "prepareUpdate", work: &work, events: &events)
+            if state == .stopped && work == nil {
+                work = { [weak self] in
+                    self?.finishPrepareUpdateExit()
+                }
+            }
+            return reply
         case .reset(let force):
             if !force {
                 return .error(.confirmationRequired)
@@ -416,6 +429,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private func completeStop(generation: UInt64, result: Result<Void, any Error>) {
         var events: [EngineEvent] = []
         var shouldWipe = false
+        var shouldExit = false
         withLock {
             guard generation == self.generation, state == .stopping else {
                 return
@@ -458,11 +472,23 @@ public final class ClusterEngine: @unchecked Sendable {
             }
             events.append(.status(currentStatusLocked()))
             events.append(.log(source: .engine, line: "stopped"))
+            if exitAfterStop {
+                shouldExit = true
+                exitAfterStop = false
+            }
         }
         broadcast(events)
         if shouldWipe {
             performDiskReset()
         }
+        if shouldExit {
+            finishPrepareUpdateExit()
+        }
+    }
+
+    private func finishPrepareUpdateExit() {
+        withLock { exitAfterStop = false }
+        processExit.exitProcess(code: 0)
     }
 
     private func performDiskReset() {

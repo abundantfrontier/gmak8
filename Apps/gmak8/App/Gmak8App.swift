@@ -1,4 +1,5 @@
 import Gmak8Kit
+import Gmak8XPC
 import SwiftUI
 
 @main
@@ -38,6 +39,7 @@ struct Gmak8App: App {
 
         Settings {
             SettingsView()
+                .environmentObject(appDelegate)
                 .environmentObject(appDelegate.settingsStore)
         }
     }
@@ -58,6 +60,11 @@ struct Gmak8Commands: Commands {
             }
             .keyboardShortcut("q", modifiers: [.command, .option])
             .disabled(!clusterActionsEnabled)
+        }
+        CommandGroup(after: .appInfo) {
+            Button(AppUpdateCopy.checkForUpdates) {
+                appDelegate.checkForUpdates()
+            }
         }
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") {

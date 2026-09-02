@@ -108,6 +108,7 @@ do {
             ]
         }
     )
+    let processExit = CoreProcessExit()
     let engine = ClusterEngine(
         scheduler: DispatchEngineScheduler(),
         runtime: CoreVirtualMachineRuntime(
@@ -116,9 +117,14 @@ do {
         ),
         bringUp: bringUp,
         publisher: publisher,
-        diskReset: HostClusterDiskReset(paths: paths)
+        diskReset: HostClusterDiskReset(paths: paths),
+        processExit: processExit
     )
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
+    processExit.setHandler { code in
+        server.stop()
+        Foundation.exit(code)
+    }
     Gmak8Log.core.info("gmak8-core listening on engine.sock")
     try server.run()
 } catch let code as EngineErrorCode where code == .locked {

@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Gmak8Kit
+import Gmak8XPC
 import SwiftUI
 
 enum Gmak8SceneID {
@@ -19,10 +20,14 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     private var forceStopAndQuit = false
     private var openWindow: ((String) -> Void)?
     private var settingsObservation: AnyCancellable?
+    private var sparkle: SparkleUpdateController!
 
     override init() {
         hasAskedFirstQuit = UserDefaults.standard.bool(forKey: Self.hasAskedKeepRunningKey)
         super.init()
+        sparkle = SparkleUpdateController { [weak self] in
+            self?.settingsStore.keepClusterRunningOnQuit ?? true
+        }
         settingsObservation = settingsStore.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -34,6 +39,9 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
             settingsStore.applyLaunchAtLoginIfNeeded()
         }
         session.startListening()
+        if AppUpdatePendingStart.consume() && !settingsStore.needsOnboarding {
+            session.startCluster(waitForEngine: true)
+        }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(windowWillClose(_:)),
@@ -98,6 +106,10 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
         ResetAlert.present(sheetWindow: resetSheetWindow()) { [weak self] in
             self?.session.resetCluster()
         }
+    }
+
+    func checkForUpdates() {
+        sparkle.checkForUpdates()
     }
 
     func openSettingsWindow() {

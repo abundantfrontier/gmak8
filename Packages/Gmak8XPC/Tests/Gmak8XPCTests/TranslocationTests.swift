@@ -65,6 +65,7 @@ struct CoreLaunchAgentTests {
         #expect(CoreLaunchAgent.label == "dev.gmak8.core")
         #expect(CoreLaunchAgent.plistName == "dev.gmak8.core.plist")
         #expect(CoreLaunchAgent.bundleProgram == "Contents/MacOS/gmak8-core")
+        #expect(!CoreLaunchAgent.keepAliveSuccessfulExit)
     }
 
     @Test func twoLoginItemsCopyNamesAgentAndMenuExtra() {

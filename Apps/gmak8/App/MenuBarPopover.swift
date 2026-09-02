@@ -86,9 +86,10 @@ struct MenuBarPopover: View {
                 appDelegate.openSettingsWindow()
             }
             .disabled(!clusterActionsEnabled)
-            Button("Check for Updates…") {}
-                .disabled(true)
-                .help("Updates restart the cluster.")
+            Button(AppUpdateCopy.checkForUpdates) {
+                appDelegate.checkForUpdates()
+            }
+            .help(AppUpdateCopy.restartsCluster)
             Button("Quit gmak8…") {
                 appDelegate.requestQuit()
             }
