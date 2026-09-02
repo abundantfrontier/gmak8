@@ -85,6 +85,15 @@ struct NDJSONCodecTests {
         #expect(try NDJSONCodec.decodeEvent(line: line) == event)
     }
 
+    @Test func decodeRequestTrimsCRLF() {
+        switch NDJSONCodec.decodeRequest(line: "{\"op\":\"status\"}\r") {
+        case .success(let request):
+            #expect(request == .status)
+        case .failure:
+            Issue.record("expected status")
+        }
+    }
+
     @Test func clusterStateRawValuesMatchProtocol() {
         #expect(
             ClusterState.allCases.map(\.rawValue) == [

@@ -61,13 +61,21 @@ public struct SecCodePeerIdentityResolver: PeerIdentityResolving, Sendable {
         let attributes = [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary
         let copyStatus = SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &code)
         guard copyStatus == errSecSuccess, let code else {
+            throw EngineErrorCode.unauthorized
+        }
+
+        let validity = SecCodeCheckValidity(code, SecCSFlags(), nil)
+        if validity == errSecCSUnsigned {
             return PeerIdentity(pid: pid, teamID: nil)
+        }
+        guard validity == errSecSuccess else {
+            throw EngineErrorCode.unauthorized
         }
 
         var staticCode: SecStaticCode?
         let staticStatus = SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode)
         guard staticStatus == errSecSuccess, let staticCode else {
-            return PeerIdentity(pid: pid, teamID: nil)
+            throw EngineErrorCode.unauthorized
         }
 
         var information: CFDictionary?
@@ -77,7 +85,7 @@ public struct SecCodePeerIdentityResolver: PeerIdentityResolving, Sendable {
             &information
         )
         guard infoStatus == errSecSuccess, let information else {
-            return PeerIdentity(pid: pid, teamID: nil)
+            throw EngineErrorCode.unauthorized
         }
 
         let teamID = (information as NSDictionary)[kSecCodeInfoTeamIdentifier] as? String

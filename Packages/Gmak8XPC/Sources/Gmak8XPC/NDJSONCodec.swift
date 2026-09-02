@@ -12,7 +12,7 @@ public enum NDJSONCodec {
     }
 
     public static func decode<T: Decodable>(_ type: T.Type, line: String) throws -> T {
-        let trimmed = line.trimmingCharacters(in: .newlines)
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let data = trimmed.data(using: .utf8), !trimmed.isEmpty else {
             throw EngineErrorCode.invalidRequest
         }

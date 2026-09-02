@@ -87,6 +87,30 @@ struct EngineSocketServerTests {
         #expect(LocalPeerPID.solLocal == SOL_LOCAL)
     }
 
+    @Test func instanceLockIsExclusiveAndMode0600() throws {
+        let harness = try SocketHarness()
+        defer { harness.stop() }
+
+        let lockPath = harness.server.instanceLockURL.path(percentEncoded: false)
+        let attributes = try FileManager.default.attributesOfItem(atPath: lockPath)
+        #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+
+        let fd = open(lockPath, O_RDWR)
+        #expect(fd >= 0)
+        defer { Darwin.close(fd) }
+        #expect(flock(fd, LOCK_EX | LOCK_NB) != 0)
+    }
+
+    @Test func crlfLinesAreAccepted() throws {
+        let harness = try SocketHarness()
+        defer { harness.stop() }
+
+        let client = try EngineTestClient(socketURL: harness.socketURL)
+        defer { client.close() }
+        try client.sendRaw("{\"op\":\"status\"}\r\n")
+        #expect(try client.readReply() == .ok)
+    }
+
     @Test func unauthorizedWhenTeamIDsDiffer() throws {
         let socketURL = URL(fileURLWithPath: "/tmp/g8-\(getpid())-\(UUID().uuidString.prefix(8)).sock")
         let scheduler = ManualEngineScheduler()
@@ -170,6 +194,13 @@ private final class EngineTestClient {
 
     func send(_ request: EngineRequest) throws {
         let data = try NDJSONCodec.encodeLine(request)
+        try writeAll(data)
+    }
+
+    func sendRaw(_ line: String) throws {
+        guard let data = line.data(using: .utf8) else {
+            throw EngineErrorCode.invalidRequest
+        }
         try writeAll(data)
     }
 

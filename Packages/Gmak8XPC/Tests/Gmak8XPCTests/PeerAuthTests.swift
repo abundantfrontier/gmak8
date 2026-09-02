@@ -40,4 +40,11 @@ struct PeerAuthTests {
         #expect(policy.isAuthorized(peer: selfIdentity, daemon: selfIdentity))
         #expect(selfIdentity.pid == pid)
     }
+
+    @Test func missingProcessThrowsUnauthorized() {
+        let resolver = SecCodePeerIdentityResolver()
+        #expect(throws: EngineErrorCode.unauthorized) {
+            try resolver.identity(for: 2_000_000_000)
+        }
+    }
 }

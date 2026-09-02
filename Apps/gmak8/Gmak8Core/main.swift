@@ -15,6 +15,9 @@ do {
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
     Gmak8Log.core.info("gmak8-core listening on engine.sock")
     try server.run()
+} catch let code as EngineErrorCode where code == .locked {
+    Gmak8Log.core.info("gmak8-core already running")
+    exit(0)
 } catch {
     Gmak8Log.core.error(
         "gmak8-core failed: \(error.localizedDescription, privacy: .public)"

@@ -2,11 +2,11 @@ import Darwin
 import Foundation
 
 public enum EngineSocketError: Error, Equatable, Sendable {
-    case locked
     case pathTooLong
     case socketFailed(errno: Int32)
     case bindFailed(errno: Int32)
     case listenFailed(errno: Int32)
+    case insecureMode
 }
 
 public final class EngineSocketServer: @unchecked Sendable {
@@ -20,8 +20,17 @@ public final class EngineSocketServer: @unchecked Sendable {
     private let lock = NSLock()
 
     private var listenFD: Int32 = -1
+    private var lockFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     private var connections: [Int32: Connection] = [:]
+
+    public var instanceLockURL: URL {
+        Self.instanceLockURL(for: socketURL)
+    }
+
+    public static func instanceLockURL(for socketURL: URL) -> URL {
+        URL(fileURLWithPath: socketURL.path(percentEncoded: false) + ".lock")
+    }
 
     public init(
         socketURL: URL,
@@ -69,6 +78,16 @@ public final class EngineSocketServer: @unchecked Sendable {
             withIntermediateDirectories: true
         )
 
+        try acquireInstanceLock()
+        do {
+            try bindAndListen(path: path)
+        } catch {
+            releaseInstanceLock()
+            throw error
+        }
+    }
+
+    private func bindAndListen(path: String) throws {
         if FileManager.default.fileExists(atPath: path) {
             if isSocketLive(path: path) {
                 throw EngineErrorCode.locked
@@ -76,30 +95,37 @@ public final class EngineSocketServer: @unchecked Sendable {
             unlink(path)
         }
 
+        var addr = try unixAddress(path: path)
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
             throw EngineSocketError.socketFailed(errno: errno)
         }
         applySocketFlags(fd)
 
-        var addr = try unixAddress(path: path)
+        let previousMask = umask(0o077)
         let bindResult = withUnsafePointer(to: &addr) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
                 bind(fd, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
+        umask(previousMask)
         if bindResult != 0 {
             let code = errno
-            close(fd)
+            Darwin.close(fd)
             throw EngineSocketError.bindFailed(errno: code)
         }
 
-        _ = chmod(path, 0o600)
-        _ = fchmod(fd, 0o600)
+        do {
+            try enforceOwnerReadWrite(path: path, fd: fd)
+        } catch {
+            Darwin.close(fd)
+            unlink(path)
+            throw error
+        }
 
         if listen(fd, 16) != 0 {
             let code = errno
-            close(fd)
+            Darwin.close(fd)
             unlink(path)
             throw EngineSocketError.listenFailed(errno: code)
         }
@@ -110,7 +136,7 @@ public final class EngineSocketServer: @unchecked Sendable {
             self?.acceptPending()
         }
         source.setCancelHandler {
-            close(fd)
+            Darwin.close(fd)
         }
         acceptSource = source
         source.resume()
@@ -128,6 +154,49 @@ public final class EngineSocketServer: @unchecked Sendable {
         acceptSource = nil
         listenFD = -1
         unlink(socketURL.path(percentEncoded: false))
+        releaseInstanceLock()
+    }
+
+    private func acquireInstanceLock() throws {
+        let path = instanceLockURL.path(percentEncoded: false)
+        let fd = open(path, O_CREAT | O_RDWR, 0o600)
+        guard fd >= 0 else {
+            throw EngineSocketError.socketFailed(errno: errno)
+        }
+        applyCloseOnExec(fd)
+        if fchmod(fd, 0o600) != 0 {
+            Darwin.close(fd)
+            throw EngineSocketError.insecureMode
+        }
+        if flock(fd, LOCK_EX | LOCK_NB) != 0 {
+            Darwin.close(fd)
+            throw EngineErrorCode.locked
+        }
+        lockFD = fd
+    }
+
+    private func releaseInstanceLock() {
+        guard lockFD >= 0 else {
+            return
+        }
+        _ = flock(lockFD, LOCK_UN)
+        Darwin.close(lockFD)
+        lockFD = -1
+        unlink(instanceLockURL.path(percentEncoded: false))
+    }
+
+    private func enforceOwnerReadWrite(path: String, fd: Int32) throws {
+        _ = fchmod(fd, 0o600)
+        if chmod(path, 0o600) != 0 {
+            throw EngineSocketError.insecureMode
+        }
+        var fileStat = stat()
+        let statResult = path.withCString { pointer in
+            lstat(pointer, &fileStat)
+        }
+        guard statResult == 0, (fileStat.st_mode & 0o777) == 0o600 else {
+            throw EngineSocketError.insecureMode
+        }
     }
 
     private func acceptPending() {
@@ -238,7 +307,7 @@ private final class Connection: @unchecked Sendable {
                 writeReply(.error(.invalidRequest))
                 continue
             }
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
                 continue
             }
@@ -344,8 +413,15 @@ private func writeReply(fd: Int32, _ reply: EngineReply) {
     }
 }
 
+private func applyCloseOnExec(_ fd: Int32) {
+    let flags = fcntl(fd, F_GETFD)
+    if flags >= 0 {
+        _ = fcntl(fd, F_SETFD, flags | FD_CLOEXEC)
+    }
+}
+
 private func applySocketFlags(_ fd: Int32) {
-    _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
+    applyCloseOnExec(fd)
     var nosigpipe: Int32 = 1
     _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, socklen_t(MemoryLayout<Int32>.size))
 }
