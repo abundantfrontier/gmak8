@@ -3,7 +3,7 @@
 <!--
   Two Login Items: (1) this LaunchAgent (gmak8-core, label dev.gmak8.core) owns the
   background cluster; (2) a separate login item for the gmak8.app menu extra is the
-  status surface at login. This PR ships only the agent; the menu extra is later.
+  status surface at login. Launch at login registers both.
 -->
 <plist version="1.0">
 <dict>

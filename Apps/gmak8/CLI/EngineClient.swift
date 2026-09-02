@@ -30,12 +30,7 @@ enum EngineClient {
         fileManager: FileManager = .default,
         timeout: timeval = timeval(tv_sec: 5, tv_usec: 0)
     ) throws -> EngineStatus {
-        let path = socketURL.path(percentEncoded: false)
-        guard fileManager.fileExists(atPath: path) else {
-            throw CLIError.engineNotRunning
-        }
-
-        let fd = try connect(path: path, timeout: timeout)
+        let fd = try openConnection(socketURL: socketURL, fileManager: fileManager, timeout: timeout)
         defer { Darwin.close(fd) }
         let request = try NDJSONCodec.encodeLine(EngineRequest.status)
         do {
@@ -46,6 +41,198 @@ enum EngineClient {
         }
         return try readStatus(fd: fd)
     }
+
+    static func submit(
+        _ request: EngineRequest,
+        socketURL: URL,
+        fileManager: FileManager = .default,
+        timeout: timeval = timeval(tv_sec: 5, tv_usec: 0)
+    ) throws {
+        let fd = try openConnection(socketURL: socketURL, fileManager: fileManager, timeout: timeout)
+        defer { Darwin.close(fd) }
+        let data = try NDJSONCodec.encodeLine(request)
+        do {
+            try writeAll(fd: fd, data: data)
+        } catch {
+            try rethrowFailedWrite(fd: fd)
+        }
+        switch try readReply(fd: fd) {
+        case .ok:
+            return
+        case .error(let code):
+            throw CLIError.engineError(code)
+        }
+    }
+
+    static func subscribe(
+        socketURL: URL,
+        fileManager: FileManager = .default,
+        timeout: timeval = timeval(tv_sec: 5, tv_usec: 0),
+        onEvent: @escaping @Sendable (EngineEvent) -> Void,
+        onError: @escaping @Sendable (CLIError) -> Void
+    ) throws -> EngineSubscription {
+        let fd = try openConnection(socketURL: socketURL, fileManager: fileManager, timeout: timeout)
+        var buffer = Data()
+        do {
+            try writeAll(fd: fd, data: try NDJSONCodec.encodeLine(EngineRequest.subscribe))
+        } catch {
+            defer { Darwin.close(fd) }
+            try rethrowFailedWrite(fd: fd)
+        }
+        do {
+            switch try readReply(fd: fd, buffer: &buffer) {
+            case .ok:
+                break
+            case .error(let code):
+                throw CLIError.engineError(code)
+            }
+        } catch let error as CLIError {
+            Darwin.close(fd)
+            throw mapPostConnect(error)
+        } catch {
+            Darwin.close(fd)
+            throw CLIError.communicationFailed
+        }
+        clearSocketTimeout(fd: fd)
+        return EngineSubscription(fd: fd, leftover: buffer, onEvent: onEvent, onError: onError)
+    }
+}
+
+final class EngineSubscription: @unchecked Sendable {
+    private let fd: Int32
+    private let queue = DispatchQueue(label: "dev.gmak8.engine.subscribe")
+    private let onEvent: @Sendable (EngineEvent) -> Void
+    private let onError: @Sendable (CLIError) -> Void
+    private let lock = NSLock()
+    private var source: DispatchSourceRead?
+    private var buffer: Data
+    private var closed = false
+    private var stoppedContinuation: CheckedContinuation<Void, Never>?
+
+    init(
+        fd: Int32,
+        leftover: Data,
+        onEvent: @escaping @Sendable (EngineEvent) -> Void,
+        onError: @escaping @Sendable (CLIError) -> Void
+    ) {
+        self.fd = fd
+        self.buffer = leftover
+        self.onEvent = onEvent
+        self.onError = onError
+        queue.async { [weak self] in
+            self?.startLocked()
+        }
+    }
+
+    func cancel() {
+        queue.async { [weak self] in
+            self?.closeLocked(error: nil)
+        }
+    }
+
+    func waitUntilStopped() async {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self else {
+                    continuation.resume()
+                    return
+                }
+                self.lock.lock()
+                if self.closed {
+                    self.lock.unlock()
+                    continuation.resume()
+                    return
+                }
+                self.stoppedContinuation = continuation
+                self.lock.unlock()
+            }
+        }
+    }
+
+    private func startLocked() {
+        drainLines()
+        if closed {
+            return
+        }
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in
+            self?.readAvailable()
+        }
+        source.setCancelHandler { [fd] in
+            Darwin.close(fd)
+        }
+        self.source = source
+        source.resume()
+    }
+
+    private func readAvailable() {
+        var chunk = [UInt8](repeating: 0, count: 4096)
+        let count = read(fd, &chunk, chunk.count)
+        if count < 0 {
+            if errno == EINTR {
+                return
+            }
+            closeLocked(error: .communicationFailed)
+            return
+        }
+        if count == 0 {
+            closeLocked(error: buffer.isEmpty ? .communicationFailed : .invalidReply)
+            return
+        }
+        buffer.append(contentsOf: chunk.prefix(count))
+        drainLines()
+    }
+
+    private func drainLines() {
+        while let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+            let lineData = buffer.prefix(upTo: newline)
+            buffer.removeSubrange(...newline)
+            let line = String(data: Data(lineData), encoding: .utf8) ?? ""
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                continue
+            }
+            if let reply = try? NDJSONCodec.decodeReply(line: trimmed) {
+                if case .error(let code) = reply {
+                    closeLocked(error: .engineError(code))
+                    return
+                }
+                continue
+            }
+            if let event = try? NDJSONCodec.decodeEvent(line: trimmed) {
+                onEvent(event)
+                continue
+            }
+            closeLocked(error: .invalidReply)
+            return
+        }
+    }
+
+    private func closeLocked(error: CLIError?) {
+        lock.lock()
+        if closed {
+            lock.unlock()
+            return
+        }
+        closed = true
+        let continuation = stoppedContinuation
+        stoppedContinuation = nil
+        lock.unlock()
+        if let error {
+            onError(error)
+        }
+        source?.cancel()
+        source = nil
+        continuation?.resume()
+    }
+}
+
+private func openConnection(socketURL: URL, fileManager: FileManager, timeout: timeval) throws -> Int32 {
+    let path = socketURL.path(percentEncoded: false)
+    guard fileManager.fileExists(atPath: path) else {
+        throw CLIError.engineNotRunning
+    }
+    return try connect(path: path, timeout: timeout)
 }
 
 private func connect(path: String, timeout: timeval) throws -> Int32 {
@@ -119,12 +306,29 @@ private func readStatusAfterFailedWrite(fd: Int32) throws -> EngineStatus {
     do {
         return try readStatus(fd: fd)
     } catch let error as CLIError {
-        switch error {
-        case .engineError, .invalidReply:
-            throw error
-        case .engineNotRunning, .communicationFailed:
+        throw mapPostConnect(error)
+    }
+}
+
+private func rethrowFailedWrite(fd: Int32) throws -> Never {
+    do {
+        switch try readReply(fd: fd) {
+        case .ok:
             throw CLIError.communicationFailed
+        case .error(let code):
+            throw CLIError.engineError(code)
         }
+    } catch let error as CLIError {
+        throw mapPostConnect(error)
+    }
+}
+
+private func mapPostConnect(_ error: CLIError) -> CLIError {
+    switch error {
+    case .engineError, .invalidReply:
+        return error
+    case .engineNotRunning, .communicationFailed:
+        return .communicationFailed
     }
 }
 
@@ -145,6 +349,27 @@ private func readStatus(fd: Int32) throws -> EngineStatus {
         }
         throw CLIError.invalidReply
     }
+}
+
+private func readReply(fd: Int32, buffer: inout Data) throws -> EngineReply {
+    while true {
+        let line = try readLine(fd: fd, buffer: &buffer)
+        if let reply = try? NDJSONCodec.decodeReply(line: line) {
+            return reply
+        }
+        throw CLIError.invalidReply
+    }
+}
+
+private func readReply(fd: Int32) throws -> EngineReply {
+    var buffer = Data()
+    return try readReply(fd: fd, buffer: &buffer)
+}
+
+private func clearSocketTimeout(fd: Int32) {
+    var timeout = timeval(tv_sec: 0, tv_usec: 0)
+    _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 }
 
 private func readLine(fd: Int32, buffer: inout Data) throws -> String {

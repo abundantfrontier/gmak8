@@ -11,6 +11,7 @@ public struct Settings: Codable, Equatable, Sendable {
     public var dataDiskGiB: Int
     public var setCurrentContextOnStart: Bool
     public var keepClusterRunningOnQuit: Bool
+    public var launchAtLogin: Bool
     public var telemetry: Bool
     public var publishNodePorts: Bool
 
@@ -23,6 +24,7 @@ public struct Settings: Codable, Equatable, Sendable {
         dataDiskGiB: Int,
         setCurrentContextOnStart: Bool = false,
         keepClusterRunningOnQuit: Bool = true,
+        launchAtLogin: Bool = false,
         telemetry: Bool = false,
         publishNodePorts: Bool = true
     ) {
@@ -34,6 +36,7 @@ public struct Settings: Codable, Equatable, Sendable {
         self.dataDiskGiB = dataDiskGiB
         self.setCurrentContextOnStart = setCurrentContextOnStart
         self.keepClusterRunningOnQuit = keepClusterRunningOnQuit
+        self.launchAtLogin = launchAtLogin
         self.telemetry = telemetry
         self.publishNodePorts = publishNodePorts
     }
@@ -47,6 +50,7 @@ public struct Settings: Codable, Equatable, Sendable {
         case dataDiskGiB
         case setCurrentContextOnStart
         case keepClusterRunningOnQuit
+        case launchAtLogin
         case telemetry
         case publishNodePorts
     }
@@ -61,6 +65,7 @@ public struct Settings: Codable, Equatable, Sendable {
         dataDiskGiB = try container.decode(Int.self, forKey: .dataDiskGiB)
         setCurrentContextOnStart = try container.decode(Bool.self, forKey: .setCurrentContextOnStart)
         keepClusterRunningOnQuit = try container.decode(Bool.self, forKey: .keepClusterRunningOnQuit)
+        launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         telemetry = try container.decode(Bool.self, forKey: .telemetry)
         publishNodePorts = try container.decodeIfPresent(Bool.self, forKey: .publishNodePorts) ?? true
     }
@@ -75,6 +80,7 @@ public struct Settings: Codable, Equatable, Sendable {
         try container.encode(dataDiskGiB, forKey: .dataDiskGiB)
         try container.encode(setCurrentContextOnStart, forKey: .setCurrentContextOnStart)
         try container.encode(keepClusterRunningOnQuit, forKey: .keepClusterRunningOnQuit)
+        try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(telemetry, forKey: .telemetry)
         try container.encode(publishNodePorts, forKey: .publishNodePorts)
     }

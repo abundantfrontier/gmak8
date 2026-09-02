@@ -2,10 +2,52 @@ import SwiftUI
 
 @main
 struct Gmak8App: App {
+    @NSApplicationDelegateAdaptor(Gmak8AppDelegate.self) private var appDelegate
+
     var body: some Scene {
-        WindowGroup {
+        Window("gmak8", id: Gmak8SceneID.main) {
             ContentView()
+                .environmentObject(appDelegate.session)
+                .environmentObject(appDelegate.settingsStore)
         }
         .defaultSize(width: 420, height: 280)
+        .commands {
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit gmak8…") {
+                    appDelegate.requestQuit()
+                }
+                .keyboardShortcut("q")
+                Button("Stop Cluster and Quit") {
+                    appDelegate.stopAndQuit()
+                }
+                .keyboardShortcut("q", modifiers: [.command, .option])
+            }
+            CommandGroup(after: .windowList) {
+                Button("Open gmak8") {
+                    appDelegate.openMainWindow()
+                }
+                .keyboardShortcut("o", modifiers: .command)
+                Button("Open Terminal") {
+                    TerminalLauncher.open()
+                }
+                .keyboardShortcut("t", modifiers: .command)
+            }
+        }
+
+        MenuBarExtra {
+            MenuBarPopover()
+                .environmentObject(appDelegate)
+                .environmentObject(appDelegate.session)
+                .environmentObject(appDelegate.settingsStore)
+        } label: {
+            MenuBarLabel()
+                .environmentObject(appDelegate.session)
+        }
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+                .environmentObject(appDelegate.settingsStore)
+        }
     }
 }

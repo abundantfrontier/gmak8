@@ -14,7 +14,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - Do not copy Eureka into this repository (it is an external profile / proving workload)
 - Do not enable App Sandbox on the app or `gmak8-core`
 - Do not set `com.apple.security.virtualization` on the UI target. Set it true on `gmak8-core` only.
-- Do not implement the menu bar extra unless the current PR asks for it
+- The menu bar extra is the status surface. Close last window does not quit the extra. Never leave a running cluster with no extra.
 
 ## Layout
 

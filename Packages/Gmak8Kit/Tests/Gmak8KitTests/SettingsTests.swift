@@ -11,6 +11,7 @@ struct SettingsTests {
         #expect(settings.clusterName == "gmak8")
         #expect(settings.setCurrentContextOnStart == false)
         #expect(settings.keepClusterRunningOnQuit == true)
+        #expect(settings.launchAtLogin == false)
         #expect(settings.telemetry == false)
         #expect(settings.publishNodePorts == true)
     }
@@ -32,6 +33,7 @@ struct SettingsTests {
             dataDiskGiB: 60,
             setCurrentContextOnStart: true,
             keepClusterRunningOnQuit: false,
+            launchAtLogin: true,
             telemetry: true,
             publishNodePorts: false
         )
@@ -110,6 +112,7 @@ struct SettingsTests {
         try json.write(to: url, atomically: true, encoding: .utf8)
         let loaded = try Settings.load(from: url)
         #expect(loaded.publishNodePorts == true)
+        #expect(loaded.launchAtLogin == false)
     }
 
     @Test func makeDefaultThrowsStructuredEurekaRefusal() {

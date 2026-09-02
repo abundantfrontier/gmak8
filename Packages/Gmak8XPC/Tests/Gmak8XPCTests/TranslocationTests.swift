@@ -75,6 +75,30 @@ struct CoreLaunchAgentTests {
     }
 }
 
+struct ExtraLoginItemTests {
+    @Test func registerRefusesTranslocatedApp() throws {
+        let service = MockLaunchAgent()
+        #expect(throws: EngineErrorCode.translocated) {
+            try ExtraLoginItem.register(
+                bundleURL: URL(fileURLWithPath: "/Users/tester/Downloads/gmak8.app"),
+                service: service
+            )
+        }
+        #expect(service.registerCount == 0)
+    }
+
+    @Test func registerSucceedsFromApplications() throws {
+        let service = MockLaunchAgent()
+        try ExtraLoginItem.register(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            service: service
+        )
+        #expect(service.registerCount == 1)
+        try ExtraLoginItem.unregister(service: service)
+        #expect(service.unregisterCount == 1)
+    }
+}
+
 private final class MockLaunchAgent: LaunchAgentRegistering, @unchecked Sendable {
     var registerCount = 0
     var unregisterCount = 0

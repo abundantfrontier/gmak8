@@ -23,7 +23,7 @@ public enum CoreLaunchAgent {
     public static let plistName = "dev.gmak8.core.plist"
     public static let bundleProgram = "Contents/MacOS/gmak8-core"
 
-    /// Settings / onboarding copy. gmak8 registers two Login Items; this PR ships only the agent.
+    /// Settings / onboarding copy. gmak8 registers two Login Items.
     public static let twoLoginItemsExplanation =
         "gmak8 uses two Login Items: (1) gmak8-core LaunchAgent, which owns the background cluster, "
         + "and (2) the gmak8 menu extra, which shows status at login. The agent is required for the "
@@ -41,6 +41,43 @@ public enum CoreLaunchAgent {
     }
 
     public static func unregister(service: any LaunchAgentRegistering = SMAppServiceAgent()) throws {
+        try service.unregister()
+    }
+}
+
+public struct SMAppServiceMainApp: LaunchAgentRegistering, Sendable {
+    public init() {}
+
+    public func register() throws {
+        let service = SMAppService.mainApp
+        if service.status == .enabled {
+            return
+        }
+        try service.register()
+    }
+
+    public func unregister() throws {
+        let service = SMAppService.mainApp
+        if service.status == .notRegistered {
+            return
+        }
+        try service.unregister()
+    }
+}
+
+public enum ExtraLoginItem {
+    public static func register(
+        bundleURL: URL,
+        checker: any TranslocationChecking = TranslocationChecker(),
+        service: any LaunchAgentRegistering = SMAppServiceMainApp()
+    ) throws {
+        if checker.shouldRefuseRegister(bundleURL: bundleURL) {
+            throw EngineErrorCode.translocated
+        }
+        try service.register()
+    }
+
+    public static func unregister(service: any LaunchAgentRegistering = SMAppServiceMainApp()) throws {
         try service.unregister()
     }
 }

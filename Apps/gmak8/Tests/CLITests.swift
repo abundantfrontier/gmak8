@@ -113,6 +113,127 @@ struct CLITests {
         #expect(StatusText.render(status) == "State: Stopped")
     }
 
+    @Test func submitMissingSocketIsEngineNotRunning() {
+        let url = URL(fileURLWithPath: "/tmp/gmak8-missing-\(UUID().uuidString).sock")
+        #expect(throws: CLIError.engineNotRunning) {
+            try EngineClient.submit(.start, socketURL: url)
+        }
+        #expect(throws: CLIError.engineNotRunning) {
+            try EngineClient.subscribe(
+                socketURL: url,
+                onEvent: { _ in },
+                onError: { _ in }
+            )
+        }
+    }
+
+    @Test func submitUnauthorizedIsEngineErrorNotMissingSocket() throws {
+        let socketURL = uniqueSocketURL()
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: ClusterEngine(scheduler: ManualEngineScheduler()),
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: "TEAMONLY")
+        )
+        try server.start()
+        defer { server.stop() }
+
+        #expect(throws: CLIError.engineError(.unauthorized)) {
+            try EngineClient.submit(.start, socketURL: socketURL)
+        }
+    }
+
+    @Test func hungListenerSubmitIsCommunicationFailedNotMissingSocket() throws {
+        let path = uniqueSocketURL().path(percentEncoded: false)
+        unlink(path)
+        let listenFD = socket(AF_UNIX, SOCK_STREAM, 0)
+        try #require(listenFD >= 0)
+        defer {
+            Darwin.close(listenFD)
+            unlink(path)
+        }
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        withUnsafeMutableBytes(of: &addr.sun_path) { dest in
+            path.withCString { cString in
+                dest.copyMemory(from: UnsafeRawBufferPointer(start: cString, count: path.utf8.count + 1))
+            }
+        }
+        let bindResult = withUnsafePointer(to: &addr) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                bind(listenFD, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        try #require(bindResult == 0)
+        try #require(listen(listenFD, 1) == 0)
+
+        #expect(throws: CLIError.communicationFailed) {
+            try EngineClient.submit(
+                .start,
+                socketURL: URL(fileURLWithPath: path),
+                timeout: timeval(tv_sec: 0, tv_usec: 200_000)
+            )
+        }
+    }
+
+    @Test func submitStartAndStopOverFakeSocket() throws {
+        let socketURL = uniqueSocketURL()
+        let scheduler = ManualEngineScheduler()
+        let engine = ClusterEngine(scheduler: scheduler)
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: engine,
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+        )
+        try server.start()
+        defer { server.stop() }
+
+        try EngineClient.submit(.start, socketURL: socketURL)
+        #expect(engine.currentStatus().state == .starting)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        try EngineClient.submit(.stop, socketURL: socketURL)
+        #expect(engine.currentStatus().state == .stopping)
+    }
+
+    @Test func subscribeStreamsInitialStatus() async throws {
+        let socketURL = uniqueSocketURL()
+        let engine = ClusterEngine(scheduler: ManualEngineScheduler())
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: engine,
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+        )
+        try server.start()
+        defer { server.stop() }
+
+        let box = SubscribeBox()
+        let status: EngineStatus? = await withCheckedContinuation { continuation in
+            box.finish = continuation
+            do {
+                box.subscription = try EngineClient.subscribe(
+                    socketURL: socketURL,
+                    timeout: timeval(tv_sec: 2, tv_usec: 0),
+                    onEvent: { event in
+                        if case .status(let status) = event {
+                            box.resume(status)
+                        }
+                    },
+                    onError: { _ in
+                        box.resume(nil)
+                    }
+                )
+            } catch {
+                box.resume(nil)
+            }
+        }
+        defer { box.subscription?.cancel() }
+        #expect(status?.state == .stopped)
+    }
+
     private func uniqueSocketURL() -> URL {
         URL(fileURLWithPath: "/tmp/g8-cli-\(getpid())-\(UUID().uuidString.prefix(8)).sock")
     }
@@ -122,5 +243,19 @@ struct CLITests {
         let text = String(data: data, encoding: .utf8)
         try #require(text != nil)
         return text!
+    }
+}
+
+private final class SubscribeBox: @unchecked Sendable {
+    private let lock = NSLock()
+    var subscription: EngineSubscription?
+    var finish: CheckedContinuation<EngineStatus?, Never>?
+
+    func resume(_ status: EngineStatus?) {
+        lock.lock()
+        let continuation = finish
+        finish = nil
+        lock.unlock()
+        continuation?.resume(returning: status)
     }
 }
