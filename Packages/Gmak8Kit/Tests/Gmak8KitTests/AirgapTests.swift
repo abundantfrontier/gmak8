@@ -122,6 +122,25 @@ struct AirgapTests {
             // expected
         }
     }
+
+    @Test func verifyCosignAcceptsCosignSignBlobFixture() throws {
+        let dir = airgapTestdataDirectory()
+        let tar = dir.appending(path: "tiny.tar")
+        let sig = dir.appending(path: "tiny.tar.sig")
+        let pem = try String(contentsOf: dir.appending(path: "cosign.pub"), encoding: .utf8)
+        #expect(pem.contains("BEGIN PUBLIC KEY"))
+        try AirgapVerifier.verifyCosign(file: tar, signature: Data(contentsOf: sig), pem: pem)
+    }
+}
+
+private func airgapTestdataDirectory() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appending(path: "guest/airgap/testdata", directoryHint: .isDirectory)
 }
 
 private struct AirgapHarness {

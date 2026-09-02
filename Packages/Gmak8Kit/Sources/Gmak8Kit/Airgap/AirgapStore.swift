@@ -1,6 +1,6 @@
 import Foundation
 
-/// Host cache for the k3s airgap archive. Onboarding UI is a later PR; this is the library API.
+/// Host cache for the pinned k3s airgap archive.
 public struct AirgapStore: Sendable {
     public var paths: HostPaths
     public var pin: AirgapPin

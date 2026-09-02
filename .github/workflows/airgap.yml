@@ -25,13 +25,17 @@ jobs:
             "https://github.com/sigstore/cosign/releases/download/v2.4.3/cosign-linux-arm64"
           chmod +x /tmp/cosign
           /tmp/cosign version
-          tmp=$(mktemp -d)
-          COSIGN_PASSWORD= /tmp/cosign generate-key-pair --output-key-prefix "$tmp/ci"
-          COSIGN_PASSWORD= COSIGN_KEY="$tmp/ci.key" COSIGN="$tmp/cosign" \
-            bash guest/airgap/sign.sh guest/airgap/testdata/tiny.tar
-          /tmp/cosign verify-blob --key "$tmp/ci.pub" \
+          /tmp/cosign verify-blob --key guest/airgap/testdata/cosign.pub \
             --signature guest/airgap/testdata/tiny.tar.sig \
             --insecure-ignore-tlog --offline \
             guest/airgap/testdata/tiny.tar
-          rm -f guest/airgap/testdata/tiny.tar.sig
+          tmp=$(mktemp -d)
+          COSIGN_PASSWORD= /tmp/cosign generate-key-pair --output-key-prefix "$tmp/ci"
+          cp guest/airgap/testdata/tiny.tar "$tmp/tiny.tar"
+          COSIGN_PASSWORD= COSIGN_KEY="$tmp/ci.key" COSIGN="$tmp/cosign" \
+            bash guest/airgap/sign.sh "$tmp/tiny.tar"
+          /tmp/cosign verify-blob --key "$tmp/ci.pub" \
+            --signature "$tmp/tiny.tar.sig" \
+            --insecure-ignore-tlog --offline \
+            "$tmp/tiny.tar"
           rm -rf "$tmp"

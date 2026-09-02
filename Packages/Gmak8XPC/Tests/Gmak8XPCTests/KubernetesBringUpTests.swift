@@ -277,6 +277,43 @@ struct KubernetesBringUpTests {
         #expect(env.server.state.k3sStarts == 0)
         #expect(env.server.state.airgapImports == 0)
     }
+
+    @Test func cancelDuringAirgapPutDoesNotStartK3s() async throws {
+        let fixture = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-bringup-airgap-\(UUID().uuidString).tar")
+        try Data("tiny-airgap-fixture".utf8).write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let env = try BringUpHarness(
+            yaml: k3sYAML,
+            airgapPresent: false,
+            holdAirgapPut: true,
+            streamClient: true,
+            airgapProvider: FileAirgapProvider(url: fixture)
+        )
+        defer {
+            env.server.state.releaseAirgapPut()
+            env.tearDown()
+        }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        #expect(env.server.state.waitUntilAirgapPutStarted())
+        #expect(env.engine.submit(.stop) == .ok)
+        #expect(env.engine.currentStatus().state == .stopping)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .stopped
+        }
+        try await waitUntil(timeout: .seconds(1)) {
+            !env.kubernetesBringUp.isWorkInFlight()
+        }
+        env.server.state.releaseAirgapPut()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(env.engine.currentStatus().state == .stopped)
+        #expect(env.engine.currentStatus().apiEndpoint == nil)
+        #expect(env.server.state.k3sStarts == 0)
+        #expect(!env.sawBringUpSuccess)
+    }
 }
 
 private struct BringUpHarness {
@@ -285,8 +322,10 @@ private struct BringUpHarness {
     var scheduler: ManualEngineScheduler
     var engine: ClusterEngine
     var server: BringUpHTTPServer
+    var kubernetesBringUp: KubernetesBringUp
     var steps: [String] { tracker.steps }
     var logs: [String] { tracker.logs }
+    var sawBringUpSuccess: Bool { tracker.sawSuccess }
 
     private let tracker: StepTracker
 
@@ -299,6 +338,8 @@ private struct BringUpHarness {
         mergeUserConfig: Bool = false,
         bytesFree: UInt64 = 1_000_000,
         airgapPresent: Bool = true,
+        holdAirgapPut: Bool = false,
+        streamClient: Bool = false,
         airgapProvider: (any AirgapProviding)? = nil,
         runtime: (any VirtualMachineRuntime)? = nil
     ) throws {
@@ -322,16 +363,28 @@ private struct BringUpHarness {
             dataDirExists: dataDirExists,
             neverReady: neverReady,
             bytesFree: bytesFree,
-            airgapPresent: airgapPresent
+            airgapPresent: airgapPresent,
+            holdAirgapPut: holdAirgapPut
         )
         server = try BringUpHTTPServer(state: state)
         tracker = StepTracker()
         let recorded = tracker
+        let port = server.port
         let agentURL = server.url
-        let bringUp = KubernetesBringUp(
-            makeClient: {
+        let makeClient: @Sendable () async throws -> GuestAgentClient
+        if streamClient {
+            makeClient = {
+                GuestAgentClient {
+                    try TCPGuestChannel.connect(host: "127.0.0.1", port: port)
+                }
+            }
+        } else {
+            makeClient = {
                 GuestAgentClient(baseURL: agentURL)
-            },
+            }
+        }
+        let bringUp = KubernetesBringUp(
+            makeClient: makeClient,
             kubeconfigStore: store,
             setCurrentContext: false,
             airgapProvider: airgapProvider,
@@ -340,6 +393,7 @@ private struct BringUpHarness {
             pollInterval: .milliseconds(5),
             stepTimeout: .seconds(2)
         )
+        kubernetesBringUp = bringUp
         let wrapped = RecordingBringUp(inner: bringUp, tracker: recorded)
         scheduler = ManualEngineScheduler()
         engine = ClusterEngine(
@@ -376,6 +430,19 @@ private final class StepTracker: @unchecked Sendable {
         logStorage.append(line)
         lock.unlock()
     }
+    private var success = false
+    var sawSuccess: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return success
+    }
+    func noteCompletion(_ result: Result<ClusterBringUpResult, any Error>) {
+        lock.lock()
+        if case .success = result {
+            success = true
+        }
+        lock.unlock()
+    }
 }
 
 private struct RecordingBringUp: ClusterBringUp {
@@ -403,7 +470,10 @@ private struct RecordingBringUp: ClusterBringUp {
                 tracker.addLog(line)
                 log(line)
             },
-            completion: completion
+            completion: { result in
+                tracker.noteCompletion(result)
+                completion(result)
+            }
         )
     }
 
@@ -424,6 +494,9 @@ private final class BringUpAgentState: @unchecked Sendable {
     var airgapImports = 0
     var lastAirgapBody = Data()
     var events: [String] = []
+    var holdAirgapPut: Bool
+    private let putLock = NSCondition()
+    private var airgapPutStarted = false
 
     init(
         yaml: Data,
@@ -431,7 +504,8 @@ private final class BringUpAgentState: @unchecked Sendable {
         dataDirExists: Bool,
         neverReady: Bool,
         bytesFree: UInt64,
-        airgapPresent: Bool
+        airgapPresent: Bool,
+        holdAirgapPut: Bool = false
     ) {
         self.yaml = yaml
         self.dataDirMinor = dataDirMinor
@@ -439,6 +513,37 @@ private final class BringUpAgentState: @unchecked Sendable {
         self.neverReady = neverReady
         self.bytesFree = bytesFree
         self.airgapPresent = airgapPresent
+        self.holdAirgapPut = holdAirgapPut
+    }
+
+    func noteAirgapPutStartedAndWaitIfHeld() {
+        putLock.lock()
+        airgapPutStarted = true
+        putLock.broadcast()
+        let deadline = Date().addingTimeInterval(5)
+        while holdAirgapPut && Date() < deadline {
+            _ = putLock.wait(until: Date().addingTimeInterval(0.05))
+        }
+        putLock.unlock()
+    }
+
+    func waitUntilAirgapPutStarted(timeout: TimeInterval = 5) -> Bool {
+        putLock.lock()
+        defer { putLock.unlock() }
+        let deadline = Date().addingTimeInterval(timeout)
+        while !airgapPutStarted {
+            if !putLock.wait(until: deadline) {
+                return false
+            }
+        }
+        return true
+    }
+
+    func releaseAirgapPut() {
+        putLock.lock()
+        holdAirgapPut = false
+        putLock.broadcast()
+        putLock.unlock()
     }
 }
 
@@ -573,6 +678,7 @@ private func response(for request: (String, String, Data), state: BringUpAgentSt
         }
         return (200, Data(#"{"present":false,"files":[],"bytes":0}"#.utf8), "application/json")
     case ("PUT", "/airgap/k3s"):
+        state.noteAirgapPutStartedAndWaitIfHeld()
         state.airgapImports += 1
         state.lastAirgapBody = request.2
         state.airgapPresent = true

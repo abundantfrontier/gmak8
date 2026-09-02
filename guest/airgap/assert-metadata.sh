@@ -21,6 +21,14 @@ test -f "$PUB" || fail "missing $PUB"
 test -f "$here/k3s-airgap-images-arm64.sha256sum" || fail "missing sha256sum file"
 test -f "$here/k3s-images.txt" || fail "missing k3s-images.txt"
 test -f "$here/testdata/tiny.tar" || fail "missing testdata/tiny.tar"
+test -f "$here/testdata/tiny.tar.sig" || fail "missing testdata/tiny.tar.sig"
+test -f "$here/testdata/cosign.pub" || fail "missing testdata/cosign.pub"
+if cmp -s "$here/testdata/cosign.pub" "$PUB"; then
+  fail "fixture Cosign key must not be the production pin"
+fi
+if test -f "$here/testdata/cosign.key"; then
+  fail "must not commit the fixture Cosign private key"
+fi
 test -x "$here/fetch.sh" || fail "fetch.sh must be executable"
 test -x "$here/sign.sh" || fail "sign.sh must be executable"
 test -x "$here/verify.sh" || fail "verify.sh must be executable"

@@ -57,6 +57,7 @@ public final class VZVirtioSocketChannel: GuestByteChannel, GuestIOTimeoutAdjust
     }
 
     public func close() {
+        inner.close()
         connection.close()
     }
 

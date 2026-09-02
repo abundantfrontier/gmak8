@@ -101,6 +101,7 @@ public final class FileDescriptorChannel: GuestByteChannel, GuestIOTimeoutAdjust
             return
         }
         closed = true
+        shutdown(fd, SHUT_RDWR)
         onClose()
     }
 
@@ -109,8 +110,8 @@ public final class FileDescriptorChannel: GuestByteChannel, GuestIOTimeoutAdjust
     }
 }
 
-enum TCPGuestChannel {
-    static func connect(host: String, port: UInt16) throws -> FileDescriptorChannel {
+public enum TCPGuestChannel {
+    public static func connect(host: String, port: UInt16) throws -> FileDescriptorChannel {
         let fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         guard fd >= 0 else {
             throw GuestAgentError.connectFailed("socket errno \(errno)")

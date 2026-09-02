@@ -17,6 +17,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
     private let stepTimeout: Duration
     private let lock = NSLock()
     private var task: Task<Void, Never>?
+    private var workInFlight = false
 
     public init(
         makeClient: @escaping @Sendable () async throws -> GuestAgentClient,
@@ -52,6 +53,8 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {
         let work = Task {
+            self.markWorkInFlight(true)
+            defer { self.markWorkInFlight(false) }
             do {
                 let result = try await self.run(
                     generation: generation,
@@ -80,6 +83,18 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
     public func cancel() {
         lock.lock()
         task?.cancel()
+        lock.unlock()
+    }
+
+    func isWorkInFlight() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return workInFlight
+    }
+
+    private func markWorkInFlight(_ value: Bool) {
+        lock.lock()
+        workInFlight = value
         lock.unlock()
     }
 
@@ -247,7 +262,10 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             _ = try await client.importAirgap(fileURL: archive.url, name: archive.fileName) { received, total in
                 setImageJob(ImageJobStatus(bytesReceived: received, bytesTotal: total))
             }
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as GuestAgentError {
+            try Task.checkCancellation()
             throw ClusterBringUpError(message: error.localizedDescription)
         }
         try await wait(

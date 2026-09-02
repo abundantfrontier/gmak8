@@ -47,32 +47,44 @@ public struct StreamGuestTransport: GuestAgentTransport {
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path(percentEncoded: false))
         let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
         let channel = try await open()
-        defer { channel.close() }
-        if let adjustable = channel as? any GuestIOTimeoutAdjusting {
-            adjustable.setIOTimeout(seconds: 5)
-        }
-        var headers = extraHeaders
-        headers["Content-Type"] = contentType
-        headers["Content-Length"] = String(size)
-        try channel.write(encodeHTTPHeaders(method: method, path: path, extraHeaders: headers))
-        let handle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? handle.close() }
-        var sent: Int64 = 0
-        onProgress?(0, size)
-        while true {
-            try Task.checkCancellation()
-            let chunk = try handle.read(upToCount: 64 * 1_024) ?? Data()
-            if chunk.isEmpty {
-                break
+        do {
+            return try await withTaskCancellationHandler {
+                defer { channel.close() }
+                if let adjustable = channel as? any GuestIOTimeoutAdjusting {
+                    adjustable.setIOTimeout(seconds: 5)
+                }
+                var headers = extraHeaders
+                headers["Content-Type"] = contentType
+                headers["Content-Length"] = String(size)
+                try channel.write(encodeHTTPHeaders(method: method, path: path, extraHeaders: headers))
+                let handle = try FileHandle(forReadingFrom: fileURL)
+                defer { try? handle.close() }
+                var sent: Int64 = 0
+                onProgress?(0, size)
+                while true {
+                    try Task.checkCancellation()
+                    let chunk = try handle.read(upToCount: 64 * 1_024) ?? Data()
+                    if chunk.isEmpty {
+                        break
+                    }
+                    try channel.write(chunk)
+                    sent += Int64(chunk.count)
+                    onProgress?(sent, size)
+                }
+                if let adjustable = channel as? any GuestIOTimeoutAdjusting {
+                    adjustable.setIOTimeout(seconds: 120)
+                }
+                try Task.checkCancellation()
+                return try readHTTPResponse(from: channel)
+            } onCancel: {
+                channel.close()
             }
-            try channel.write(chunk)
-            sent += Int64(chunk.count)
-            onProgress?(sent, size)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            try Task.checkCancellation()
+            throw error
         }
-        if let adjustable = channel as? any GuestIOTimeoutAdjusting {
-            adjustable.setIOTimeout(seconds: 120)
-        }
-        return try readHTTPResponse(from: channel)
     }
 }
 
@@ -118,7 +130,16 @@ public struct URLSessionGuestTransport: GuestAgentTransport, @unchecked Sendable
             request.setValue(value, forHTTPHeaderField: name)
         }
         onProgress?(0, size)
-        let (data, response) = try await session.upload(for: request, fromFile: fileURL)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.upload(for: request, fromFile: fileURL)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            try Task.checkCancellation()
+            throw error
+        }
         onProgress?(size, size)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         return GuestHTTPResponse(statusCode: status, body: data)
