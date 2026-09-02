@@ -19,7 +19,7 @@ public enum OnboardingCopy {
     public static let downloadUnavailable =
         "Remote download waits for a gmak8-signed GitHub Release (archive + .sig). Choose a file… for a local signed pair."
     public static let guestDigestUnpublished =
-        "The guest disk SHA-256 is not published yet. Choose a file… when you have a signed pair, or continue without it."
+        "The guest disk SHA-256 is not published yet. Continue without it until a signed guest is available."
     public static let offlineHint = "Choose a file… next to its .sig."
     public static let sizeBudget500MiB = "≤ 500 MiB"
 

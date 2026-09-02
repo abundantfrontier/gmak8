@@ -142,7 +142,7 @@ struct OnboardingView: View {
                 Button(OnboardingCopy.chooseFile) {
                     onboarding.chooseFile(kind)
                 }
-                .disabled(status == .working)
+                .disabled(status == .working || !OnboardingAssets.chooseFileEnabled(kind))
             }
         }
         .padding(.vertical, 4)

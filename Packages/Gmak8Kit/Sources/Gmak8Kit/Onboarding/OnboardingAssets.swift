@@ -72,4 +72,15 @@ public enum OnboardingAssets {
             return false
         }
     }
+
+    public static func chooseFileEnabled(_ kind: OnboardingAssetKind) -> Bool {
+        switch kind {
+        case .guest:
+            return GuestAssetPin.bundled.signed.chooseFileEnabled
+        case .k3sAirgap:
+            return AirgapPin.bundled.signed.chooseFileEnabled
+        case .kubevirtAirgap:
+            return false
+        }
+    }
 }

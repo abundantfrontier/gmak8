@@ -27,6 +27,11 @@ public struct SignedAssetPin: Equatable, Sendable {
         !hasStubDigest && Self.isGmak8SignedReleaseURL(url)
     }
 
+    /// Local import still verifies SHA-256; a placeholder digest can never match.
+    public var chooseFileEnabled: Bool {
+        !hasStubDigest
+    }
+
     public static func isGmak8SignedReleaseURL(_ url: URL) -> Bool {
         let host = (url.host ?? "").lowercased()
         let path = url.path.lowercased()

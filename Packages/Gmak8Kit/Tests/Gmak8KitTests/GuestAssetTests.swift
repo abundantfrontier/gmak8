@@ -18,6 +18,7 @@ struct GuestAssetTests {
         #expect(!pin.url.absoluteString.contains("docker.io"))
         #expect(pin.signed.hasStubDigest)
         #expect(!pin.signed.remoteDownloadEnabled)
+        #expect(!pin.signed.chooseFileEnabled)
         let pem = try CosignPin.loadPublicKeyPEM()
         #expect(pem.contains("BEGIN PUBLIC KEY"))
     }

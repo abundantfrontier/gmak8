@@ -154,7 +154,7 @@ final class OnboardingSession: ObservableObject {
     }
 
     func chooseFile(_ kind: OnboardingAssetKind) {
-        guard let store = store(for: kind) else {
+        guard let store = store(for: kind), store.pin.chooseFileEnabled else {
             return
         }
         let panel = NSOpenPanel()

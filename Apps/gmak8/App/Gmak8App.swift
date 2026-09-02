@@ -25,21 +25,19 @@ struct Gmak8App: App {
         }
         .menuBarExtraStyle(.window)
         .commands {
-            Gmak8Commands(appDelegate: appDelegate)
+            Gmak8Commands(appDelegate: appDelegate, settingsStore: appDelegate.settingsStore)
         }
 
         Settings {
             SettingsView()
                 .environmentObject(appDelegate.settingsStore)
-                .disabled(
-                    !FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding)
-                )
         }
     }
 }
 
 struct Gmak8Commands: Commands {
     var appDelegate: Gmak8AppDelegate
+    @ObservedObject var settingsStore: SettingsStore
 
     var body: some Commands {
         CommandGroup(replacing: .appTermination) {
@@ -51,14 +49,14 @@ struct Gmak8Commands: Commands {
                 appDelegate.stopAndQuit()
             }
             .keyboardShortcut("q", modifiers: [.command, .option])
-            .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding))
+            .disabled(!clusterActionsEnabled)
         }
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") {
                 appDelegate.openSettingsWindow()
             }
             .keyboardShortcut(",")
-            .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding))
+            .disabled(!clusterActionsEnabled)
         }
         CommandGroup(after: .windowList) {
             Button("Open gmak8") {
@@ -69,7 +67,11 @@ struct Gmak8Commands: Commands {
                 TerminalLauncher.open()
             }
             .keyboardShortcut("t", modifiers: .command)
-            .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding))
+            .disabled(!clusterActionsEnabled)
         }
+    }
+
+    private var clusterActionsEnabled: Bool {
+        FirstRunGate.clusterActionsEnabled(needsOnboarding: settingsStore.needsOnboarding)
     }
 }

@@ -20,6 +20,7 @@ struct OnboardingTests {
         #expect(OnboardingCopy.createAndStart == "Create and start")
         #expect(OnboardingCopy.gmak8HelperMissing.contains("Contents/Helpers"))
         #expect(OnboardingCopy.downloadUnavailable.contains("gmak8-signed"))
+        #expect(!OnboardingCopy.guestDigestUnpublished.contains(OnboardingCopy.chooseFile))
         #expect(OnboardingCopy.kubernetesVersionValue == "1.33.3")
         #expect(OnboardingCopy.kubernetesVersionValue == K3sPin.displayVersion)
         #expect(OnboardingCopy.pathExportSnippet == #"export PATH="$HOME/.local/bin:$PATH""#)
@@ -90,6 +91,8 @@ struct OnboardingTests {
         #expect(OnboardingAssets.isRequiredToContinue(.k3sAirgap))
         #expect(!OnboardingAssets.remoteDownloadEnabled(.guest))
         #expect(!OnboardingAssets.remoteDownloadEnabled(.k3sAirgap))
+        #expect(!OnboardingAssets.chooseFileEnabled(.guest))
+        #expect(OnboardingAssets.chooseFileEnabled(.k3sAirgap))
     }
 
     @Test func isSupportedHardFailIsNotALockAndNestedVirtIsInformational() {
@@ -251,6 +254,7 @@ struct OnboardingTests {
         let stub = GuestAssetPin.bundled.signed
         #expect(stub.hasStubDigest)
         #expect(!stub.remoteDownloadEnabled)
+        #expect(!stub.chooseFileEnabled)
         #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
         let published = SignedAssetPin(
             fileName: AirgapPin.archiveFileName,
@@ -259,6 +263,7 @@ struct OnboardingTests {
             maxBytes: AirgapPin.maxCompressedBytes
         )
         #expect(!published.hasStubDigest)
+        #expect(published.chooseFileEnabled)
         #expect(published.remoteDownloadEnabled)
         let k3sIO = AirgapPin.bundled.signed
         #expect(!SignedAssetPin.isGmak8SignedReleaseURL(k3sIO.url))

@@ -1,3 +1,4 @@
+import Gmak8Kit
 import Gmak8XPC
 import SwiftUI
 
@@ -48,5 +49,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(minWidth: 420, minHeight: 240)
         .padding()
+        .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: settingsStore.needsOnboarding))
     }
 }

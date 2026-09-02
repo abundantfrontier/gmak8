@@ -17,10 +17,14 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     private var hasAskedFirstQuit: Bool
     private var forceStopAndQuit = false
     private var openWindow: (() -> Void)?
+    private var settingsObservation: AnyCancellable?
 
     override init() {
         hasAskedFirstQuit = UserDefaults.standard.bool(forKey: Self.hasAskedKeepRunningKey)
         super.init()
+        settingsObservation = settingsStore.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

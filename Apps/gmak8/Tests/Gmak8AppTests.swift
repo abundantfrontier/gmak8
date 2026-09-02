@@ -212,6 +212,9 @@ struct Gmak8AppTests {
         #expect(!FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
         #expect(GuestAssetPin.bundled.signed.hasStubDigest)
         #expect(!GuestAssetPin.bundled.signed.remoteDownloadEnabled)
+        #expect(!GuestAssetPin.bundled.signed.chooseFileEnabled)
         #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
+        #expect(AirgapPin.bundled.signed.chooseFileEnabled)
+        #expect(!OnboardingCopy.guestDigestUnpublished.contains(OnboardingCopy.chooseFile))
     }
 }
