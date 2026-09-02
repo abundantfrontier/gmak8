@@ -1,3 +1,4 @@
+import Gmak8Kit
 import SwiftUI
 
 @main
@@ -30,6 +31,9 @@ struct Gmak8App: App {
         Settings {
             SettingsView()
                 .environmentObject(appDelegate.settingsStore)
+                .disabled(
+                    !FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding)
+                )
         }
     }
 }
@@ -47,6 +51,14 @@ struct Gmak8Commands: Commands {
                 appDelegate.stopAndQuit()
             }
             .keyboardShortcut("q", modifiers: [.command, .option])
+            .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding))
+        }
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") {
+                appDelegate.openSettingsWindow()
+            }
+            .keyboardShortcut(",")
+            .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding))
         }
         CommandGroup(after: .windowList) {
             Button("Open gmak8") {
@@ -57,6 +69,7 @@ struct Gmak8Commands: Commands {
                 TerminalLauncher.open()
             }
             .keyboardShortcut("t", modifiers: .command)
+            .disabled(!FirstRunGate.clusterActionsEnabled(needsOnboarding: appDelegate.settingsStore.needsOnboarding))
         }
     }
 }

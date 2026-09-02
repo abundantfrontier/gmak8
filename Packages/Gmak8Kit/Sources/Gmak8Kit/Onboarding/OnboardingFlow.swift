@@ -30,6 +30,14 @@ public enum FirstRunGate {
     public static func shouldShowOnboarding(settingsFileExists: Bool) -> Bool {
         !settingsFileExists
     }
+
+    public static func shouldPersistSettings(needsOnboarding: Bool) -> Bool {
+        !needsOnboarding
+    }
+
+    public static func clusterActionsEnabled(needsOnboarding: Bool) -> Bool {
+        !needsOnboarding
+    }
 }
 
 public struct OnboardingDraft: Equatable, Sendable {
@@ -95,19 +103,23 @@ public enum OnboardingAdvance {
         permissions: PermissionsOutcome,
         guestReady: Bool,
         airgapReady: Bool,
-        profileAccepted: Bool
+        profileAccepted: Bool,
+        guestRequired: Bool = true,
+        airgapRequired: Bool = true
     ) -> Bool {
+        let guestOK = !guestRequired || guestReady
+        let airgapOK = !airgapRequired || airgapReady
         switch page {
         case .welcome, .whatYouGet, .cli:
             return true
         case .assets:
-            return guestReady && airgapReady
+            return guestOK && airgapOK
         case .permissions:
             return permissions.canContinue
         case .profile:
             return profileAccepted
         case .createCluster:
-            return guestReady && airgapReady && permissions.canContinue && profileAccepted
+            return guestOK && airgapOK && permissions.canContinue && profileAccepted
         }
     }
 }

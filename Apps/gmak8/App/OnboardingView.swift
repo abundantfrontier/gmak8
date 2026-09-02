@@ -100,6 +100,14 @@ struct OnboardingView: View {
                 .fontWeight(.semibold)
             Text(OnboardingCopy.assetsBody)
                 .foregroundStyle(.secondary)
+            Text(OnboardingCopy.downloadUnavailable)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if GuestAssetPin.bundled.signed.hasStubDigest {
+                Text(OnboardingCopy.guestDigestUnpublished)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             ForEach(onboarding.visibleAssets, id: \.self) { kind in
                 assetRow(kind)
             }
@@ -122,11 +130,6 @@ struct OnboardingView: View {
                 Text(kind.sizeBudget)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if !kind.isRequired {
-                    Text("Skip")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             Text(assetStatusText(status))
                 .font(.caption)
@@ -135,11 +138,11 @@ struct OnboardingView: View {
                 Button(OnboardingCopy.download) {
                     onboarding.download(kind)
                 }
-                .disabled(status == .working || !kind.isRequired && kind == .kubevirtAirgap)
+                .disabled(status == .working || !OnboardingAssets.remoteDownloadEnabled(kind))
                 Button(OnboardingCopy.chooseFile) {
                     onboarding.chooseFile(kind)
                 }
-                .disabled(status == .working || kind == .kubevirtAirgap)
+                .disabled(status == .working)
             }
         }
         .padding(.vertical, 4)
@@ -177,18 +180,24 @@ struct OnboardingView: View {
             }
             .pickerStyle(.radioGroup)
             Text(
-                "vCPU \(onboarding.draft.cpu) · RAM \(onboarding.draft.memoryGiB) GiB · Disk \(onboarding.draft.dataDiskGiB) GiB"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            Text(
                 "This Mac: \(onboarding.host.processorCount) CPU, \(onboarding.host.physicalMemoryGiB) GiB RAM, \(onboarding.host.freeDiskGiB) GiB free disk."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
-            Text(OnboardingCopy.sparseDisk)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if onboarding.draft.profileIsAccepted {
+                Stepper(value: cpuBinding, in: 1...max(1, onboarding.host.processorCount)) {
+                    Text("vCPU \(onboarding.draft.cpu)")
+                }
+                Stepper(value: memoryBinding, in: 2...max(2, onboarding.host.physicalMemoryGiB)) {
+                    Text("RAM \(onboarding.draft.memoryGiB) GiB")
+                }
+                Stepper(value: diskBinding, in: 20...1_024) {
+                    Text("Disk \(onboarding.draft.dataDiskGiB) GiB")
+                }
+                Text(OnboardingCopy.sparseDisk)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if onboarding.draft.profile == .eureka || onboarding.draft.profile == .eurekaAPIOnly {
                 Text(OnboardingCopy.eurekaExplanation)
                     .font(.caption)
@@ -233,7 +242,7 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
             }
             if onboarding.cliPlan.missingGmak8Helper {
-                Text("gmak8 CLI helper is missing from Contents/Helpers.")
+                Text(OnboardingCopy.gmak8HelperMissing)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -282,6 +291,27 @@ struct OnboardingView: View {
         Binding(
             get: { onboarding.draft.setCurrentContextOnStart },
             set: { onboarding.draft.setCurrentContextOnStart = $0 }
+        )
+    }
+
+    private var cpuBinding: Binding<Int> {
+        Binding(
+            get: { onboarding.draft.cpu },
+            set: { onboarding.draft.cpu = $0 }
+        )
+    }
+
+    private var memoryBinding: Binding<Int> {
+        Binding(
+            get: { onboarding.draft.memoryGiB },
+            set: { onboarding.draft.memoryGiB = $0 }
+        )
+    }
+
+    private var diskBinding: Binding<Int> {
+        Binding(
+            get: { onboarding.draft.dataDiskGiB },
+            set: { onboarding.draft.dataDiskGiB = $0 }
         )
     }
 

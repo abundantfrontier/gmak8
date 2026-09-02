@@ -208,5 +208,10 @@ struct Gmak8AppTests {
         )
         #expect(!unsupported.canContinue)
         #expect(CoreLaunchAgent.twoLoginItemsExplanation.contains("two Login Items"))
+        #expect(!FirstRunGate.shouldPersistSettings(needsOnboarding: true))
+        #expect(!FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
+        #expect(GuestAssetPin.bundled.signed.hasStubDigest)
+        #expect(!GuestAssetPin.bundled.signed.remoteDownloadEnabled)
+        #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
     }
 }

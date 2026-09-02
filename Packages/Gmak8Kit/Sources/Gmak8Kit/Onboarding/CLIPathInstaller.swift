@@ -61,7 +61,6 @@ public enum CLIPathInstaller {
         home.appending(path: relativeBinPath, directoryHint: .isDirectory)
     }
 
-    /// `gmak8.app/Contents/Helpers`, never PATH.
     public static func helpersDirectory(bundleURL: URL) -> URL {
         if bundleURL.pathExtension == "app" {
             return
@@ -156,6 +155,9 @@ public enum CLIPathInstaller {
     }
 
     public static func install(_ plan: CLIInstallPlan, fileManager: FileManager = .default) throws {
+        if plan.binaries.isEmpty {
+            return
+        }
         try fileManager.createDirectory(at: plan.destinationDirectory, withIntermediateDirectories: true)
         if !fileManager.isWritableFile(atPath: plan.destinationDirectory.path(percentEncoded: false)) {
             throw CLIInstallError.notWritable(plan.destinationDirectory)

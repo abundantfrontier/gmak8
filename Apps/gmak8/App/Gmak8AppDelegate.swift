@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Gmak8Kit
 import SwiftUI
 
 enum Gmak8SceneID {
@@ -89,6 +90,9 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     func openSettingsWindow() {
+        guard FirstRunGate.clusterActionsEnabled(needsOnboarding: settingsStore.needsOnboarding) else {
+            return
+        }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)

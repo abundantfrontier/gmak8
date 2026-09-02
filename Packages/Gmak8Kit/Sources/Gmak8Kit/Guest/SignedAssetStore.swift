@@ -57,13 +57,13 @@ public struct SignedAssetStore: Sendable {
         cacheDirectory.appending(path: "\(pin.fileName).sig")
     }
 
-    public func cachedFileIfValid() throws -> URL? {
+    public func cachedFileIfValid(fileManager: FileManager = .default) throws -> URL? {
         let file = archiveURL
-        guard FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) else {
+        guard fileManager.fileExists(atPath: file.path(percentEncoded: false)) else {
             return nil
         }
         let sig = signatureURL
-        guard FileManager.default.fileExists(atPath: sig.path(percentEncoded: false)) else {
+        guard fileManager.fileExists(atPath: sig.path(percentEncoded: false)) else {
             throw SignedAssetError.missingSignature(label: label)
         }
         try verify(file: file, signatureFile: sig)

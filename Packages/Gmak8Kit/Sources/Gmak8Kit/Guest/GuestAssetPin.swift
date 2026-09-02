@@ -12,6 +12,27 @@ public struct SignedAssetPin: Equatable, Sendable {
         self.sha256 = sha256
         self.maxBytes = maxBytes
     }
+
+    /// All-zero or empty SHA-256 is a placeholder, not a published digest.
+    public var hasStubDigest: Bool {
+        let hex = sha256.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard hex.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            return true
+        }
+        return hex.allSatisfy { $0 == "0" }
+    }
+
+    /// Remote fetch is only valid for a gmak8 GitHub Release that includes a keyful Cosign `.sig`.
+    public var remoteDownloadEnabled: Bool {
+        !hasStubDigest && Self.isGmak8SignedReleaseURL(url)
+    }
+
+    public static func isGmak8SignedReleaseURL(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        let path = url.path.lowercased()
+        let github = host == "github.com" || host.hasSuffix(".github.com")
+        return github && path.contains("/gmak8/") && !path.contains("/k3s-io/")
+    }
 }
 
 public struct GuestAssetPin: Equatable, Sendable {

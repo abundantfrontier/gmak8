@@ -47,12 +47,29 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
 }
 
 public enum OnboardingAssets {
-    public static func visible(for profile: Profile) -> [OnboardingAssetKind] {
-        switch profile {
-        case .kubernetes:
-            return [.guest, .k3sAirgap]
-        case .eureka, .eurekaAPIOnly:
-            return [.guest, .k3sAirgap, .kubevirtAirgap]
+    public static func visible(for _: Profile) -> [OnboardingAssetKind] {
+        [.guest, .k3sAirgap]
+    }
+
+    public static func isRequiredToContinue(_ kind: OnboardingAssetKind) -> Bool {
+        switch kind {
+        case .guest:
+            return !GuestAssetPin.bundled.signed.hasStubDigest
+        case .k3sAirgap:
+            return !AirgapPin.bundled.signed.hasStubDigest
+        case .kubevirtAirgap:
+            return false
+        }
+    }
+
+    public static func remoteDownloadEnabled(_ kind: OnboardingAssetKind) -> Bool {
+        switch kind {
+        case .guest:
+            return GuestAssetPin.bundled.signed.remoteDownloadEnabled
+        case .k3sAirgap:
+            return AirgapPin.bundled.signed.remoteDownloadEnabled
+        case .kubevirtAirgap:
+            return false
         }
     }
 }

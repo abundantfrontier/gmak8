@@ -1,3 +1,4 @@
+import Gmak8Kit
 import Gmak8XPC
 import SwiftUI
 
@@ -56,11 +57,12 @@ struct MenuBarPopover: View {
                     Button("Start") {
                         session.startCluster()
                     }
+                    .disabled(!clusterActionsEnabled)
                 } else {
                     Button("Stop") {
                         session.stopCluster()
                     }
-                    .disabled(!session.canStop)
+                    .disabled(!session.canStop || !clusterActionsEnabled)
                 }
                 Button("Pause") {}
                     .disabled(true)
@@ -74,11 +76,13 @@ struct MenuBarPopover: View {
                 TerminalLauncher.open()
             }
             .keyboardShortcut("t", modifiers: .command)
+            .disabled(!clusterActionsEnabled)
             publishedPortsMenu
             Divider()
             Button("Settings…") {
                 appDelegate.openSettingsWindow()
             }
+            .disabled(!clusterActionsEnabled)
             Button("Check for Updates…") {}
                 .disabled(true)
                 .help("Updates restart the cluster.")
@@ -91,6 +95,10 @@ struct MenuBarPopover: View {
         .onAppear {
             appDelegate.bindOpenWindow(openWindow)
         }
+    }
+
+    private var clusterActionsEnabled: Bool {
+        FirstRunGate.clusterActionsEnabled(needsOnboarding: settingsStore.needsOnboarding)
     }
 
     private var header: some View {

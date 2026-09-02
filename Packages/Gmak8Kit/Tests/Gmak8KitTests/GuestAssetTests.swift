@@ -16,6 +16,8 @@ struct GuestAssetTests {
         #expect(pin.sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil)
         #expect(!pin.url.absoluteString.lowercased().contains("docker"))
         #expect(!pin.url.absoluteString.contains("docker.io"))
+        #expect(pin.signed.hasStubDigest)
+        #expect(!pin.signed.remoteDownloadEnabled)
         let pem = try CosignPin.loadPublicKeyPEM()
         #expect(pem.contains("BEGIN PUBLIC KEY"))
     }

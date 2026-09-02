@@ -26,14 +26,17 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
 
     func setKeepClusterRunningOnQuit(_ value: Bool) {
         settings.keepClusterRunningOnQuit = value
-        persist()
+        persistIfOnboardingComplete()
     }
 
     func setLaunchAtLogin(_ value: Bool) {
+        guard FirstRunGate.clusterActionsEnabled(needsOnboarding: needsOnboarding) else {
+            return
+        }
         do {
             try applyLaunchAtLogin(value)
             settings.launchAtLogin = value
-            persist()
+            persistIfOnboardingComplete()
             lastError = nil
         } catch EngineErrorCode.translocated {
             lastError = OnboardingCopy.moveToApplications
@@ -78,6 +81,13 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    private func persistIfOnboardingComplete() {
+        guard FirstRunGate.shouldPersistSettings(needsOnboarding: needsOnboarding) else {
+            return
+        }
+        persist()
     }
 
     private func persist() {

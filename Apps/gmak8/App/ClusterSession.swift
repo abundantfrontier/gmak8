@@ -48,8 +48,12 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         subscription = nil
     }
 
-    func startCluster() {
+    func startCluster(waitForEngine: Bool = false) {
         ensureCoreAgentRegistered()
+        if waitForEngine {
+            Task { await self.submitStartWhenEngineReady() }
+            return
+        }
         submit(.start)
     }
 
@@ -72,6 +76,30 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         } catch {
             connectionError = .communicationFailed
         }
+    }
+
+    private func submitStartWhenEngineReady() async {
+        let socketURL = self.socketURL
+        var remaining = EngineReadyPoll.defaultAttempts
+        while remaining > 0 {
+            do {
+                try await Task.detached {
+                    try EngineClient.submit(.start, socketURL: socketURL)
+                }.value
+                connectionError = nil
+                return
+            } catch let error as CLIError where error == .engineNotRunning {
+                remaining -= 1
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            } catch let error as CLIError {
+                markDisconnected(error)
+                return
+            } catch {
+                markDisconnected(.communicationFailed)
+                return
+            }
+        }
+        markDisconnected(.engineNotRunning)
     }
 
     private func submit(_ request: EngineRequest) {

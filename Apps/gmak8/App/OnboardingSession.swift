@@ -88,7 +88,9 @@ final class OnboardingSession: ObservableObject {
             permissions: permissions,
             guestReady: assetStatus[.guest] == .ready,
             airgapReady: assetStatus[.k3sAirgap] == .ready,
-            profileAccepted: draft.profileIsAccepted
+            profileAccepted: draft.profileIsAccepted,
+            guestRequired: OnboardingAssets.isRequiredToContinue(.guest),
+            airgapRequired: OnboardingAssets.isRequiredToContinue(.k3sAirgap)
         )
     }
 
@@ -117,14 +119,14 @@ final class OnboardingSession: ObservableObject {
     }
 
     func refreshCachedAssets() {
-        for kind in OnboardingAssetKind.allCases {
+        for kind in visibleAssets {
             if assetStatus[kind] == .working {
                 continue
             }
             do {
-                if try store(for: kind)?.cachedFileIfValid() != nil {
+                if try store(for: kind)?.cachedFileIfValid(fileManager: fileManager) != nil {
                     assetStatus[kind] = .ready
-                } else if assetStatus[kind] != .ready {
+                } else {
                     assetStatus[kind] = .missing
                 }
             } catch {
@@ -134,7 +136,7 @@ final class OnboardingSession: ObservableObject {
     }
 
     func download(_ kind: OnboardingAssetKind) {
-        guard let store = store(for: kind) else {
+        guard let store = store(for: kind), store.pin.remoteDownloadEnabled else {
             return
         }
         assetStatus[kind] = .working
@@ -186,6 +188,8 @@ final class OnboardingSession: ObservableObject {
                 try CLIPathInstaller.install(cliPlan, fileManager: fileManager)
             } catch {
                 lastError = error.localizedDescription
+                finishing = false
+                return
             }
             settingsStore.completeOnboarding(settings)
             if settingsStore.needsOnboarding {
@@ -194,7 +198,7 @@ final class OnboardingSession: ObservableObject {
                 return
             }
             try CoreLaunchAgent.register(bundleURL: bundleURL)
-            clusterSession.startCluster()
+            clusterSession.startCluster(waitForEngine: true)
         } catch EngineErrorCode.translocated {
             settingsStore.lastError = OnboardingCopy.moveToApplications
             lastError = OnboardingCopy.moveToApplications

@@ -18,6 +18,8 @@ struct OnboardingTests {
         #expect(OnboardingCopy.eurekaExplanation.contains("LoadBalancer"))
         #expect(OnboardingCopy.currentContextCheckbox == "Set gmak8 as kubectl current-context")
         #expect(OnboardingCopy.createAndStart == "Create and start")
+        #expect(OnboardingCopy.gmak8HelperMissing.contains("Contents/Helpers"))
+        #expect(OnboardingCopy.downloadUnavailable.contains("gmak8-signed"))
         #expect(OnboardingCopy.kubernetesVersionValue == "1.33.3")
         #expect(OnboardingCopy.kubernetesVersionValue == K3sPin.displayVersion)
         #expect(OnboardingCopy.pathExportSnippet == #"export PATH="$HOME/.local/bin:$PATH""#)
@@ -71,18 +73,23 @@ struct OnboardingTests {
     @Test func firstRunShowsWhenSettingsFileIsMissing() {
         #expect(FirstRunGate.shouldShowOnboarding(settingsFileExists: false))
         #expect(!FirstRunGate.shouldShowOnboarding(settingsFileExists: true))
+        #expect(!FirstRunGate.shouldPersistSettings(needsOnboarding: true))
+        #expect(FirstRunGate.shouldPersistSettings(needsOnboarding: false))
+        #expect(!FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
+        #expect(FirstRunGate.clusterActionsEnabled(needsOnboarding: false))
     }
 
-    @Test func kubevirtAirgapIsHiddenUnlessEurekaProfile() {
+    @Test func kubevirtAirgapRowIsOmittedUntilAStoreExists() {
         #expect(OnboardingAssets.visible(for: .kubernetes) == [.guest, .k3sAirgap])
-        #expect(!OnboardingAssets.visible(for: .kubernetes).contains(.kubevirtAirgap))
-        #expect(OnboardingAssets.visible(for: .eureka).contains(.kubevirtAirgap))
-        #expect(OnboardingAssets.visible(for: .eurekaAPIOnly).contains(.kubevirtAirgap))
-        #expect(OnboardingAssetKind.guest.isRequired)
-        #expect(OnboardingAssetKind.k3sAirgap.isRequired)
-        #expect(!OnboardingAssetKind.kubevirtAirgap.isRequired)
+        #expect(OnboardingAssets.visible(for: .eureka) == [.guest, .k3sAirgap])
+        #expect(OnboardingAssets.visible(for: .eurekaAPIOnly) == [.guest, .k3sAirgap])
+        #expect(!OnboardingAssets.visible(for: .eureka).contains(.kubevirtAirgap))
         #expect(OnboardingAssetKind.guest.fileName.hasPrefix("gmak8-guest-"))
         #expect(OnboardingAssetKind.k3sAirgap.fileName == AirgapPin.archiveFileName)
+        #expect(!OnboardingAssets.isRequiredToContinue(.guest))
+        #expect(OnboardingAssets.isRequiredToContinue(.k3sAirgap))
+        #expect(!OnboardingAssets.remoteDownloadEnabled(.guest))
+        #expect(!OnboardingAssets.remoteDownloadEnabled(.k3sAirgap))
     }
 
     @Test func isSupportedHardFailIsNotALockAndNestedVirtIsInformational() {
@@ -151,6 +158,28 @@ struct OnboardingTests {
             )
         )
         #expect(
+            OnboardingAdvance.canLeave(
+                page: .assets,
+                permissions: ready,
+                guestReady: false,
+                airgapReady: true,
+                profileAccepted: true,
+                guestRequired: false,
+                airgapRequired: true
+            )
+        )
+        #expect(
+            OnboardingAdvance.canLeave(
+                page: .createCluster,
+                permissions: ready,
+                guestReady: false,
+                airgapReady: true,
+                profileAccepted: true,
+                guestRequired: false,
+                airgapRequired: true
+            )
+        )
+        #expect(
             !OnboardingAdvance.canLeave(
                 page: .permissions,
                 permissions: .unsupportedVirtualization,
@@ -209,9 +238,41 @@ struct OnboardingTests {
         #expect(!draft.profileIsAccepted)
         #expect(draft.profileRefusal == .insufficientMemory(requiredGiB: 18, availableGiB: 8))
         #expect(draft.profileRefusal?.onboardingMessage.contains("Eureka API-only") == true)
+        #expect(draft.cpu == 4)
+        #expect(draft.memoryGiB == 4)
+        #expect(draft.dataDiskGiB == 60)
         draft.applyProfile(.eurekaAPIOnly, host: host)
         #expect(draft.profileIsAccepted)
         #expect(draft.cpu == 4)
         #expect(draft.memoryGiB == 4)
+    }
+
+    @Test func remoteDownloadOnlyForGmak8SignedReleaseWithRealDigest() {
+        let stub = GuestAssetPin.bundled.signed
+        #expect(stub.hasStubDigest)
+        #expect(!stub.remoteDownloadEnabled)
+        #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
+        let published = SignedAssetPin(
+            fileName: AirgapPin.archiveFileName,
+            url: URL(string: "https://github.com/gmak8/gmak8/releases/download/v0.0.1/\(AirgapPin.archiveFileName)")!,
+            sha256: AirgapPin.bundled.sha256,
+            maxBytes: AirgapPin.maxCompressedBytes
+        )
+        #expect(!published.hasStubDigest)
+        #expect(published.remoteDownloadEnabled)
+        let k3sIO = AirgapPin.bundled.signed
+        #expect(!SignedAssetPin.isGmak8SignedReleaseURL(k3sIO.url))
+    }
+
+    @Test func engineReadyPollSucceedsOnLaterAttempt() {
+        var calls = 0
+        #expect(
+            EngineReadyPoll.wait(attempts: 3) {
+                calls += 1
+                return calls >= 2
+            }
+        )
+        #expect(calls == 2)
+        #expect(!EngineReadyPoll.wait(attempts: 2, isReady: { false }))
     }
 }

@@ -110,6 +110,22 @@ struct CLIPathInstallerTests {
         )
     }
 
+    @Test func emptyPlanSkipsInstallWithoutCreatingBinDirectory() throws {
+        let env = try CLIHarness()
+        defer { env.tearDown() }
+        let dest = CLIPathInstaller.defaultDestination(home: env.home)
+        let plan = CLIInstallPlan(
+            destinationDirectory: dest,
+            binaries: [],
+            skippedVirtctl: true,
+            missingGmak8Helper: true,
+            pathExportNeeded: true,
+            homebrewBinDetected: false
+        )
+        try CLIPathInstaller.install(plan)
+        #expect(!FileManager.default.fileExists(atPath: dest.path(percentEncoded: false)))
+    }
+
     @Test func macosHelperPathResolvesContentsHelpers() {
         let executable = URL(fileURLWithPath: "/Applications/gmak8.app/Contents/MacOS/gmak8")
         #expect(

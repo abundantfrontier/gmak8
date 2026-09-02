@@ -13,10 +13,14 @@ public enum OnboardingCopy {
 
     public static let assetsTitle = "Cluster assets"
     public static let assetsBody =
-        "Download the guest disk and k3s airgap archive. Each file is verified with SHA-256 and keyful Cosign (public key pinned in the app)."
+        "Each file is verified with SHA-256 and keyful Cosign (public key pinned in the app)."
     public static let chooseFile = "Choose a file…"
     public static let download = "Download"
-    public static let offlineHint = "Offline? Choose a file… next to its .sig."
+    public static let downloadUnavailable =
+        "Remote download waits for a gmak8-signed GitHub Release (archive + .sig). Choose a file… for a local signed pair."
+    public static let guestDigestUnpublished =
+        "The guest disk SHA-256 is not published yet. Choose a file… when you have a signed pair, or continue without it."
+    public static let offlineHint = "Choose a file… next to its .sig."
     public static let sizeBudget500MiB = "≤ 500 MiB"
 
     public static let permissionsTitle = "Permissions"
@@ -40,6 +44,8 @@ public enum OnboardingCopy {
     public static let homebrewDetected =
         "Detected /opt/homebrew/bin. gmak8 still installs to ~/.local/bin and never requires admin."
     public static let virtctlSkipped = "virtctl is not in this app bundle yet; skipping that copy."
+    public static let gmak8HelperMissing =
+        "gmak8 CLI helper is missing from Contents/Helpers; skipping that copy."
 
     public static let createTitle = "Create cluster"
     public static let clusterName = "Cluster name"
@@ -64,6 +70,8 @@ public enum OnboardingCopy {
             assetsBody,
             chooseFile,
             download,
+            downloadUnavailable,
+            guestDigestUnpublished,
             offlineHint,
             sizeBudget500MiB,
             permissionsTitle,
@@ -81,6 +89,7 @@ public enum OnboardingCopy {
             pathExportSnippet,
             homebrewDetected,
             virtctlSkipped,
+            gmak8HelperMissing,
             createTitle,
             clusterName,
             kubernetesVersion,
