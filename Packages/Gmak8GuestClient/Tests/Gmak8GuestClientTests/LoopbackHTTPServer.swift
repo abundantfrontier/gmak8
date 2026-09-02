@@ -220,6 +220,9 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
         case ("GET", "/node"):
             return .json(200, state.nodeReady ? #"{"ready":true,"name":"gmak8"}"# : #"{"ready":false,"name":"gmak8"}"#)
         case ("GET", "/services"):
+            if let code = state.servicesStatus, code >= 400 {
+                return .json(code, #"{"ok":false,"error":"kubectl failed"}"#)
+            }
             return .json(200, state.servicesJSON)
         case ("PUT", "/time"):
             if request.body.isEmpty {
@@ -252,4 +255,5 @@ final class FixtureState: @unchecked Sendable {
     var lastAirgapBody = Data()
     var servicesJSON =
         #"{"items":[{"namespace":"default","name":"nginx","type":"NodePort","ports":[{"name":"http","port":80,"nodePort":30080,"protocol":"TCP"}]}]}"#
+    var servicesStatus: Int?
 }

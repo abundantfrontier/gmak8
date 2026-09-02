@@ -75,6 +75,40 @@ struct KubernetesBringUpTests {
         #expect(env.steps.contains(ClusterStartStep.kubernetes))
         #expect(env.steps.contains(ClusterStartStep.api))
         #expect(env.steps.contains(ClusterStartStep.nodeReady))
+        #expect(env.server.state.airgapImports == 0)
+        #expect(env.server.state.k3sStarts == 1)
+    }
+
+    @Test func presentAirgapSkipsImport() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, airgapPresent: true)
+        defer { env.tearDown() }
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.server.state.airgapImports == 0)
+        #expect(env.server.state.k3sStarts == 1)
+        #expect(env.steps.contains(ClusterStartStep.airgap))
+    }
+
+    @Test func healthOkDoesNotSkipUnmountedDataDisk() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, mounted: false)
+        defer { env.tearDown() }
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().step == ClusterStartStep.dataDisk
+        }
+        #expect(env.engine.currentStatus().state == .starting)
+        #expect(env.server.state.k3sStarts == 0)
+        env.server.state.mounted = true
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.engine.currentStatus().apiEndpoint == "https://127.0.0.1:6443")
+        #expect(env.steps.contains(ClusterStartStep.dataDisk))
+        #expect(env.steps.contains(ClusterStartStep.guestAgent))
     }
 
     @Test func bootstrapRewritesApiPort16443() async throws {
@@ -338,6 +372,7 @@ private struct BringUpHarness {
         neverReady: Bool = false,
         mergeUserConfig: Bool = false,
         bytesFree: UInt64 = 1_000_000,
+        mounted: Bool = true,
         airgapPresent: Bool = true,
         holdAirgapPut: Bool = false,
         streamClient: Bool = false,
@@ -364,6 +399,7 @@ private struct BringUpHarness {
             dataDirExists: dataDirExists,
             neverReady: neverReady,
             bytesFree: bytesFree,
+            mounted: mounted,
             airgapPresent: airgapPresent,
             holdAirgapPut: holdAirgapPut
         )
@@ -489,6 +525,7 @@ private final class BringUpAgentState: @unchecked Sendable {
     var dataDirExists: Bool
     var neverReady: Bool
     var bytesFree: UInt64
+    var mounted: Bool
     var airgapPresent: Bool
     var started = false
     var k3sStarts = 0
@@ -505,6 +542,7 @@ private final class BringUpAgentState: @unchecked Sendable {
         dataDirExists: Bool,
         neverReady: Bool,
         bytesFree: UInt64,
+        mounted: Bool,
         airgapPresent: Bool,
         holdAirgapPut: Bool = false
     ) {
@@ -513,6 +551,7 @@ private final class BringUpAgentState: @unchecked Sendable {
         self.dataDirExists = dataDirExists
         self.neverReady = neverReady
         self.bytesFree = bytesFree
+        self.mounted = mounted
         self.airgapPresent = airgapPresent
         self.holdAirgapPut = holdAirgapPut
     }
@@ -648,6 +687,15 @@ private func response(for request: (String, String, Data), state: BringUpAgentSt
     case ("GET", "/health"):
         return (200, Data(#"{"ok":true}"#.utf8), "application/json")
     case ("GET", "/disks"):
+        if !state.mounted {
+            return (
+                200,
+                Data(
+                    #"{"gmak8_data":"unmounted","kite_data":"unmounted","mountpoint":"/mnt/data","label":"","bytes_total":0,"bytes_free":0}"#
+                        .utf8),
+                "application/json"
+            )
+        }
         let json =
             "{\"gmak8_data\":\"mounted\",\"kite_data\":\"mounted\",\"mountpoint\":\"/mnt/data\",\"label\":\"GMAK8_DATA\",\"bytes_total\":10000000,\"bytes_free\":\(state.bytesFree)}"
         return (200, Data(json.utf8), "application/json")

@@ -472,6 +472,14 @@ func TestAirgapGetAndPut(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("missing length status %d", rec.Code)
 	}
+
+	oversize := httptest.NewRequest(http.MethodPut, "/airgap/k3s", bytes.NewReader([]byte("x")))
+	oversize.Header.Set("Content-Length", strconv.FormatInt(maxAirgapBytes+1, 10))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, oversize)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversize status %d %s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestListenTCPHealth(t *testing.T) {

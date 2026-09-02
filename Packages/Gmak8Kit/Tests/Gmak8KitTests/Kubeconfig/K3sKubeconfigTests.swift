@@ -64,4 +64,23 @@ struct K3sKubeconfigTests {
         #expect(privateYAML.contains("server: https://127.0.0.1:16443"))
         #expect(!privateYAML.contains("192.168.127.2"))
     }
+
+    @Test func missingCertsAreMissingMaterial() {
+        let yaml = """
+            apiVersion: v1
+            clusters:
+            - cluster:
+                server: https://127.0.0.1:6443
+              name: default
+            """
+        #expect(throws: K3sKubeconfigError.missingMaterial) {
+            _ = try K3sKubeconfig.localhostMaterial(from: yaml, port: 6443)
+        }
+    }
+
+    @Test func nonYAMLIsRejected() {
+        #expect(throws: K3sKubeconfigError.notYAML) {
+            _ = try K3sKubeconfig.localhostMaterial(from: "{[", port: 6443)
+        }
+    }
 }

@@ -209,6 +209,42 @@ struct NodePortPublisherTests {
         #expect(exposer.bound[30080] == nil)
     }
 
+    @Test func successfulEmptyListUnexposesOwnedPorts() async throws {
+        let source = FakeServiceSource(services: [
+            nodePort("nginx", nodePort: 30080)
+        ])
+        let exposer = FakeExposer()
+        let publisher = NodePortPublisher(
+            source: source, exposer: exposer, pollInterval: .milliseconds(5))
+        publisher.start(onChange: {}, log: { _ in })
+        defer { publisher.cancel() }
+        try await waitUntil { exposer.bound[30080] == 30080 }
+        source.setServices([])
+        try await waitUntil {
+            exposer.unexposeCalls.contains(30080) && exposer.bound[30080] == nil
+        }
+        #expect(publisher.snapshot().filter { $0.collision == .published }.isEmpty)
+    }
+
+    @Test func removedServiceUnexposesOnlyThatPort() async throws {
+        let source = FakeServiceSource(services: [
+            nodePort("nginx", nodePort: 30080),
+            nodePort("redis", nodePort: 30081),
+        ])
+        let exposer = FakeExposer()
+        let publisher = NodePortPublisher(
+            source: source, exposer: exposer, pollInterval: .milliseconds(5))
+        publisher.start(onChange: {}, log: { _ in })
+        defer { publisher.cancel() }
+        try await waitUntil { exposer.boundKeys == Set([30080, 30081]) }
+        source.setServices([nodePort("nginx", nodePort: 30080)])
+        try await waitUntil {
+            exposer.unexposeCalls.contains(30081) && exposer.bound[30080] == 30080
+        }
+        #expect(exposer.bound[30081] == nil)
+        #expect(publisher.snapshot().map(\.service) == ["nginx"])
+    }
+
     @Test func listFailureKeepsExistingBinds() async throws {
         let source = FakeServiceSource(services: [
             nodePort("nginx", nodePort: 30080)
@@ -316,6 +352,13 @@ private final class FakeServiceSource: GuestServiceSource, @unchecked Sendable {
     func setError(_ error: (any Error)?) {
         lock.lock()
         self.error = error
+        lock.unlock()
+    }
+
+    func setServices(_ services: [GuestService]) {
+        lock.lock()
+        self.services = services
+        self.error = nil
         lock.unlock()
     }
 

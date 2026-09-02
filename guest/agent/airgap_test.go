@@ -25,6 +25,18 @@ func TestSanitizeAirgapName(t *testing.T) {
 	}
 }
 
+func TestImportAirgapRejectsOversize(t *testing.T) {
+	dir := t.TempDir()
+	h := defaultHost()
+	h.imagesDir = filepath.Join(dir, "images")
+	h.tmpDir = filepath.Join(dir, "tmp")
+	h.mountPoint = dir
+	_, err := h.ImportAirgap("tiny.tar.zst", bytes.NewReader([]byte("x")), maxAirgapBytes+1)
+	if err == nil || !strings.Contains(err.Error(), "size budget") {
+		t.Fatalf("err %v", err)
+	}
+}
+
 func TestListAirgapPresent(t *testing.T) {
 	dir := t.TempDir()
 	if listAirgap(dir).Present {

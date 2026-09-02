@@ -163,6 +163,20 @@ struct GuestAgentClientTests {
         #expect(disks.isDataMounted)
     }
 
+    @Test func servicesHTTPErrorThrows() async throws {
+        let (server, state) = try makeGuestAgentFixture()
+        defer { server.stop() }
+        state.servicesStatus = 500
+        let client = GuestAgentClient(baseURL: server.url)
+        do {
+            _ = try await client.services()
+            Issue.record("expected kubectl failure")
+        } catch GuestAgentError.httpStatus(let code, let message) {
+            #expect(code == 500)
+            #expect(message == "kubectl failed")
+        }
+    }
+
     @Test func httpErrorSurfacesAgentMessage() async throws {
         let (server, _) = try makeGuestAgentFixture()
         defer { server.stop() }

@@ -115,6 +115,21 @@ struct NDJSONCodecTests {
         #expect(legacy.hostURL == "http://127.0.0.1:30080")
     }
 
+    @Test func imageJobRoundTrip() throws {
+        let event = EngineEvent.status(
+            EngineStatus(
+                state: .starting,
+                step: "airgap",
+                imageJob: ImageJobStatus(bytesReceived: 12, bytesTotal: 24)
+            )
+        )
+        let line = try utf8Line(event)
+        #expect(line.contains("\"step\":\"airgap\""))
+        #expect(line.contains("\"bytesReceived\":12"))
+        #expect(line.contains("\"bytesTotal\":24"))
+        #expect(try NDJSONCodec.decodeEvent(line: line) == event)
+    }
+
     @Test func logEventRoundTrip() throws {
         let event = EngineEvent.log(source: .engine, line: "start accepted")
         let line = try utf8Line(event)

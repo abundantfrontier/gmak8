@@ -13,6 +13,14 @@ struct K3sConfigTests {
         #expect(!K3sConfig.yaml.contains("disable-helm-controller:"))
         #expect(!K3sConfig.yaml.contains("write-kubeconfig:"))
         #expect(!K3sConfig.yaml.contains("\ndisable:"))
+        #expect(K3sConfig.yaml.contains("  - 127.0.0.1"))
+        #expect(K3sConfig.yaml.contains("  - localhost"))
+        #expect(K3sConfig.yaml.contains("  - gmak8"))
+        #expect(K3sConfig.yaml.contains("  - gmak8.internal"))
+        #expect(K3sConfig.yaml.contains("  - 192.168.127.2"))
+        #expect(K3sConfig.yaml.contains("cluster-cidr: 10.42.0.0/16"))
+        #expect(K3sConfig.yaml.contains("service-cidr: 10.43.0.0/16"))
+        #expect(K3sConfig.yaml.contains("cluster-dns: 10.43.0.10"))
     }
 
     @Test func writeHostFileCreatesK3sConfigYaml() throws {

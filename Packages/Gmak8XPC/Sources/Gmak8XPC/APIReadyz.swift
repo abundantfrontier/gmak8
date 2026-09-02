@@ -16,10 +16,15 @@ public enum APIReadyz {
         do {
             let (_, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            return status == 200 || status == 401 || status == 403
+            return accepts(status)
         } catch {
             return false
         }
+    }
+
+    /// Anonymous kube-apiserver often returns 401/403 on `/readyz` when the process is up.
+    public static func accepts(_ status: Int) -> Bool {
+        status == 200 || status == 401 || status == 403
     }
 }
 
