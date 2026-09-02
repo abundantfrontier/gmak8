@@ -23,7 +23,7 @@ xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
   build
 ```
 
-Open `Apps/gmak8/gmak8.xcodeproj` in Xcode and run the **gmak8** scheme.
+The **gmak8** CLI (`status`, `version`) is the `gmak8-cli` scheme; `version` does not need `gmak8-core`. Open `Apps/gmak8/gmak8.xcodeproj` in Xcode and run the **gmak8** scheme.
 
 CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, Gmak8Kit tests, xcodebuild test).
 

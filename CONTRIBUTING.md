@@ -29,6 +29,11 @@ xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
   -scheme gmak8-core \
   -destination 'platform=macOS' \
   test
+
+xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
+  -scheme gmak8-cli \
+  -destination 'platform=macOS' \
+  test
 ```
 
 Format Swift with the repo config:

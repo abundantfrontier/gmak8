@@ -14,51 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A10000000000000000000002"
-               BuildableName = "gmak8.app"
-               BlueprintName = "gmak8"
-               ReferencedContainer = "container:gmak8.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A20000000000000000000007"
-               BuildableName = "gmak8-core"
-               BlueprintName = "gmak8-core"
-               ReferencedContainer = "container:gmak8.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "A30000000000000000000009"
                BuildableName = "gmak8"
                BlueprintName = "gmak8-cli"
-               ReferencedContainer = "container:gmak8.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "NO"
-            buildForProfiling = "NO"
-            buildForArchiving = "NO"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A1000000000000000000001B"
-               BuildableName = "gmak8Tests.xctest"
-               BlueprintName = "gmak8Tests"
                ReferencedContainer = "container:gmak8.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -97,9 +55,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A10000000000000000000002"
-            BuildableName = "gmak8.app"
-            BlueprintName = "gmak8"
+            BlueprintIdentifier = "A30000000000000000000009"
+            BuildableName = "gmak8"
+            BlueprintName = "gmak8-cli"
             ReferencedContainer = "container:gmak8.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -114,9 +72,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A10000000000000000000002"
-            BuildableName = "gmak8.app"
-            BlueprintName = "gmak8"
+            BlueprintIdentifier = "A30000000000000000000009"
+            BuildableName = "gmak8"
+            BlueprintName = "gmak8-cli"
             ReferencedContainer = "container:gmak8.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

@@ -20,6 +20,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 
 - `Apps/gmak8` — SwiftUI app (`gmak8.app`)
 - `Apps/gmak8/Gmak8Core` — LaunchAgent (`gmak8-core`) listening on `engine.sock`
+- `Apps/gmak8/CLI` — ArgumentParser CLI (`gmak8`) on `engine.sock` (`status`, `version`)
 - `Packages/Gmak8Kit` — paths, settings, logging
 - `Packages/Gmak8XPC` — NDJSON engine protocol, fake cluster state machine, peer/Team ID policy
 - `docs/design.md` — product and implementation design
