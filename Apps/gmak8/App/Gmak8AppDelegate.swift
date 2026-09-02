@@ -184,7 +184,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     private func keepExtraHideWindows() {
-        for window in NSApp.windows where isProductWindow(window) {
+        for window in NSApp.windows where shouldHideWhenKeepingExtra(window) {
             window.orderOut(nil)
         }
         NSApp.setActivationPolicy(.accessory)
@@ -205,6 +205,10 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
             title: window.title,
             isStatusBar: window.level == .statusBar
         )
+    }
+
+    private func shouldHideWhenKeepingExtra(_ window: NSWindow) -> Bool {
+        ProductWindowIdentity.shouldHideWhenKeepingExtra(isStatusBar: window.level == .statusBar)
     }
 
     private func launchedAsLoginItem() -> Bool {

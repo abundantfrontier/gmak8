@@ -114,4 +114,8 @@ enum ProductWindowIdentity {
         }
         return false
     }
+
+    static func shouldHideWhenKeepingExtra(isStatusBar: Bool) -> Bool {
+        !isStatusBar
+    }
 }

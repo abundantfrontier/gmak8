@@ -12,9 +12,6 @@ struct Gmak8App: App {
                 .environmentObject(appDelegate.settingsStore)
         }
         .defaultSize(width: 420, height: 280)
-        .commands {
-            Gmak8Commands(appDelegate: appDelegate)
-        }
 
         MenuBarExtra {
             MenuBarPopover()

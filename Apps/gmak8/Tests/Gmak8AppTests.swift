@@ -159,6 +159,8 @@ struct Gmak8AppTests {
                 isStatusBar: true
             )
         )
+        #expect(ProductWindowIdentity.shouldHideWhenKeepingExtra(isStatusBar: false))
+        #expect(!ProductWindowIdentity.shouldHideWhenKeepingExtra(isStatusBar: true))
     }
 
     @Test func statusPresentationFormatsPinAndMetrics() {
