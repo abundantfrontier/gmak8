@@ -4,6 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 swift format lint --strict --recursive --configuration .swift-format Apps Packages
+# Plan-only soak checks. Must not pass --live (no VZ on GitHub-hosted macOS).
+bash scripts/soak.sh --self-test
 swift test --package-path Packages/Gmak8Kit
 swift test --package-path Packages/Gmak8XPC
 swift test --package-path Packages/Gmak8Virtualization

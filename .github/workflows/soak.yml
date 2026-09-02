@@ -1,0 +1,43 @@
+name: soak
+
+# Self-hosted VZ soak. Manual until a runner with label gmak8-vm exists.
+# GitHub-hosted macOS cannot run Virtualization.framework.
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: start/stop cycles (nightly default 50)
+        required: false
+        default: "50"
+        type: string
+      gate:
+        description: "0.9 (start/stop, dirty-kill fsck, NodePort) or 1.0 (KubeVirt deferred)"
+        required: false
+        default: "0.9"
+        type: string
+
+concurrency:
+  group: gmak8-vm-soak
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    runs-on:
+      - self-hosted
+      - gmak8-vm
+    timeout-minutes: 480
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print soak plan
+        env:
+          GMAK8_SOAK_CYCLES: ${{ inputs.cycles }}
+          GMAK8_SOAK_GATE: ${{ inputs.gate }}
+        run: bash scripts/soak.sh --plan
+      - name: Start/stop, dirty-kill fsck, NodePort curl
+        env:
+          GMAK8_SOAK_CYCLES: ${{ inputs.cycles }}
+          GMAK8_SOAK_GATE: ${{ inputs.gate }}
+        run: bash scripts/soak.sh --live
