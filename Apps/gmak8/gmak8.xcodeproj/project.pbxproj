@@ -30,6 +30,8 @@
 		A30000000000000000000016 /* StatusText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000007 /* StatusText.swift */; };
 		A30000000000000000000017 /* CLITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3000000000000000000001B /* CLITests.swift */; };
 		A30000000000000000000018 /* gmak8 in Embed gmak8 CLI */ = {isa = PBXBuildFile; fileRef = A30000000000000000000004 /* gmak8 */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		A40000000000000000000003 /* Gmak8Virtualization in Frameworks */ = {isa = PBXBuildFile; productRef = A40000000000000000000002 /* Gmak8Virtualization */; };
+		A40000000000000000000005 /* CoreVirtualMachineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000004 /* CoreVirtualMachineRuntime.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -109,6 +111,7 @@
 		A30000000000000000000006 /* EngineClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineClient.swift; sourceTree = "<group>"; };
 		A30000000000000000000007 /* StatusText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusText.swift; sourceTree = "<group>"; };
 		A3000000000000000000001B /* CLITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLITests.swift; sourceTree = "<group>"; };
+		A40000000000000000000004 /* CoreVirtualMachineRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreVirtualMachineRuntime.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +139,7 @@
 			files = (
 				A20000000000000000000010 /* Gmak8Kit in Frameworks */,
 				A2000000000000000000000E /* Gmak8XPC in Frameworks */,
+				A40000000000000000000003 /* Gmak8Virtualization in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -207,6 +211,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000005 /* main.swift */,
+				A40000000000000000000004 /* CoreVirtualMachineRuntime.swift */,
 				A20000000000000000000013 /* dev.gmak8.core.plist */,
 			);
 			path = Gmak8Core;
@@ -288,6 +293,7 @@
 			packageProductDependencies = (
 				A2000000000000000000000F /* Gmak8Kit */,
 				A2000000000000000000000D /* Gmak8XPC */,
+				A40000000000000000000002 /* Gmak8Virtualization */,
 			);
 			productName = "gmak8-core";
 			productReference = A20000000000000000000004 /* gmak8-core */;
@@ -350,6 +356,7 @@
 			packageReferences = (
 				A10000000000000000000010 /* XCLocalSwiftPackageReference "Gmak8Kit" */,
 				A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */,
+				A40000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Virtualization" */,
 				A30000000000000000000001 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			productRefGroup = A10000000000000000000009 /* Products */;
@@ -408,6 +415,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A20000000000000000000006 /* main.swift in Sources */,
+				A40000000000000000000005 /* CoreVirtualMachineRuntime.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -861,6 +869,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../Packages/Gmak8XPC;
 		};
+		A40000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Virtualization" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Packages/Gmak8Virtualization;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -919,6 +931,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */;
 			productName = Gmak8XPC;
+		};
+		A40000000000000000000002 /* Gmak8Virtualization */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A40000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Virtualization" */;
+			productName = Gmak8Virtualization;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -66,6 +66,22 @@ public struct HostPaths: Equatable, Sendable {
         applicationSupport.appending(path: "vm", directoryHint: .isDirectory)
     }
 
+    public var osImage: URL {
+        vmDirectory.appending(path: "os.img")
+    }
+
+    public var dataImage: URL {
+        vmDirectory.appending(path: "data.img")
+    }
+
+    public var efiNVRAM: URL {
+        vmDirectory.appending(path: "efi-nvram.bin")
+    }
+
+    public var serialLog: URL {
+        vmDirectory.appending(path: "serial.log")
+    }
+
     public var vfkitSocket: URL {
         caches.appending(path: "n.sock")
     }

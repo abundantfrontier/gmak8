@@ -119,6 +119,54 @@ struct ClusterEngineTests {
         #expect(scheduler.pendingCount == 1)
     }
 
+    @Test func startFailsWhenDiskImagesLocked() {
+        let runtime = StubVirtualMachineRuntime(
+            preflightError: VirtualMachinePreflightError(
+                code: .locked,
+                message: "Another gmak8 (engine.sock live) holds data.img. Quit that instance."
+            )
+        )
+        let engine = ClusterEngine(scheduler: ManualEngineScheduler(), runtime: runtime)
+        #expect(engine.submit(.start) == .error(.locked))
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(engine.currentStatus().lastError?.contains("data.img") == true)
+        #expect(!runtime.started)
+    }
+
+    @Test func startFailsUnsupportedWithoutLockCopy() {
+        let message =
+            "This Mac cannot run a virtual machine (unsupported CPU, OS, or missing virtualization entitlement)."
+        let runtime = StubVirtualMachineRuntime(
+            preflightError: VirtualMachinePreflightError(
+                code: .virtualizationUnsupported,
+                message: message
+            )
+        )
+        let engine = ClusterEngine(scheduler: ManualEngineScheduler(), runtime: runtime)
+        #expect(engine.submit(.start) == .error(.virtualizationUnsupported))
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(engine.currentStatus().lastError == message)
+        let lastError = engine.currentStatus().lastError ?? ""
+        #expect(!lastError.lowercased().contains("lock"))
+        #expect(!lastError.lowercased().contains("hypervisor"))
+        #expect(!runtime.started)
+    }
+
+    @Test func customRuntimeStartAndStopAreInvoked() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = StubVirtualMachineRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+        #expect(engine.submit(.start) == .ok)
+        #expect(engine.currentStatus().step == "vm")
+        scheduler.runNext()
+        #expect(runtime.started)
+        #expect(engine.currentStatus().state == .running)
+        #expect(engine.submit(.stop) == .ok)
+        scheduler.runNext()
+        #expect(runtime.stopped)
+        #expect(engine.currentStatus().state == .stopped)
+    }
+
     private func statusStates(_ events: [EngineEvent]) -> [ClusterState] {
         events.compactMap { event in
             if case .status(let status) = event {
@@ -126,6 +174,31 @@ struct ClusterEngineTests {
             }
             return nil
         }
+    }
+}
+
+private final class StubVirtualMachineRuntime: VirtualMachineRuntime, @unchecked Sendable {
+    var stepName: String { "vm" }
+    var preflightError: VirtualMachinePreflightError?
+    var started = false
+    var stopped = false
+
+    init(preflightError: VirtualMachinePreflightError? = nil) {
+        self.preflightError = preflightError
+    }
+
+    func preflight() -> VirtualMachinePreflightError? {
+        preflightError
+    }
+
+    func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        started = true
+        completion(.success(()))
+    }
+
+    func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        stopped = true
+        completion(.success(()))
     }
 }
 

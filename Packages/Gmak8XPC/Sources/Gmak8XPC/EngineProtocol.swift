@@ -15,6 +15,7 @@ public enum EngineErrorCode: String, Error, Codable, Equatable, Sendable {
     case confirmationRequired = "confirmation_required"
     case translocated
     case locked
+    case virtualizationUnsupported = "virtualization_unsupported"
     case unauthorized
     case unknownOp = "unknown_op"
     case invalidRequest = "invalid_request"

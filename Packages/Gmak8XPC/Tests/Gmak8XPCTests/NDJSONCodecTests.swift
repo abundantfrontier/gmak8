@@ -22,6 +22,10 @@ struct NDJSONCodecTests {
         )
         #expect(try utf8Line(EngineReply.error(.translocated)) == "{\"error\":\"translocated\"}\n")
         #expect(try utf8Line(EngineReply.error(.locked)) == "{\"error\":\"locked\"}\n")
+        #expect(
+            try utf8Line(EngineReply.error(.virtualizationUnsupported))
+                == "{\"error\":\"virtualization_unsupported\"}\n"
+        )
     }
 
     @Test func decodesOpsIncludingResetWithoutForce() throws {

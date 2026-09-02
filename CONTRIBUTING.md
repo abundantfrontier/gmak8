@@ -19,6 +19,7 @@ Requirements: macOS 14+, Apple Silicon, Xcode with Swift 6.
 ```bash
 swift test --package-path Packages/Gmak8Kit
 swift test --package-path Packages/Gmak8XPC
+swift test --package-path Packages/Gmak8Virtualization
 
 xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
   -scheme gmak8 \
@@ -42,6 +43,6 @@ Format Swift with the repo config:
 swift format --in-place --recursive --configuration .swift-format Apps Packages
 ```
 
-CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, Gmak8Kit tests, xcodebuild test). It does not run Virtualization.framework.
+CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, package tests, xcodebuild test). It does not boot a Linux VM.
 
 Do not add Docker, Compose, or a Docker socket shim. Do not copy the Eureka source tree into this repository.
