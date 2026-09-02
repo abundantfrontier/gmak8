@@ -37,6 +37,10 @@ jobs:
             guest/mkosi/mkosi.extra/usr/local/lib/gmak8/format-data-disk.sh \
             guest/mkosi/mkosi.extra/usr/local/lib/gmak8/modprobe-kvm.sh \
             guest/k3s/install.sh \
+            guest/airgap/fetch.sh \
+            guest/airgap/sign.sh \
+            guest/airgap/verify.sh \
+            guest/airgap/assert-metadata.sh \
             guest/mkosi/mkosi.extra/usr/local/lib/gmak8/install-k3s.sh \
             guest/mkosi/mkosi.postinst.chroot \
             guest/mkosi/tests/validate.sh \

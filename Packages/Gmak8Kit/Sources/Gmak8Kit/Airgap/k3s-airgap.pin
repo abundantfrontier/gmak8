@@ -1,0 +1,8 @@
+# Pin for the k3s airgap image archive. Do not vendor the blob in git.
+# Upstream bytes are re-wrapped as AIRGAP_NAME for GitHub Releases (< 2 GiB).
+K3S_VERSION=v1.33.3+k3s1
+AIRGAP_NAME=gmak8-k3s-airgap-v1.33.3-arm64.tar.zst
+AIRGAP_URL=https://github.com/k3s-io/k3s/releases/download/v1.33.3%2Bk3s1/k3s-airgap-images-arm64.tar.zst
+AIRGAP_SHA256=c12ec7b122f34eb1f89310b05e66b500a2f49522d7cd4ceb3475a675cab6ebc6
+AIRGAP_MAX_BYTES=524288000
+GUEST_IMAGES_DIR=/mnt/data/rancher/agent/images

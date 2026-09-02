@@ -201,6 +201,22 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
         case ("POST", "/k3s/start"):
             state.k3sActive = true
             return .json(200, #"{"ok":true}"#)
+        case ("GET", "/airgap"):
+            if state.airgapPresent {
+                return .json(
+                    200,
+                    #"{"present":true,"files":["gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"],"bytes":\#(state.airgapBytes)}"#
+                )
+            }
+            return .json(200, #"{"present":false,"files":[],"bytes":0}"#)
+        case ("PUT", "/airgap/k3s"):
+            state.airgapPresent = true
+            state.airgapBytes = UInt64(request.body.count)
+            state.lastAirgapBody = request.body
+            return .json(
+                200,
+                #"{"present":true,"files":["gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"],"bytes":\#(request.body.count)}"#
+            )
         case ("GET", "/node"):
             return .json(200, state.nodeReady ? #"{"ready":true,"name":"gmak8"}"# : #"{"ready":false,"name":"gmak8"}"#)
         case ("PUT", "/time"):
@@ -229,4 +245,7 @@ final class FixtureState: @unchecked Sendable {
     var dataDirMinor = "1.33"
     var dataDirExists = true
     var nodeReady = true
+    var airgapPresent = true
+    var airgapBytes: UInt64 = 24
+    var lastAirgapBody = Data()
 }

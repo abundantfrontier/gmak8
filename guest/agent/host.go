@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"syscall"
 	"time"
@@ -16,6 +17,8 @@ type Host interface {
 	K3s() K3sReport
 	StartK3s() error
 	Node() NodeReport
+	Airgap() AirgapReport
+	ImportAirgap(name string, r io.Reader, size int64) (AirgapReport, error)
 	SetTime(t time.Time) error
 	Shutdown() error
 }
@@ -43,6 +46,8 @@ type realHost struct {
 	k3sPath        string
 	serverDBDir    string
 	k3sVersionFile string
+	imagesDir      string
+	tmpDir         string
 }
 
 func defaultHost() *realHost {
@@ -56,6 +61,8 @@ func defaultHost() *realHost {
 		k3sPath:        k3sBinaryPath,
 		serverDBDir:    k3sServerDBDir,
 		k3sVersionFile: k3sVersionFile,
+		imagesDir:      k3sImagesDir,
+		tmpDir:         dataTmpDir,
 	}
 }
 

@@ -26,6 +26,7 @@ public protocol ClusterBringUp: Sendable {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void,
         log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     )
@@ -41,6 +42,7 @@ public struct NoOpClusterBringUp: ClusterBringUp {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void,
         log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {

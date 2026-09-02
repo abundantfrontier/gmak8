@@ -44,6 +44,34 @@ public struct GuestAgentClient: Sendable {
         _ = try await send(method: "POST", path: "/k3s/start", body: nil, as: GuestOK.self)
     }
 
+    public func airgap() async throws -> GuestAirgap {
+        try await send(method: "GET", path: "/airgap", body: nil, as: GuestAirgap.self)
+    }
+
+    public func importAirgap(
+        fileURL: URL,
+        name: String,
+        onProgress: (@Sendable (Int64, Int64) -> Void)? = nil
+    ) async throws -> GuestAirgap {
+        let response = try await transport.sendFile(
+            method: "PUT",
+            path: "/airgap/k3s",
+            fileURL: fileURL,
+            contentType: "application/octet-stream",
+            extraHeaders: ["X-Gmak8-Name": name],
+            onProgress: onProgress
+        )
+        if response.statusCode < 200 || response.statusCode >= 300 {
+            let message = (try? JSONDecoder().decode(GuestOK.self, from: response.body))?.error
+            throw GuestAgentError.httpStatus(response.statusCode, message)
+        }
+        do {
+            return try JSONDecoder().decode(GuestAirgap.self, from: response.body)
+        } catch {
+            throw GuestAgentError.decode(String(describing: error))
+        }
+    }
+
     public func node() async throws -> GuestNode {
         try await send(method: "GET", path: "/node", body: nil, as: GuestNode.self)
     }

@@ -36,7 +36,7 @@ public enum VZGuestAgentConnector {
     }
 }
 
-public final class VZVirtioSocketChannel: GuestByteChannel, @unchecked Sendable {
+public final class VZVirtioSocketChannel: GuestByteChannel, GuestIOTimeoutAdjusting, @unchecked Sendable {
     private let connection: VZVirtioSocketConnection
     private let inner: FileDescriptorChannel
 
@@ -58,6 +58,10 @@ public final class VZVirtioSocketChannel: GuestByteChannel, @unchecked Sendable 
 
     public func close() {
         connection.close()
+    }
+
+    public func setIOTimeout(seconds: Int) {
+        inner.setIOTimeout(seconds: seconds)
     }
 }
 

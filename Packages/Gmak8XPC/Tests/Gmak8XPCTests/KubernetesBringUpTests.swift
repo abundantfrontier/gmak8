@@ -22,6 +22,27 @@ struct KubernetesBringUpTests {
             client-key-data: KEY_DATA
         """
 
+    @Test func hostAirgapProviderFailsWhenCacheMissing() throws {
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-airgap-provider-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = HostPaths(
+            applicationSupport: root.appending(path: "Application Support/dev.gmak8.app"),
+            caches: root.appending(path: "Caches/dev.gmak8.app"),
+            logs: root.appending(path: "Logs/gmak8")
+        )
+        let provider = HostAirgapProvider(paths: paths, publicKeyPEM: "not-a-key")
+        do {
+            _ = try provider.resolvedArchive()
+            Issue.record("expected missing archive")
+        } catch let error as AirgapError {
+            #expect(error.localizedDescription.contains("docker.io/rancher"))
+        }
+    }
+
     @Test func fakePathStillRunsWithoutAgent() {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler)
@@ -160,6 +181,7 @@ struct KubernetesBringUpTests {
         try await waitUntil {
             env.engine.currentStatus().step == ClusterStartStep.guestAgent
                 || env.engine.currentStatus().step == ClusterStartStep.dataDisk
+                || env.engine.currentStatus().step == ClusterStartStep.airgap
                 || env.engine.currentStatus().step == ClusterStartStep.kubernetes
         }
         #expect(env.engine.submit(.stop) == .ok)
@@ -171,6 +193,89 @@ struct KubernetesBringUpTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(env.engine.currentStatus().state == .stopped)
         #expect(env.engine.currentStatus().apiEndpoint == nil)
+    }
+
+    @Test func missingAirgapFailsWithoutStartingK3s() async throws {
+        let env = try BringUpHarness(
+            yaml: k3sYAML, airgapPresent: false, airgapProvider: MissingAirgapProvider())
+        defer { env.tearDown() }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .stopping
+        }
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .failed
+        }
+        let message = env.engine.currentStatus().lastError ?? ""
+        #expect(message.contains("docker.io/rancher"))
+        #expect(env.server.state.k3sStarts == 0)
+        #expect(env.server.state.events.filter { $0 == "k3s" }.isEmpty)
+    }
+
+    @Test func airgapImportRunsBeforeK3sStart() async throws {
+        let fixture = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-bringup-airgap-\(UUID().uuidString).tar")
+        try Data("tiny-airgap-fixture".utf8).write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let env = try BringUpHarness(
+            yaml: k3sYAML,
+            airgapPresent: false,
+            airgapProvider: FileAirgapProvider(url: fixture)
+        )
+        defer { env.tearDown() }
+
+        let sawJob = FlagBox()
+        _ = env.engine.subscribe { event in
+            if case .status(let status) = event, status.imageJob != nil {
+                sawJob.set()
+            }
+        }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.server.state.events.contains("airgap"))
+        #expect(env.server.state.events.contains("k3s"))
+        let airgapIndex = env.server.state.events.firstIndex(of: "airgap") ?? .max
+        let k3sIndex = env.server.state.events.firstIndex(of: "k3s") ?? .min
+        #expect(airgapIndex < k3sIndex)
+        #expect(env.server.state.lastAirgapBody == Data("tiny-airgap-fixture".utf8))
+        #expect(sawJob.value)
+        #expect(env.engine.currentStatus().imageJob == nil)
+        #expect(env.steps.contains(ClusterStartStep.airgap))
+    }
+
+    @Test func airgapPreflightRefusesTightDisk() async throws {
+        let fixture = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-bringup-airgap-\(UUID().uuidString).tar")
+        try Data(repeating: 0x61, count: 100).write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let env = try BringUpHarness(
+            yaml: k3sYAML,
+            bytesFree: 1,
+            airgapPresent: false,
+            airgapProvider: FileAirgapProvider(url: fixture)
+        )
+        defer { env.tearDown() }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .stopping
+        }
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .failed
+        }
+        let message = env.engine.currentStatus().lastError ?? ""
+        #expect(message.contains("20%"))
+        #expect(env.server.state.k3sStarts == 0)
+        #expect(env.server.state.airgapImports == 0)
     }
 }
 
@@ -192,6 +297,9 @@ private struct BringUpHarness {
         dataDirExists: Bool = false,
         neverReady: Bool = false,
         mergeUserConfig: Bool = false,
+        bytesFree: UInt64 = 1_000_000,
+        airgapPresent: Bool = true,
+        airgapProvider: (any AirgapProviding)? = nil,
         runtime: (any VirtualMachineRuntime)? = nil
     ) throws {
         root = FileManager.default.temporaryDirectory.appending(
@@ -212,7 +320,9 @@ private struct BringUpHarness {
             yaml: Data(yaml.utf8),
             dataDirMinor: dataDirMinor,
             dataDirExists: dataDirExists,
-            neverReady: neverReady
+            neverReady: neverReady,
+            bytesFree: bytesFree,
+            airgapPresent: airgapPresent
         )
         server = try BringUpHTTPServer(state: state)
         tracker = StepTracker()
@@ -224,6 +334,7 @@ private struct BringUpHarness {
             },
             kubeconfigStore: store,
             setCurrentContext: false,
+            airgapProvider: airgapProvider,
             apiPort: { apiPort },
             checkAPI: { _ in true },
             pollInterval: .milliseconds(5),
@@ -276,6 +387,7 @@ private struct RecordingBringUp: ClusterBringUp {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void,
         log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {
@@ -286,6 +398,7 @@ private struct RecordingBringUp: ClusterBringUp {
                 tracker.add(step)
                 setStep(step)
             },
+            setImageJob: setImageJob,
             log: { line in
                 tracker.addLog(line)
                 log(line)
@@ -304,13 +417,28 @@ private final class BringUpAgentState: @unchecked Sendable {
     var dataDirMinor: String
     var dataDirExists: Bool
     var neverReady: Bool
+    var bytesFree: UInt64
+    var airgapPresent: Bool
     var started = false
+    var k3sStarts = 0
+    var airgapImports = 0
+    var lastAirgapBody = Data()
+    var events: [String] = []
 
-    init(yaml: Data, dataDirMinor: String, dataDirExists: Bool, neverReady: Bool) {
+    init(
+        yaml: Data,
+        dataDirMinor: String,
+        dataDirExists: Bool,
+        neverReady: Bool,
+        bytesFree: UInt64,
+        airgapPresent: Bool
+    ) {
         self.yaml = yaml
         self.dataDirMinor = dataDirMinor
         self.dataDirExists = dataDirExists
         self.neverReady = neverReady
+        self.bytesFree = bytesFree
+        self.airgapPresent = airgapPresent
     }
 }
 
@@ -319,7 +447,7 @@ private final class BringUpHTTPServer: @unchecked Sendable {
     let port: UInt16
     private let queue = DispatchQueue(label: "gmak8.xpc.test.http")
     private var source: DispatchSourceRead?
-    private let state: BringUpAgentState
+    let state: BringUpAgentState
 
     var url: URL { URL(string: "http://127.0.0.1:\(port)")! }
 
@@ -386,7 +514,8 @@ private final class BringUpHTTPServer: @unchecked Sendable {
             guard let request = readHTTPRequest(fd: client) else {
                 return
             }
-            let (status, body, contentType) = response(for: request, state: state)
+            let (status, body, contentType) = response(
+                for: (request.method, request.path, request.body), state: state)
             let header =
                 "HTTP/1.1 \(status) OK\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
             var payload = Data(header.utf8)
@@ -408,18 +537,14 @@ private final class BringUpHTTPServer: @unchecked Sendable {
     }
 }
 
-private func response(for request: (String, String), state: BringUpAgentState) -> (Int, Data, String) {
+private func response(for request: (String, String, Data), state: BringUpAgentState) -> (Int, Data, String) {
     switch (request.0, request.1) {
     case ("GET", "/health"):
         return (200, Data(#"{"ok":true}"#.utf8), "application/json")
     case ("GET", "/disks"):
-        return (
-            200,
-            Data(
-                #"{"gmak8_data":"mounted","kite_data":"mounted","mountpoint":"/mnt/data","label":"GMAK8_DATA","bytes_total":100,"bytes_free":40}"#
-                    .utf8),
-            "application/json"
-        )
+        let json =
+            "{\"gmak8_data\":\"mounted\",\"kite_data\":\"mounted\",\"mountpoint\":\"/mnt/data\",\"label\":\"GMAK8_DATA\",\"bytes_total\":10000000,\"bytes_free\":\(state.bytesFree)}"
+        return (200, Data(json.utf8), "application/json")
     case ("GET", "/k3s"):
         let active = state.started && !state.neverReady
         let minorJSON = state.dataDirMinor.isEmpty ? "null" : "\"\(state.dataDirMinor)\""
@@ -428,6 +553,8 @@ private func response(for request: (String, String), state: BringUpAgentState) -
         return (200, Data(json.utf8), "application/json")
     case ("POST", "/k3s/start"):
         state.started = true
+        state.k3sStarts += 1
+        state.events.append("k3s")
         return (200, Data(#"{"ok":true}"#.utf8), "application/json")
     case ("GET", "/kubeconfig"):
         return (200, state.yaml, "application/yaml")
@@ -436,12 +563,35 @@ private func response(for request: (String, String), state: BringUpAgentState) -
             return (200, Data(#"{"ready":false,"name":"gmak8"}"#.utf8), "application/json")
         }
         return (200, Data(#"{"ready":true,"name":"gmak8"}"#.utf8), "application/json")
+    case ("GET", "/airgap"):
+        if state.airgapPresent {
+            return (
+                200,
+                Data(#"{"present":true,"files":["gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"],"bytes":24}"#.utf8),
+                "application/json"
+            )
+        }
+        return (200, Data(#"{"present":false,"files":[],"bytes":0}"#.utf8), "application/json")
+    case ("PUT", "/airgap/k3s"):
+        state.airgapImports += 1
+        state.lastAirgapBody = request.2
+        state.airgapPresent = true
+        state.events.append("airgap")
+        let json =
+            "{\"present\":true,\"files\":[\"gmak8-k3s-airgap-v1.33.3-arm64.tar.zst\"],\"bytes\":\(request.2.count)}"
+        return (200, Data(json.utf8), "application/json")
     default:
         return (404, Data(#"{"ok":false,"error":"not found"}"#.utf8), "application/json")
     }
 }
 
-private func readHTTPRequest(fd: Int32) -> (String, String)? {
+private struct BringUpHTTPRequest {
+    var method: String
+    var path: String
+    var body: Data
+}
+
+private func readHTTPRequest(fd: Int32) -> BringUpHTTPRequest? {
     var buffer = Data()
     let separator = Data([0x0D, 0x0A, 0x0D, 0x0A])
     var chunk = [UInt8](repeating: 0, count: 4096)
@@ -455,15 +605,70 @@ private func readHTTPRequest(fd: Int32) -> (String, String)? {
             return nil
         }
     }
-    guard let headerText = String(data: buffer, encoding: .utf8) else {
+    guard let range = buffer.range(of: separator) else {
         return nil
     }
-    let requestLine = headerText.split(separator: "\r\n", omittingEmptySubsequences: false).first
-    let parts = requestLine?.split(separator: " ") ?? []
+    let headerText = String(data: buffer[buffer.startIndex..<range.lowerBound], encoding: .utf8) ?? ""
+    let lines = headerText.split(separator: "\r\n", omittingEmptySubsequences: false)
+    guard let requestLine = lines.first else {
+        return nil
+    }
+    let parts = requestLine.split(separator: " ")
     guard parts.count >= 2 else {
         return nil
     }
-    return (String(parts[0]), String(parts[1]))
+    var headers: [String: String] = [:]
+    for line in lines.dropFirst() {
+        guard let colon = line.firstIndex(of: ":") else {
+            continue
+        }
+        let name = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+        let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        headers[name] = value
+    }
+    var body = Data(buffer[range.upperBound...])
+    if let lengthText = headers["content-length"], let length = Int(lengthText) {
+        while body.count < length {
+            let count = Darwin.read(fd, &chunk, min(chunk.count, length - body.count))
+            if count <= 0 {
+                return nil
+            }
+            body.append(contentsOf: chunk.prefix(count))
+        }
+        body = Data(body.prefix(length))
+    }
+    return BringUpHTTPRequest(method: String(parts[0]), path: String(parts[1]), body: body)
+}
+
+private struct FileAirgapProvider: AirgapProviding {
+    var url: URL
+
+    func resolvedArchive() throws -> AirgapLocalArchive {
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false))
+        let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+        return AirgapLocalArchive(url: url, fileName: url.lastPathComponent, byteCount: size)
+    }
+}
+
+private struct MissingAirgapProvider: AirgapProviding {
+    func resolvedArchive() throws -> AirgapLocalArchive {
+        throw AirgapError.missingArchive("/tmp/gmak8-missing-airgap.tar.zst")
+    }
+}
+
+private final class FlagBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = false
+    var value: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+    func set() {
+        lock.lock()
+        storage = true
+        lock.unlock()
+    }
 }
 
 private final class SlowStopRuntime: VirtualMachineRuntime, @unchecked Sendable {

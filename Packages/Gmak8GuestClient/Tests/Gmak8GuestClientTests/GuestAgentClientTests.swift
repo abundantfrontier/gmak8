@@ -47,6 +47,13 @@ struct GuestAgentClientTests {
         let node = try JSONDecoder().decode(GuestNode.self, from: Data(#"{"ready":true,"name":"gmak8"}"#.utf8))
         #expect(node.ready)
         #expect(node.name == "gmak8")
+        let airgap = try JSONDecoder().decode(
+            GuestAirgap.self,
+            from: Data(#"{"present":true,"files":["gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"],"bytes":24}"#.utf8)
+        )
+        #expect(airgap.present)
+        #expect(airgap.files.count == 1)
+        #expect(airgap.bytes == 24)
     }
 
     @Test func healthJSONDoesNotCarryDiskKeys() throws {
@@ -104,6 +111,19 @@ struct GuestAgentClientTests {
         #expect(k3s.dataDirMinor == "1.33")
         try await client.startK3s()
         #expect(try await client.node().ready)
+
+        let airgap = try await client.airgap()
+        #expect(airgap.present)
+        state.airgapPresent = false
+        #expect(!(try await client.airgap().present))
+        let fixture = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-airgap-fixture-\(UUID().uuidString).tar")
+        try Data("tiny-airgap-fixture".utf8).write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let imported = try await client.importAirgap(
+            fileURL: fixture, name: "gmak8-k3s-airgap-v1.33.3-arm64.tar.zst")
+        #expect(imported.present)
+        #expect(state.lastAirgapBody == Data("tiny-airgap-fixture".utf8))
 
         state.kubeconfig = nil
         do {

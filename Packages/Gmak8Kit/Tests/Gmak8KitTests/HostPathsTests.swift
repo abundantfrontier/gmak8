@@ -39,6 +39,11 @@ struct HostPathsTests {
         #expect(paths.vfkitSocket.deletingLastPathComponent() == paths.caches)
         #expect(paths.gvproxySocket.deletingLastPathComponent() == paths.caches)
         #expect(paths.buildkitSocket.deletingLastPathComponent() == paths.caches)
+        #expect(paths.airgapCacheDirectory.lastPathComponent == "airgap")
+        #expect(paths.airgapCacheDirectory.deletingLastPathComponent() == paths.caches)
+        #expect(paths.k3sAirgapFile.lastPathComponent == AirgapPin.archiveFileName)
+        #expect(paths.k3sAirgapFile.deletingLastPathComponent() == paths.airgapCacheDirectory)
+        #expect(paths.k3sAirgapSignatureFile.lastPathComponent == "\(AirgapPin.archiveFileName).sig")
     }
 
     @Test func logsDirectoryIsLibraryLogsGmak8() {

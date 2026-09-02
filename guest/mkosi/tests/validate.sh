@@ -47,6 +47,7 @@ grep -q 'Type=ext4' "$mount_unit" || fail "mount Type=ext4"
 grep -q 'After=mnt-data.mount' "$prep_unit" || fail "prep After=mnt-data.mount"
 grep -q 'Before=k3s.service' "$prep_unit" || fail "prep Before=k3s.service"
 grep -q '/mnt/data/rancher' "$prep_unit" || fail "prep must mkdir rancher"
+grep -q '/mnt/data/rancher/agent/images' "$prep_unit" || fail "prep must mkdir k3s agent/images"
 grep -q '/mnt/data/buildkit' "$prep_unit" || fail "prep must mkdir buildkit"
 grep -q '/mnt/data/local-path' "$prep_unit" || fail "prep must mkdir local-path"
 
@@ -174,7 +175,23 @@ grep -q '/kubeconfig' "$readme" || fail "README must document GET /kubeconfig"
 grep -q '/k3s' "$readme" || fail "README must document GET /k3s"
 grep -q '/k3s/start' "$readme" || fail "README must document POST /k3s/start"
 grep -q '/node' "$readme" || fail "README must document GET /node"
+grep -q '/airgap' "$readme" || fail "README must document GET /airgap"
+grep -q '/airgap/k3s' "$readme" || fail "README must document PUT /airgap/k3s"
+grep -q 'agent/images' "$readme" || fail "README must document k3s agent/images drop"
+grep -q 'docker.io/rancher' "$readme" || fail "README must document first boot does not pull docker.io/rancher"
 grep -q 'check-data-dir' "$readme" || fail "README must document data-dir compat check"
+
+bash "$root/guest/airgap/assert-metadata.sh" || fail "airgap metadata"
+
+if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/airgap.yml"; then
+  fail "airgap.yml must not run Virtualization.framework"
+fi
+if grep -E '^[[:space:]]+continue-on-error: true' "$root/.github/workflows/airgap.yml"; then
+  fail "airgap.yml must not continue-on-error"
+fi
+if grep -Eq 'k3s-airgap-images-arm64.tar.zst' "$root/.github/workflows/airgap.yml" && grep -Eq 'curl .*k3s-airgap-images' "$root/.github/workflows/airgap.yml"; then
+  fail "airgap.yml must not download the real airgap tarball on the default path"
+fi
 
 if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/guest.yml"; then
   fail "guest.yml must not run Virtualization.framework"

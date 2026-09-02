@@ -12,6 +12,14 @@ public struct GuestHTTPResponse: Equatable, Sendable {
 
 public protocol GuestAgentTransport: Sendable {
     func send(method: String, path: String, body: Data?) async throws -> GuestHTTPResponse
+    func sendFile(
+        method: String,
+        path: String,
+        fileURL: URL,
+        contentType: String,
+        extraHeaders: [String: String],
+        onProgress: (@Sendable (Int64, Int64) -> Void)?
+    ) async throws -> GuestHTTPResponse
 }
 
 public struct StreamGuestTransport: GuestAgentTransport {
@@ -27,6 +35,45 @@ public struct StreamGuestTransport: GuestAgentTransport {
         try channel.write(encodeHTTPRequest(method: method, path: path, body: body))
         return try readHTTPResponse(from: channel)
     }
+
+    public func sendFile(
+        method: String,
+        path: String,
+        fileURL: URL,
+        contentType: String,
+        extraHeaders: [String: String],
+        onProgress: (@Sendable (Int64, Int64) -> Void)?
+    ) async throws -> GuestHTTPResponse {
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path(percentEncoded: false))
+        let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+        let channel = try await open()
+        defer { channel.close() }
+        if let adjustable = channel as? any GuestIOTimeoutAdjusting {
+            adjustable.setIOTimeout(seconds: 5)
+        }
+        var headers = extraHeaders
+        headers["Content-Type"] = contentType
+        headers["Content-Length"] = String(size)
+        try channel.write(encodeHTTPHeaders(method: method, path: path, extraHeaders: headers))
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+        var sent: Int64 = 0
+        onProgress?(0, size)
+        while true {
+            try Task.checkCancellation()
+            let chunk = try handle.read(upToCount: 64 * 1_024) ?? Data()
+            if chunk.isEmpty {
+                break
+            }
+            try channel.write(chunk)
+            sent += Int64(chunk.count)
+            onProgress?(sent, size)
+        }
+        if let adjustable = channel as? any GuestIOTimeoutAdjusting {
+            adjustable.setIOTimeout(seconds: 120)
+        }
+        return try readHTTPResponse(from: channel)
+    }
 }
 
 public struct URLSessionGuestTransport: GuestAgentTransport, @unchecked Sendable {
@@ -39,8 +86,7 @@ public struct URLSessionGuestTransport: GuestAgentTransport, @unchecked Sendable
     }
 
     public func send(method: String, path: String, body: Data?) async throws -> GuestHTTPResponse {
-        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        var request = URLRequest(url: baseURL.appending(path: trimmed))
+        var request = URLRequest(url: url(for: path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
@@ -52,20 +98,64 @@ public struct URLSessionGuestTransport: GuestAgentTransport, @unchecked Sendable
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         return GuestHTTPResponse(statusCode: status, body: data)
     }
+
+    public func sendFile(
+        method: String,
+        path: String,
+        fileURL: URL,
+        contentType: String,
+        extraHeaders: [String: String],
+        onProgress: (@Sendable (Int64, Int64) -> Void)?
+    ) async throws -> GuestHTTPResponse {
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path(percentEncoded: false))
+        let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+        var request = URLRequest(url: url(for: path))
+        request.httpMethod = method
+        request.timeoutInterval = 120
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        for (name, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        onProgress?(0, size)
+        let (data, response) = try await session.upload(for: request, fromFile: fileURL)
+        onProgress?(size, size)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        return GuestHTTPResponse(statusCode: status, body: data)
+    }
+
+    private func url(for path: String) -> URL {
+        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        return baseURL.appending(path: trimmed)
+    }
 }
 
-func encodeHTTPRequest(method: String, path: String, body: Data?) -> Data {
+func encodeHTTPHeaders(method: String, path: String, extraHeaders: [String: String] = [:]) -> Data {
     var header = "\(method) \(path) HTTP/1.1\r\n"
     header += "Host: gmak8-agent\r\n"
     header += "User-Agent: gmak8-guest-client\r\n"
     header += "Accept: application/json\r\n"
     header += "Connection: close\r\n"
-    if let body {
-        header += "Content-Type: application/json\r\n"
-        header += "Content-Length: \(body.count)\r\n"
+    var seen: Set<String> = ["host", "user-agent", "accept", "connection"]
+    for (name, value) in extraHeaders {
+        let key = name.lowercased()
+        if seen.contains(key) {
+            continue
+        }
+        seen.insert(key)
+        header += "\(name): \(value)\r\n"
     }
     header += "\r\n"
-    var data = Data(header.utf8)
+    return Data(header.utf8)
+}
+
+func encodeHTTPRequest(method: String, path: String, body: Data?) -> Data {
+    var extra: [String: String] = [:]
+    if let body {
+        extra["Content-Type"] = "application/json"
+        extra["Content-Length"] = String(body.count)
+    }
+    var data = encodeHTTPHeaders(method: method, path: path, extraHeaders: extra)
     if let body {
         data.append(body)
     }

@@ -76,6 +76,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private var apiEndpoint: String?
     private var failAfterStop: String?
     private var generation: UInt64 = 0
+    private var imageJob: ImageJobStatus?
     private var subscribers: [UUID: @Sendable (EngineEvent) -> Void] = [:]
 
     public init(
@@ -142,6 +143,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 lastError = nil
                 apiEndpoint = nil
                 failAfterStop = nil
+                imageJob = nil
                 generation += 1
                 claimedGeneration = generation
                 events.append(.status(currentStatusLocked()))
@@ -307,6 +309,9 @@ public final class ClusterEngine: @unchecked Sendable {
             setStep: { [weak self] name in
                 self?.updateStep(generation: generation, name: name)
             },
+            setImageJob: { [weak self] job in
+                self?.updateImageJob(generation: generation, job: job)
+            },
             log: { [weak self] line in
                 self?.broadcast([.log(source: .engine, line: line)])
             },
@@ -328,6 +333,18 @@ public final class ClusterEngine: @unchecked Sendable {
         broadcast(events)
     }
 
+    private func updateImageJob(generation: UInt64, job: ImageJobStatus?) {
+        var events: [EngineEvent] = []
+        withLock {
+            guard generation == self.generation, state == .starting else {
+                return
+            }
+            imageJob = job
+            events.append(.status(currentStatusLocked()))
+        }
+        broadcast(events)
+    }
+
     private func completeBringUp(generation: UInt64, result: Result<ClusterBringUpResult, any Error>) {
         var events: [EngineEvent] = []
         var stopGeneration: UInt64?
@@ -340,6 +357,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 state = .running
                 apiEndpoint = outcome.apiEndpoint
                 lastError = nil
+                imageJob = nil
                 events.append(.status(currentStatusLocked()))
                 events.append(.log(source: .engine, line: "cluster running"))
             case .failure(let error):
@@ -347,6 +365,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 failAfterStop = lastError
                 state = .stopping
                 step = runtime.stepName
+                imageJob = nil
                 self.generation += 1
                 stopGeneration = self.generation
                 bringUp.cancel()
@@ -376,11 +395,13 @@ public final class ClusterEngine: @unchecked Sendable {
                     failAfterStop = nil
                     step = nil
                     apiEndpoint = nil
+                    imageJob = nil
                 } else {
                     state = .stopped
                     step = nil
                     lastError = nil
                     apiEndpoint = nil
+                    imageJob = nil
                 }
             case .failure(let error):
                 state = .failed
@@ -391,6 +412,7 @@ public final class ClusterEngine: @unchecked Sendable {
                     failAfterStop = nil
                 }
                 apiEndpoint = nil
+                imageJob = nil
             }
             events.append(.status(currentStatusLocked()))
             events.append(.log(source: .engine, line: "stopped"))
@@ -428,11 +450,13 @@ public final class ClusterEngine: @unchecked Sendable {
                     state = .failed
                     lastError = error.localizedDescription
                     apiEndpoint = nil
+                    imageJob = nil
                 } else {
                     state = .stopped
                     step = nil
                     lastError = nil
                     apiEndpoint = nil
+                    imageJob = nil
                 }
                 events.append(.status(currentStatusLocked()))
                 events.append(
@@ -457,7 +481,7 @@ public final class ClusterEngine: @unchecked Sendable {
             nestedVirt: nestedVirt,
             lastError: lastError,
             publishedPorts: [],
-            imageJob: nil
+            imageJob: imageJob
         )
     }
 

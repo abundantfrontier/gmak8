@@ -7,7 +7,11 @@ public protocol GuestByteChannel: Sendable {
     func close()
 }
 
-public final class FileDescriptorChannel: GuestByteChannel, @unchecked Sendable {
+public protocol GuestIOTimeoutAdjusting: AnyObject {
+    func setIOTimeout(seconds: Int)
+}
+
+public final class FileDescriptorChannel: GuestByteChannel, GuestIOTimeoutAdjusting, @unchecked Sendable {
     private let fd: Int32
     private let onClose: @Sendable () -> Void
     private let lock = NSLock()
@@ -32,9 +36,17 @@ public final class FileDescriptorChannel: GuestByteChannel, @unchecked Sendable 
     private static let ioTimeoutSeconds: Int = 5
 
     private static func applyIOTimeout(_ fd: Int32) {
-        var tv = timeval(tv_sec: ioTimeoutSeconds, tv_usec: 0)
+        applyIOTimeout(fd, seconds: ioTimeoutSeconds)
+    }
+
+    private static func applyIOTimeout(_ fd: Int32, seconds: Int) {
+        var tv = timeval(tv_sec: seconds, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+    }
+
+    public func setIOTimeout(seconds: Int) {
+        Self.applyIOTimeout(fd, seconds: seconds)
     }
 
     public func write(_ data: Data) throws {

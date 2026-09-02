@@ -98,6 +98,18 @@ public struct GuestOK: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestAirgap: Codable, Equatable, Sendable {
+    public var present: Bool
+    public var files: [String]
+    public var bytes: UInt64
+
+    public init(present: Bool, files: [String] = [], bytes: UInt64 = 0) {
+        self.present = present
+        self.files = files
+        self.bytes = bytes
+    }
+}
+
 public enum GuestTime: Equatable, Sendable {
     case unix(Int64)
     case rfc3339(String)
@@ -125,9 +137,22 @@ struct RFC3339TimeBody: Codable, Equatable {
     var rfc3339: String
 }
 
-public enum GuestAgentError: Error, Equatable, Sendable {
+public enum GuestAgentError: Error, Equatable, LocalizedError, Sendable {
     case httpStatus(Int, String?)
     case decode(String)
     case connectFailed(String)
     case io(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .httpStatus(let code, let message):
+            return message ?? "guest agent HTTP \(code)"
+        case .decode(let message):
+            return "guest agent decode: \(message)"
+        case .connectFailed(let message):
+            return "guest agent connect: \(message)"
+        case .io(let message):
+            return "guest agent io: \(message)"
+        }
+    }
 }

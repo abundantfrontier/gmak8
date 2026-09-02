@@ -103,6 +103,18 @@ public struct HostPaths: Equatable, Sendable {
         caches.appending(path: "buildkit.sock")
     }
 
+    public var airgapCacheDirectory: URL {
+        caches.appending(path: "airgap", directoryHint: .isDirectory)
+    }
+
+    public var k3sAirgapFile: URL {
+        airgapCacheDirectory.appending(path: AirgapPin.archiveFileName)
+    }
+
+    public var k3sAirgapSignatureFile: URL {
+        airgapCacheDirectory.appending(path: "\(AirgapPin.archiveFileName).sig")
+    }
+
     public static func unixgramPathFits(_ url: URL) -> Bool {
         url.withUnsafeFileSystemRepresentation { pointer in
             guard let pointer else {

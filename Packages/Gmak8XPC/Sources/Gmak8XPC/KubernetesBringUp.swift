@@ -10,6 +10,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
     private let kubeconfigStore: KubeconfigStore
     private let setCurrentContext: Bool
     private let matrix: CompatibilityMatrix
+    private let airgapProvider: any AirgapProviding
     private let apiPort: @Sendable () -> Int
     private let checkAPI: @Sendable (Int) async -> Bool
     private let pollInterval: Duration
@@ -22,6 +23,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         kubeconfigStore: KubeconfigStore,
         setCurrentContext: Bool,
         matrix: CompatibilityMatrix = .bundled,
+        airgapProvider: (any AirgapProviding)? = nil,
         apiPort: @escaping @Sendable () -> Int,
         checkAPI: (@Sendable (Int) async -> Bool)? = nil,
         pollInterval: Duration = .milliseconds(200),
@@ -31,6 +33,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         self.kubeconfigStore = kubeconfigStore
         self.setCurrentContext = setCurrentContext
         self.matrix = matrix
+        self.airgapProvider = airgapProvider ?? HostAirgapProvider(paths: .current())
         self.apiPort = apiPort
         self.checkAPI =
             checkAPI ?? { port in
@@ -44,13 +47,18 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void,
         log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {
         let work = Task {
             do {
                 let result = try await self.run(
-                    generation: generation, isCurrent: isCurrent, setStep: setStep, log: log)
+                    generation: generation,
+                    isCurrent: isCurrent,
+                    setStep: setStep,
+                    setImageJob: setImageJob,
+                    log: log)
                 if Task.isCancelled || !isCurrent(generation) {
                     return
                 }
@@ -79,6 +87,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void,
         log: @escaping @Sendable (String) -> Void
     ) async throws -> ClusterBringUpResult {
         try await wait(
@@ -106,7 +115,12 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             )
         }
 
-        setStep(ClusterStartStep.airgap)
+        try await importAirgapIfNeeded(
+            generation: generation,
+            isCurrent: isCurrent,
+            setStep: setStep,
+            setImageJob: setImageJob
+        )
 
         try await wait(
             generation: generation,
@@ -191,6 +205,60 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             try await Task.sleep(for: pollInterval)
         }
         throw ClusterBringUpError(message: "Timed out waiting for \(step)")
+    }
+
+    private func importAirgapIfNeeded(
+        generation: UInt64,
+        isCurrent: @escaping @Sendable (UInt64) -> Bool,
+        setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void
+    ) async throws {
+        setStep(ClusterStartStep.airgap)
+        try Task.checkCancellation()
+        guard isCurrent(generation) else {
+            throw CancellationError()
+        }
+        let client = try await makeClient()
+        if try await client.airgap().present {
+            setImageJob(nil)
+            return
+        }
+        let archive: AirgapLocalArchive
+        do {
+            archive = try airgapProvider.resolvedArchive()
+        } catch let error as AirgapError {
+            throw ClusterBringUpError(message: error.localizedDescription)
+        } catch let error as ClusterBringUpError {
+            throw error
+        } catch {
+            throw ClusterBringUpError(message: error.localizedDescription)
+        }
+        let disks = try await client.disks()
+        if !AirgapVerifier.fitsOnDataDisk(archiveBytes: archive.byteCount, bytesFree: disks.bytesFree) {
+            throw ClusterBringUpError(
+                message: AirgapError.insufficientDisk(
+                    needed: AirgapVerifier.requiredFreeBytes(archiveBytes: archive.byteCount),
+                    free: disks.bytesFree
+                ).localizedDescription
+            )
+        }
+        setImageJob(ImageJobStatus(bytesReceived: 0, bytesTotal: archive.byteCount))
+        do {
+            _ = try await client.importAirgap(fileURL: archive.url, name: archive.fileName) { received, total in
+                setImageJob(ImageJobStatus(bytesReceived: received, bytesTotal: total))
+            }
+        } catch let error as GuestAgentError {
+            throw ClusterBringUpError(message: error.localizedDescription)
+        }
+        try await wait(
+            generation: generation,
+            isCurrent: isCurrent,
+            setStep: setStep,
+            step: ClusterStartStep.airgap
+        ) {
+            try await client.airgap().present
+        }
+        setImageJob(nil)
     }
 }
 

@@ -26,6 +26,8 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /k3s", s.handleK3s)
 	mux.HandleFunc("POST /k3s/start", s.handleK3sStart)
 	mux.HandleFunc("GET /node", s.handleNode)
+	mux.HandleFunc("GET /airgap", s.handleAirgap)
+	mux.HandleFunc("PUT /airgap/k3s", s.handleAirgapImport)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
 	return mux
@@ -74,6 +76,37 @@ func (s *Server) handleK3sStart(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.host.Node())
+}
+
+func (s *Server) handleAirgap(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.host.Airgap())
+}
+
+func (s *Server) handleAirgapImport(w http.ResponseWriter, r *http.Request) {
+	name := r.Header.Get("X-Gmak8-Name")
+	if q := r.URL.Query().Get("name"); q != "" {
+		name = q
+	}
+	cl := r.Header.Get("Content-Length")
+	if cl == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "content-length required"})
+		return
+	}
+	size, err := strconv.ParseInt(cl, 10, 64)
+	if err != nil || size <= 0 {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid content-length"})
+		return
+	}
+	if size > maxAirgapBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, errorResponse{Error: "airgap archive exceeds size budget"})
+		return
+	}
+	report, err := s.host.ImportAirgap(name, io.LimitReader(r.Body, size), size)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (s *Server) handleTime(w http.ResponseWriter, r *http.Request) {

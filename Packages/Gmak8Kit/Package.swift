@@ -23,7 +23,9 @@ let package = Package(
                 .product(name: "Yams", package: "Yams")
             ],
             resources: [
-                .copy("Compatibility/compatibility-matrix.json")
+                .copy("Compatibility/compatibility-matrix.json"),
+                .copy("Airgap/k3s-airgap.pin"),
+                .copy("Airgap/cosign.pub"),
             ]
         ),
         .testTarget(

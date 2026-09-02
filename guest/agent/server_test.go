@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,9 @@ type fakeHost struct {
 	shutdowns     int
 	k3sStarts     int
 	startK3sErr   error
+	airgap        AirgapReport
+	airgapImports int
+	importErr     error
 }
 
 func (f *fakeHost) Disks() DisksReport { return f.disks }
@@ -51,6 +55,39 @@ func (f *fakeHost) StartK3s() error {
 }
 func (f *fakeHost) Node() NodeReport {
 	return f.node
+}
+func (f *fakeHost) Airgap() AirgapReport {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.airgap.Files == nil {
+		return AirgapReport{Files: []string{}}
+	}
+	return f.airgap
+}
+func (f *fakeHost) ImportAirgap(name string, r io.Reader, size int64) (AirgapReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.importErr != nil {
+		return AirgapReport{}, f.importErr
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return AirgapReport{}, err
+	}
+	if int64(len(data)) != size {
+		return AirgapReport{}, errString("short airgap write")
+	}
+	clean, err := sanitizeAirgapName(name)
+	if err != nil {
+		return AirgapReport{}, err
+	}
+	f.airgapImports++
+	f.airgap = AirgapReport{
+		Present: true,
+		Files:   []string{clean},
+		Bytes:   uint64(len(data)),
+	}
+	return f.airgap, nil
 }
 func (f *fakeHost) SetTime(t time.Time) error {
 	f.mu.Lock()
@@ -318,6 +355,8 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodGet, "/k3s/start"},
 		{http.MethodPost, "/node"},
 		{http.MethodPost, "/kubeconfig"},
+		{http.MethodPost, "/airgap"},
+		{http.MethodGet, "/airgap/k3s"},
 		{http.MethodGet, "/nope"},
 	}
 	for _, tc := range cases {
@@ -326,6 +365,53 @@ func TestWrongMethods(t *testing.T) {
 		if rec.Code == http.StatusOK {
 			t.Fatalf("%s %s: unexpected 200", tc.method, tc.path)
 		}
+	}
+}
+
+func TestAirgapGetAndPut(t *testing.T) {
+	host := &fakeHost{airgap: AirgapReport{Files: []string{}}}
+	h := NewHandler(host)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/airgap", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+	}
+	var report AirgapReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Present {
+		t.Fatalf("expected empty airgap %+v", report)
+	}
+
+	body := []byte("tiny-airgap-fixture")
+	req := httptest.NewRequest(http.MethodPut, "/airgap/k3s", bytes.NewReader(body))
+	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	req.Header.Set("X-Gmak8-Name", "gmak8-k3s-airgap-v1.33.3-arm64.tar.zst")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put status %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if !report.Present || len(report.Files) != 1 || report.Bytes != uint64(len(body)) {
+		t.Fatalf("after put %+v", report)
+	}
+	host.mu.Lock()
+	imports := host.airgapImports
+	host.mu.Unlock()
+	if imports != 1 {
+		t.Fatalf("imports %d", imports)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/airgap/k3s", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing length status %d", rec.Code)
 	}
 }
 

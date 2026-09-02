@@ -71,6 +71,19 @@ HelmChart addons). Do **not** set a custom `write-kubeconfig` path. The admin
 file remains `/etc/rancher/k3s/k3s.yaml`. The agent reads that file for
 `GET /kubeconfig`.
 
+## k3s airgap images
+
+First boot must not pull `docker.io/rancher/*`. The host drops the pinned archive
+into `/mnt/data/rancher/agent/images/` **before** `POST /k3s/start`. k3s imports
+those files on server start (`--data-dir /mnt/data/rancher`).
+
+Pins (URL, SHA-256, 500 MiB budget) and the keyful Cosign public key live in
+[`airgap/`](airgap/). Do **not** vendor `gmak8-k3s-airgap-v1.33.3-arm64.tar.zst`
+in git. `fetch.sh` downloads the upstream `k3s-airgap-images-arm64.tar.zst` and
+re-wraps it under that name. `sign.sh` / `verify.sh` use keyful Cosign
+(`cosign.pub` is pinned in the app). macOS CI only checks metadata and a tiny
+fixture tar.
+
 ## Guest agent (vsock 1024)
 
 Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
@@ -84,6 +97,8 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | `GET` | `/k3s` | JSON: systemd active, installed version, on-disk data-dir minor if known. |
 | `POST` | `/k3s/start` | `systemctl start --no-block k3s` (after the host compatibility probe). |
 | `GET` | `/node` | JSON: Node.Ready from `kubectl get nodes` (false if k3s is not up). |
+| `GET` | `/airgap` | JSON: whether k3s airgap archives are in `/mnt/data/rancher/agent/images`. |
+| `PUT` | `/airgap/k3s` | Stream an airgap `.tar` / `.tar.zst` into `agent/images` (vsock, 0600, fsync). Header `X-Gmak8-Name`. |
 | `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
 | `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |
 

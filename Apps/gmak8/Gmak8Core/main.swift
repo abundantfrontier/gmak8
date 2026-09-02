@@ -61,6 +61,7 @@ do {
         },
         kubeconfigStore: KubeconfigStore.current(),
         setCurrentContext: setCurrentContext,
+        airgapProvider: HostAirgapProvider(paths: paths),
         apiPort: { controller.apiHostPort }
     )
     let engine = ClusterEngine(
