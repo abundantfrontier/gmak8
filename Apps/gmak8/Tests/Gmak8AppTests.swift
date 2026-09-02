@@ -217,4 +217,12 @@ struct Gmak8AppTests {
         #expect(AirgapPin.bundled.signed.chooseFileEnabled)
         #expect(!OnboardingCopy.guestDigestUnpublished.contains(OnboardingCopy.chooseFile))
     }
+
+    @Test func recoveryCopiesMatchLockedDiskAndTranslocation() {
+        #expect(RecoveryCopy.diskImagesLocked.contains("data.img"))
+        #expect(RecoveryCopy.diskImagesLocked.contains("engine.sock"))
+        #expect(RecoveryCopy.translocated == "Move gmak8 to /Applications and re-open.")
+        #expect(ResetConfirmation.engineRequest == .reset(force: true))
+        #expect(!RecoveryAction.allCases.map(\.rawValue).contains { $0.lowercased().contains("snapshot") })
+    }
 }

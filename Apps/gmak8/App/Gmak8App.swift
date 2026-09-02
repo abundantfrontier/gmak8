@@ -14,6 +14,14 @@ struct Gmak8App: App {
         }
         .defaultSize(width: 640, height: 520)
 
+        Window("Recovery", id: Gmak8SceneID.recovery) {
+            RecoveryView()
+                .environmentObject(appDelegate)
+                .environmentObject(appDelegate.session)
+                .environmentObject(appDelegate.settingsStore)
+        }
+        .defaultSize(width: 520, height: 420)
+
         MenuBarExtra {
             MenuBarPopover()
                 .environmentObject(appDelegate)
@@ -68,6 +76,9 @@ struct Gmak8Commands: Commands {
             }
             .keyboardShortcut("t", modifiers: .command)
             .disabled(!clusterActionsEnabled)
+            Button("Recovery / Diagnostics") {
+                appDelegate.openRecoveryWindow()
+            }
         }
     }
 

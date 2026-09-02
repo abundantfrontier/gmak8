@@ -62,6 +62,12 @@ struct ContentView: View {
                     }
                     .disabled(!session.canStop)
                 }
+                Button("Diagnostics") {
+                    appDelegate.openRecoveryWindow()
+                }
+                Button("Reset…") {
+                    appDelegate.confirmAndResetCluster()
+                }
             }
         }
         .padding(40)

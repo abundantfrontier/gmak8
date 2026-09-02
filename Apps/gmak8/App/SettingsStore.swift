@@ -39,9 +39,9 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
             persistIfOnboardingComplete()
             lastError = nil
         } catch EngineErrorCode.translocated {
-            lastError = OnboardingCopy.moveToApplications
+            lastError = RecoveryCopy.translocated
         } catch {
-            lastError = error.localizedDescription
+            lastError = RecoveryCopy.loginItemDenied
         }
     }
 
@@ -77,9 +77,9 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
             try LaunchAtLoginPolicy.apply(mutation, bundleURL: Bundle.main.bundleURL)
             lastError = nil
         } catch EngineErrorCode.translocated {
-            lastError = OnboardingCopy.moveToApplications
+            lastError = RecoveryCopy.translocated
         } catch {
-            lastError = error.localizedDescription
+            lastError = RecoveryCopy.loginItemDenied
         }
     }
 

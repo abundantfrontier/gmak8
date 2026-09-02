@@ -61,6 +61,18 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         submit(.stop)
     }
 
+    func resetCluster() {
+        submit(.reset(force: true))
+    }
+
+    func restartCluster() {
+        if canStart {
+            startCluster()
+            return
+        }
+        stopCluster()
+    }
+
     func stopClusterBestEffort() async {
         do {
             let socketURL = self.socketURL

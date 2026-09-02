@@ -5,6 +5,7 @@ import SwiftUI
 
 enum Gmak8SceneID {
     static let main = ProductWindowIdentity.sceneID
+    static let recovery = "recovery"
 }
 
 @MainActor
@@ -16,7 +17,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
 
     private var hasAskedFirstQuit: Bool
     private var forceStopAndQuit = false
-    private var openWindow: (() -> Void)?
+    private var openWindow: ((String) -> Void)?
     private var settingsObservation: AnyCancellable?
 
     override init() {
@@ -77,19 +78,25 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     func bindOpenWindow(_ openWindow: OpenWindowAction) {
-        self.openWindow = { openWindow(id: Gmak8SceneID.main) }
+        self.openWindow = { id in
+            openWindow(id: id)
+        }
     }
 
     func openMainWindow(_ openWindow: OpenWindowAction? = nil) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        if let openWindow {
-            openWindow(id: Gmak8SceneID.main)
-        } else {
-            self.openWindow?()
-        }
+        presentWindow(id: Gmak8SceneID.main, openWindow: openWindow)
         for window in NSApp.windows where isProductWindow(window) {
             window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func openRecoveryWindow(_ openWindow: OpenWindowAction? = nil) {
+        presentWindow(id: Gmak8SceneID.recovery, openWindow: openWindow)
+    }
+
+    func confirmAndResetCluster() {
+        ResetAlert.present { [weak self] in
+            self?.session.resetCluster()
         }
     }
 
@@ -100,6 +107,16 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    private func presentWindow(id: String, openWindow: OpenWindowAction?) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        if let openWindow {
+            openWindow(id: id)
+        } else {
+            self.openWindow?(id)
+        }
     }
 
     private var currentPolicy: QuitPolicy {

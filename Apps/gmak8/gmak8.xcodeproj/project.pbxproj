@@ -50,6 +50,7 @@
 		A70000000000000000000018 /* StatusText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000007 /* StatusText.swift */; };
 		A80000000000000000000002 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000001 /* OnboardingView.swift */; };
 		A80000000000000000000004 /* OnboardingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000003 /* OnboardingSession.swift */; };
+		A80000000000000000000006 /* RecoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000005 /* RecoveryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -141,6 +142,7 @@
 		A70000000000000000000015 /* Gmak8AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmak8AppDelegate.swift; sourceTree = "<group>"; };
 		A80000000000000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A80000000000000000000003 /* OnboardingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSession.swift; sourceTree = "<group>"; };
+		A80000000000000000000005 /* RecoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -212,6 +214,7 @@
 				A70000000000000000000013 /* SettingsView.swift */,
 				A80000000000000000000003 /* OnboardingSession.swift */,
 				A80000000000000000000001 /* OnboardingView.swift */,
+				A80000000000000000000005 /* RecoveryView.swift */,
 				A70000000000000000000007 /* StatusPresentation.swift */,
 				A7000000000000000000000A /* TerminalLauncher.swift */,
 			);
@@ -470,6 +473,7 @@
 				A70000000000000000000005 /* QuitPolicy.swift in Sources */,
 				A70000000000000000000010 /* SettingsStore.swift in Sources */,
 				A70000000000000000000014 /* SettingsView.swift in Sources */,
+				A80000000000000000000006 /* RecoveryView.swift in Sources */,
 				A70000000000000000000008 /* StatusPresentation.swift in Sources */,
 				A7000000000000000000000B /* TerminalLauncher.swift in Sources */,
 				A70000000000000000000017 /* EngineClient.swift in Sources */,

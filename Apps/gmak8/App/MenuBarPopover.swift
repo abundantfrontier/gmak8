@@ -77,6 +77,9 @@ struct MenuBarPopover: View {
             }
             .keyboardShortcut("t", modifiers: .command)
             .disabled(!clusterActionsEnabled)
+            Button("Recovery / Diagnostics") {
+                appDelegate.openRecoveryWindow(openWindow)
+            }
             publishedPortsMenu
             Divider()
             Button("Settings…") {
