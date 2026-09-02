@@ -27,6 +27,15 @@ struct HostPathsTests {
         #expect(paths.engineSocket.deletingLastPathComponent() == paths.applicationSupport)
         #expect(paths.kubeconfigFile.deletingLastPathComponent() == paths.applicationSupport)
         #expect(paths.vmDirectory.deletingLastPathComponent() == paths.applicationSupport)
+        #expect(paths.guestCacheDirectory.lastPathComponent == "guest")
+        #expect(paths.guestCacheDirectory.deletingLastPathComponent().lastPathComponent == "cache")
+        #expect(
+            paths.guestCacheDirectory.deletingLastPathComponent().deletingLastPathComponent()
+                == paths.applicationSupport
+        )
+        #expect(paths.guestImageFile.lastPathComponent == GuestAssetPin.archiveFileName)
+        #expect(paths.guestImageFile.deletingLastPathComponent() == paths.guestCacheDirectory)
+        #expect(paths.guestImageSignatureFile.lastPathComponent == "\(GuestAssetPin.archiveFileName).sig")
     }
 
     @Test func cachesHoldsShortUnixgramSockets() {

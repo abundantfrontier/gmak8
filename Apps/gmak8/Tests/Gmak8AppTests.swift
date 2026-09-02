@@ -177,4 +177,36 @@ struct Gmak8AppTests {
                 == "CPU 8%   RAM 4.1 / 16 GiB   Disk 40 / 256 GiB"
         )
     }
+
+    @Test func onboardingCopyCurrentContextAndPermissions() {
+        #expect(OnboardingCopy.welcomeHeadline == "gmak8 runs Kubernetes on this Mac. Not Docker.")
+        #expect(OnboardingCopy.currentContextCheckbox == "Set gmak8 as kubectl current-context")
+        #expect(OnboardingCopy.createAndStart == "Create and start")
+        #expect(OnboardingCopy.kubernetesVersionValue == "1.33.3")
+        #expect(OnboardingCopy.pathExportSnippet == #"export PATH="$HOME/.local/bin:$PATH""#)
+        let host = HostSnapshot(
+            processorCount: 8,
+            physicalMemoryGiB: 16,
+            freeDiskGiB: 100,
+            nestedVirtualizationSupported: false
+        )
+        #expect(!OnboardingDraft(host: host).setCurrentContextOnStart)
+        #expect(!OnboardingCopy.unsupportedVirtualization.lowercased().contains("lock"))
+        for text in OnboardingCopy.userFacingStrings {
+            #expect(!OnboardingCopy.mentionsDockerHub(text))
+        }
+        let nested = PermissionsProbe.evaluate(
+            virtualizationSupported: true,
+            nestedVirtualizationSupported: false,
+            shouldRefuseLaunchAgent: false
+        )
+        #expect(nested.canContinue)
+        let unsupported = PermissionsProbe.evaluate(
+            virtualizationSupported: false,
+            nestedVirtualizationSupported: false,
+            shouldRefuseLaunchAgent: false
+        )
+        #expect(!unsupported.canContinue)
+        #expect(CoreLaunchAgent.twoLoginItemsExplanation.contains("two Login Items"))
+    }
 }

@@ -6,6 +6,7 @@ import Gmak8XPC
 @MainActor
 final class SettingsStore: ObservableObject, @unchecked Sendable {
     @Published private(set) var settings: Settings
+    @Published private(set) var needsOnboarding: Bool
     @Published var lastError: String?
 
     private let paths: HostPaths
@@ -14,6 +15,8 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
     init(paths: HostPaths = .current(), fileManager: FileManager = .default) {
         self.paths = paths
         self.fileManager = fileManager
+        let settingsExist = fileManager.fileExists(atPath: paths.settingsFile.path(percentEncoded: false))
+        self.needsOnboarding = FirstRunGate.shouldShowOnboarding(settingsFileExists: settingsExist)
         self.settings = SettingsStore.loadOrDefault(paths: paths, fileManager: fileManager)
     }
 
@@ -33,9 +36,18 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
             persist()
             lastError = nil
         } catch EngineErrorCode.translocated {
-            lastError = "Move gmak8 to /Applications and re-open."
+            lastError = OnboardingCopy.moveToApplications
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    func completeOnboarding(_ newSettings: Settings) {
+        settings = newSettings
+        persist()
+        if lastError == nil {
+            needsOnboarding = false
+            try? TimeMachineExclusion.excludeVMDirectory(at: paths.vmDirectory, fileManager: fileManager)
         }
     }
 
@@ -62,7 +74,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
             try LaunchAtLoginPolicy.apply(mutation, bundleURL: Bundle.main.bundleURL)
             lastError = nil
         } catch EngineErrorCode.translocated {
-            lastError = "Move gmak8 to /Applications and re-open."
+            lastError = OnboardingCopy.moveToApplications
         } catch {
             lastError = error.localizedDescription
         }
@@ -104,7 +116,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
             processorCount: ProcessInfo.processInfo.processorCount,
             physicalMemoryGiB: max(memoryGiB, 1),
             freeDiskGiB: max(freeDiskGiB, 0),
-            nestedVirtualizationSupported: false
+            nestedVirtualizationSupported: SystemVirtualizationCapabilities.nestedVirtualizationSupported
         )
     }
 }

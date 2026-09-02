@@ -1,4 +1,5 @@
 import Foundation
+import Gmak8Kit
 import Testing
 
 @testable import Gmak8XPC
@@ -34,6 +35,28 @@ struct TranslocationTests {
         )
         #expect(checker.isTranslocated(url))
         #expect(checker.shouldRefuseRegister(bundleURL: url))
+    }
+
+    @Test func onboardingPermissionsRefuseTranslocatedAndDownloads() {
+        let checker = TranslocationChecker()
+        let downloads = URL(fileURLWithPath: "/Users/tester/Downloads/gmak8.app")
+        let translocated = PermissionsProbe.evaluate(
+            virtualizationSupported: true,
+            nestedVirtualizationSupported: true,
+            shouldRefuseLaunchAgent: checker.shouldRefuseRegister(bundleURL: downloads)
+        )
+        #expect(translocated == .translocated)
+        #expect(!translocated.canContinue)
+        #expect(PermissionsProbe.message(translocated) == OnboardingCopy.moveToApplications)
+
+        let applications = URL(fileURLWithPath: "/Applications/gmak8.app")
+        let ready = PermissionsProbe.evaluate(
+            virtualizationSupported: true,
+            nestedVirtualizationSupported: false,
+            shouldRefuseLaunchAgent: checker.shouldRefuseRegister(bundleURL: applications)
+        )
+        #expect(ready == .ready(nestedVirtualizationSupported: false))
+        #expect(ready.canContinue)
     }
 }
 

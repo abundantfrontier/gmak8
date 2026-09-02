@@ -6,12 +6,12 @@ struct Gmak8App: App {
 
     var body: some Scene {
         Window(ProductWindowIdentity.title, id: Gmak8SceneID.main) {
-            ContentView()
+            RootView()
                 .environmentObject(appDelegate)
                 .environmentObject(appDelegate.session)
                 .environmentObject(appDelegate.settingsStore)
         }
-        .defaultSize(width: 420, height: 280)
+        .defaultSize(width: 640, height: 520)
 
         MenuBarExtra {
             MenuBarPopover()

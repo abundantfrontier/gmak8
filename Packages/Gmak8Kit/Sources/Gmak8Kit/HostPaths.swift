@@ -115,6 +115,20 @@ public struct HostPaths: Equatable, Sendable {
         airgapCacheDirectory.appending(path: "\(AirgapPin.archiveFileName).sig")
     }
 
+    public var guestCacheDirectory: URL {
+        applicationSupport
+            .appending(path: "cache", directoryHint: .isDirectory)
+            .appending(path: "guest", directoryHint: .isDirectory)
+    }
+
+    public var guestImageFile: URL {
+        guestCacheDirectory.appending(path: GuestAssetPin.archiveFileName)
+    }
+
+    public var guestImageSignatureFile: URL {
+        guestCacheDirectory.appending(path: "\(GuestAssetPin.archiveFileName).sig")
+    }
+
     public static func unixgramPathFits(_ url: URL) -> Bool {
         url.withUnsafeFileSystemRepresentation { pointer in
             guard let pointer else {

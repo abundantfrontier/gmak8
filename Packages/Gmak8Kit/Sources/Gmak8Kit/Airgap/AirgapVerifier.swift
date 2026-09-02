@@ -77,13 +77,29 @@ public enum AirgapVerifier {
     public static func verify(
         file: URL,
         signatureFile: URL,
+        sha256: String,
+        maxBytes: Int64,
+        publicKeyPEM: String
+    ) throws {
+        _ = try verifySize(file: file, maxBytes: maxBytes)
+        try verifySHA256(file: file, expected: sha256)
+        let signature = try Data(contentsOf: signatureFile)
+        try verifyCosign(file: file, signature: signature, pem: publicKeyPEM)
+    }
+
+    public static func verify(
+        file: URL,
+        signatureFile: URL,
         pin: AirgapPin,
         publicKeyPEM: String
     ) throws {
-        _ = try verifySize(file: file, maxBytes: pin.maxBytes)
-        try verifySHA256(file: file, expected: pin.sha256)
-        let signature = try Data(contentsOf: signatureFile)
-        try verifyCosign(file: file, signature: signature, pem: publicKeyPEM)
+        try verify(
+            file: file,
+            signatureFile: signatureFile,
+            sha256: pin.sha256,
+            maxBytes: pin.maxBytes,
+            publicKeyPEM: publicKeyPEM
+        )
     }
 
     public static func signatureBytes(from data: Data) -> Data {

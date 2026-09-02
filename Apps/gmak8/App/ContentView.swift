@@ -1,5 +1,24 @@
 import SwiftUI
 
+struct RootView: View {
+    @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var appDelegate: Gmak8AppDelegate
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Group {
+            if settingsStore.needsOnboarding {
+                OnboardingView()
+            } else {
+                ContentView()
+            }
+        }
+        .onAppear {
+            appDelegate.bindOpenWindow(openWindow)
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var session: ClusterSession
     @EnvironmentObject private var appDelegate: Gmak8AppDelegate

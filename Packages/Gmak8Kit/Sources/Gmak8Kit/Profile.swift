@@ -2,6 +2,17 @@ public enum Profile: String, Codable, Equatable, Sendable, CaseIterable {
     case kubernetes
     case eureka
     case eurekaAPIOnly
+
+    public var displayName: String {
+        switch self {
+        case .kubernetes:
+            return "Kubernetes"
+        case .eureka:
+            return "Eureka"
+        case .eurekaAPIOnly:
+            return "Eureka API-only"
+        }
+    }
 }
 
 public struct HostSnapshot: Equatable, Sendable {
@@ -43,6 +54,20 @@ public enum ProfileRefusal: Error, Equatable, Sendable {
     case insufficientMemory(requiredGiB: Int, availableGiB: Int)
     case insufficientDisk(requiredGiB: Int, availableGiB: Int)
     case nestedVirtualizationUnsupported
+
+    public var onboardingMessage: String {
+        switch self {
+        case .insufficientMemory(let requiredGiB, let availableGiB):
+            return
+                "Eureka needs at least \(requiredGiB) GiB RAM (this Mac has \(availableGiB) GiB). Switch to Eureka API-only."
+        case .insufficientDisk(let requiredGiB, let availableGiB):
+            return
+                "Eureka needs at least \(requiredGiB) GiB free disk (this Mac has \(availableGiB) GiB). Switch to Eureka API-only."
+        case .nestedVirtualizationUnsupported:
+            return
+                "This Mac cannot run nested VMs (needs Apple Silicon M3 or later and macOS 15+). Switch to Eureka API-only or Kubernetes."
+        }
+    }
 }
 
 public enum ProfileResolution: Equatable, Sendable {

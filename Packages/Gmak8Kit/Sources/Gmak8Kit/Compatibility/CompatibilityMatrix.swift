@@ -68,4 +68,15 @@ public enum CompatibilityMatrixError: Error, Equatable, Sendable {
 
 public enum K3sPin {
     public static let version = "v1.33.3+k3s1"
+
+    public static var displayVersion: String {
+        var trimmed = version
+        if trimmed.first == "v" {
+            trimmed.removeFirst()
+        }
+        if let plus = trimmed.firstIndex(of: "+") {
+            trimmed = String(trimmed[..<plus])
+        }
+        return trimmed
+    }
 }

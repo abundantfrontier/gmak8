@@ -45,8 +45,8 @@ public struct AirgapStore: Sendable {
         }
         try AirgapVerifier.verify(file: source, signatureFile: sig, pin: pin, publicKeyPEM: publicKeyPEM)
         try fileManager.createDirectory(at: paths.airgapCacheDirectory, withIntermediateDirectories: true)
-        try copyOwnerReadWriteAtomically(from: source, to: archiveURL, fileManager: fileManager)
-        try copyOwnerReadWriteAtomically(from: sig, to: signatureURL, fileManager: fileManager)
+        try AtomicFileReplace.copy(from: source, to: archiveURL, posixPermissions: 0o600, fileManager: fileManager)
+        try AtomicFileReplace.copy(from: sig, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
         return archiveURL
     }
 
@@ -70,35 +70,8 @@ public struct AirgapStore: Sendable {
         }
         try AirgapVerifier.verify(file: tmp, signatureFile: sigTmp, pin: pin, publicKeyPEM: publicKeyPEM)
         try fileManager.createDirectory(at: paths.airgapCacheDirectory, withIntermediateDirectories: true)
-        try copyOwnerReadWriteAtomically(from: tmp, to: archiveURL, fileManager: fileManager)
-        try copyOwnerReadWriteAtomically(from: sigTmp, to: signatureURL, fileManager: fileManager)
+        try AtomicFileReplace.copy(from: tmp, to: archiveURL, posixPermissions: 0o600, fileManager: fileManager)
+        try AtomicFileReplace.copy(from: sigTmp, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
         return archiveURL
-    }
-}
-
-/// chmod 0600 on the temp file before publishing so the cache path is never world-readable.
-private func copyOwnerReadWriteAtomically(from source: URL, to dest: URL, fileManager: FileManager) throws {
-    try fileManager.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let temp = dest.deletingLastPathComponent().appending(
-        path: ".\(dest.lastPathComponent).tmp-\(UUID().uuidString)"
-    )
-    do {
-        if fileManager.fileExists(atPath: temp.path(percentEncoded: false)) {
-            try fileManager.removeItem(at: temp)
-        }
-        try fileManager.copyItem(at: source, to: temp)
-        try fileManager.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: temp.path(percentEncoded: false)
-        )
-        _ = try fileManager.replaceItemAt(
-            dest,
-            withItemAt: temp,
-            backupItemName: nil,
-            options: .usingNewMetadataOnly
-        )
-    } catch {
-        try? fileManager.removeItem(at: temp)
-        throw error
     }
 }

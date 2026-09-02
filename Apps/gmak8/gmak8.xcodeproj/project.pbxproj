@@ -48,6 +48,8 @@
 		A70000000000000000000016 /* Gmak8AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000015 /* Gmak8AppDelegate.swift */; };
 		A70000000000000000000017 /* EngineClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000006 /* EngineClient.swift */; };
 		A70000000000000000000018 /* StatusText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000007 /* StatusText.swift */; };
+		A80000000000000000000002 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000001 /* OnboardingView.swift */; };
+		A80000000000000000000004 /* OnboardingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000003 /* OnboardingSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -137,6 +139,8 @@
 		A70000000000000000000011 /* MenuBarPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPopover.swift; sourceTree = "<group>"; };
 		A70000000000000000000013 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A70000000000000000000015 /* Gmak8AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmak8AppDelegate.swift; sourceTree = "<group>"; };
+		A80000000000000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A80000000000000000000003 /* OnboardingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -206,6 +210,8 @@
 				A70000000000000000000004 /* QuitPolicy.swift */,
 				A7000000000000000000000F /* SettingsStore.swift */,
 				A70000000000000000000013 /* SettingsView.swift */,
+				A80000000000000000000003 /* OnboardingSession.swift */,
+				A80000000000000000000001 /* OnboardingView.swift */,
 				A70000000000000000000007 /* StatusPresentation.swift */,
 				A7000000000000000000000A /* TerminalLauncher.swift */,
 			);
@@ -468,6 +474,8 @@
 				A7000000000000000000000B /* TerminalLauncher.swift in Sources */,
 				A70000000000000000000017 /* EngineClient.swift in Sources */,
 				A70000000000000000000018 /* StatusText.swift in Sources */,
+				A80000000000000000000004 /* OnboardingSession.swift in Sources */,
+				A80000000000000000000002 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

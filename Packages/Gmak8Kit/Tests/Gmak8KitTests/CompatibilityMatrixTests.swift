@@ -15,6 +15,7 @@ struct CompatibilityMatrixTests {
         #expect(!CompatibilityMatrix.bundled.accepts(dataDirMinor: "", dataDirExists: true))
         #expect(!CompatibilityMatrix.bundled.accepts(dataDirMinor: "1.32", dataDirExists: true))
         #expect(K3sPin.version == "v1.33.3+k3s1")
+        #expect(K3sPin.displayVersion == "1.33.3")
     }
 
     @Test func refusalNamesResetAndMatchingPair() {

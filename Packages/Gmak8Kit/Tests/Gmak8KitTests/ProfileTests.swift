@@ -147,5 +147,8 @@ struct ProfileTests {
         #expect(Profile.eureka.rawValue == "eureka")
         #expect(Profile.eurekaAPIOnly.rawValue == "eurekaAPIOnly")
         #expect(Profile.allCases.count == 3)
+        #expect(Profile.kubernetes.displayName == "Kubernetes")
+        #expect(Profile.eureka.displayName == "Eureka")
+        #expect(Profile.eurekaAPIOnly.displayName == "Eureka API-only")
     }
 }

@@ -23,16 +23,18 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        settingsStore.ensureCoreAgentRegistered()
+        if !settingsStore.needsOnboarding {
+            settingsStore.ensureCoreAgentRegistered()
+            settingsStore.applyLaunchAtLoginIfNeeded()
+        }
         session.startListening()
-        settingsStore.applyLaunchAtLoginIfNeeded()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(windowWillClose(_:)),
             name: NSWindow.willCloseNotification,
             object: nil
         )
-        if launchedAsLoginItem() {
+        if launchedAsLoginItem(), !settingsStore.needsOnboarding {
             DispatchQueue.main.async { [weak self] in
                 self?.keepExtraHideWindows()
             }

@@ -26,6 +26,7 @@ let package = Package(
                 .copy("Compatibility/compatibility-matrix.json"),
                 .copy("Airgap/k3s-airgap.pin"),
                 .copy("Airgap/cosign.pub"),
+                .copy("Guest/guest.pin"),
             ]
         ),
         .testTarget(
