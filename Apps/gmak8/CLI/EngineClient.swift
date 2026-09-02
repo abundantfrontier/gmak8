@@ -4,6 +4,7 @@ import Gmak8XPC
 
 enum CLIError: Error, Equatable {
     case engineNotRunning
+    case communicationFailed
     case engineError(EngineErrorCode)
     case invalidReply
 }
@@ -13,6 +14,8 @@ extension CLIError: LocalizedError {
         switch self {
         case .engineNotRunning:
             return "gmak8-core is not running (engine.sock is missing)."
+        case .communicationFailed:
+            return "could not talk to gmak8-core."
         case .engineError(let code):
             return "gmak8-core returned error: \(code.rawValue)."
         case .invalidReply:
@@ -22,36 +25,46 @@ extension CLIError: LocalizedError {
 }
 
 enum EngineClient {
-    static func status(socketURL: URL, fileManager: FileManager = .default) throws -> EngineStatus {
+    static func status(
+        socketURL: URL,
+        fileManager: FileManager = .default,
+        timeout: timeval = timeval(tv_sec: 5, tv_usec: 0)
+    ) throws -> EngineStatus {
         let path = socketURL.path(percentEncoded: false)
         guard fileManager.fileExists(atPath: path) else {
             throw CLIError.engineNotRunning
         }
 
-        let fd = try connect(path: path)
+        let fd = try connect(path: path, timeout: timeout)
         defer { Darwin.close(fd) }
-        try writeAll(fd: fd, data: try NDJSONCodec.encodeLine(EngineRequest.status))
+        let request = try NDJSONCodec.encodeLine(EngineRequest.status)
+        do {
+            try writeAll(fd: fd, data: request)
+        } catch {
+            // Core may already have written unauthorized and closed; drain that reply.
+            return try readStatusAfterFailedWrite(fd: fd)
+        }
         return try readStatus(fd: fd)
     }
 }
 
-private func connect(path: String) throws -> Int32 {
+private func connect(path: String, timeout: timeval) throws -> Int32 {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else {
-        throw CLIError.engineNotRunning
+        throw CLIError.communicationFailed
     }
     var nosigpipe: Int32 = 1
     _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, socklen_t(MemoryLayout<Int32>.size))
-    var timeout = timeval(tv_sec: 5, tv_usec: 0)
-    _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-    _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    var receiveTimeout = timeout
+    _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &receiveTimeout, socklen_t(MemoryLayout<timeval>.size))
+    _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &receiveTimeout, socklen_t(MemoryLayout<timeval>.size))
 
     let addr: sockaddr_un
     do {
         addr = try unixAddress(path: path)
     } catch {
         Darwin.close(fd)
-        throw CLIError.engineNotRunning
+        throw CLIError.communicationFailed
     }
     var address = addr
     let result = withUnsafePointer(to: &address) { pointer in
@@ -71,7 +84,7 @@ private func unixAddress(path: String) throws -> sockaddr_un {
     let maxPath = MemoryLayout.size(ofValue: addr.sun_path)
     let pathBytes = path.utf8.count
     guard pathBytes + 1 <= maxPath else {
-        throw CLIError.engineNotRunning
+        throw CLIError.communicationFailed
     }
     addr.sun_family = sa_family_t(AF_UNIX)
     addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
@@ -95,9 +108,22 @@ private func writeAll(fd: Int32, data: Data) throws {
                 if errno == EINTR {
                     continue
                 }
-                throw CLIError.engineNotRunning
+                throw CLIError.communicationFailed
             }
             offset += written
+        }
+    }
+}
+
+private func readStatusAfterFailedWrite(fd: Int32) throws -> EngineStatus {
+    do {
+        return try readStatus(fd: fd)
+    } catch let error as CLIError {
+        switch error {
+        case .engineError, .invalidReply:
+            throw error
+        case .engineNotRunning, .communicationFailed:
+            throw CLIError.communicationFailed
         }
     }
 }
@@ -134,10 +160,13 @@ private func readLine(fd: Int32, buffer: inout Data) throws -> String {
             if errno == EINTR {
                 continue
             }
-            throw CLIError.engineNotRunning
+            throw CLIError.communicationFailed
         }
         if count == 0 {
-            throw CLIError.invalidReply
+            if !buffer.isEmpty {
+                throw CLIError.invalidReply
+            }
+            throw CLIError.communicationFailed
         }
         buffer.append(contentsOf: chunk.prefix(count))
     }
