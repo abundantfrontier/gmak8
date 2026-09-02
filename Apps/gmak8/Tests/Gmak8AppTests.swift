@@ -235,6 +235,16 @@ struct Gmak8AppTests {
         #expect(!ClusterRestart.shouldStart(pending: false, state: .stopped))
     }
 
+    @Test func explicitStopCancelsPendingRestart() {
+        let pendingRestart = ClusterRestart.pending(after: .restart)
+        #expect(pendingRestart)
+        #expect(ClusterRestart.shouldStart(pending: pendingRestart, state: .stopped))
+        let afterStop = ClusterRestart.pending(after: .stop)
+        #expect(!afterStop)
+        #expect(!ClusterRestart.shouldStart(pending: afterStop, state: .stopped))
+        #expect(!ClusterRestart.shouldStart(pending: afterStop, state: .failed))
+    }
+
     @Test func recoveryWindowHoldsResetSheetNotMenuExtra() {
         #expect(
             ProductWindowIdentity.isRecoveryWindow(

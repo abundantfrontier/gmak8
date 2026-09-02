@@ -59,24 +59,27 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
     }
 
     func stopCluster() {
+        startAfterStop = ClusterRestart.pending(after: .stop)
         submit(.stop)
     }
 
     func resetCluster() {
+        startAfterStop = ClusterRestart.pending(after: .stop)
         submit(.reset(force: true))
     }
 
     func restartCluster() {
         if ClusterRestart.shouldStart(pending: true, state: status.state) {
-            startAfterStop = false
+            startAfterStop = ClusterRestart.pending(after: .stop)
             startCluster()
             return
         }
-        startAfterStop = true
-        stopCluster()
+        startAfterStop = ClusterRestart.pending(after: .restart)
+        submit(.stop)
     }
 
     func stopClusterBestEffort() async {
+        startAfterStop = ClusterRestart.pending(after: .stop)
         do {
             let socketURL = self.socketURL
             try await Task.detached {
@@ -181,7 +184,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         if case .status(let status) = event {
             self.status = status
             if ClusterRestart.shouldStart(pending: startAfterStop, state: status.state) {
-                startAfterStop = false
+                startAfterStop = ClusterRestart.pending(after: .stop)
                 startCluster()
             }
         }
@@ -195,7 +198,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
     }
 
     private func markDisconnected(_ error: CLIError) {
-        startAfterStop = false
+        startAfterStop = ClusterRestart.pending(after: .stop)
         connectionError = error
         if error.resetsClusterStatus {
             status = EngineStatusAfterDisconnect.status()

@@ -90,7 +90,16 @@ struct QuitPolicy: Equatable, Sendable {
     }
 }
 
+enum ClusterStopIntent: Equatable, Sendable {
+    case restart
+    case stop
+}
+
 enum ClusterRestart {
+    static func pending(after intent: ClusterStopIntent) -> Bool {
+        intent == .restart
+    }
+
     static func shouldStart(pending: Bool, state: ClusterState) -> Bool {
         pending && (state == .stopped || state == .failed)
     }
