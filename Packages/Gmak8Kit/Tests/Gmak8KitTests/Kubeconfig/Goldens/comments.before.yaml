@@ -1,0 +1,37 @@
+# keep this file-level comment
+apiVersion: v1
+kind: Config
+# clusters below — docker-desktop first
+clusters:
+- cluster:
+    certificate-authority-data: DOCKER_CA
+    server: https://kubernetes.docker.internal:6443
+    # docker extra
+    insecure-skip-tls-verify: false
+    extra-field: keep-me
+  name: docker-desktop
+- cluster:
+    certificate-authority-data: OLD_CA
+    server: https://127.0.0.1:6443
+  name: gmak8
+users:
+- name: docker-desktop
+  user:
+    client-certificate-data: DOCKER_CERT
+    client-key-data: DOCKER_KEY
+- name: gmak8
+  user:
+    client-certificate-data: OLD_CERT
+    client-key-data: OLD_KEY
+contexts:
+- name: docker-desktop
+  context:
+    cluster: docker-desktop
+    user: docker-desktop
+    namespace: kube-system
+- name: gmak8
+  context:
+    cluster: gmak8
+    user: gmak8
+current-context: docker-desktop
+preferences: {}

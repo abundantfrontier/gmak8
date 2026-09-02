@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: AWS_CA
+    server: https://eks.example
+  name: prod
+- cluster:
+    certificate-authority-data: CA_DATA
+    server: https://127.0.0.1:6443
+  name: gmak8
+users:
+- name: aws
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: aws
+      args:
+        - eks
+        - get-token
+        - --cluster-name
+        - prod
+      env:
+        - name: AWS_PROFILE
+          value: prod
+      interactiveMode: IfAvailable
+      provideClusterInfo: false
+- name: gmak8
+  user:
+    client-certificate-data: CERT_DATA
+    client-key-data: KEY_DATA
+contexts:
+- context:
+    cluster: prod
+    user: aws
+  name: prod
+- context:
+    cluster: gmak8
+    user: gmak8
+  name: gmak8
+current-context: prod

@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: A_CA
+    server: https://a.example
+  name: a
+- cluster:
+    certificate-authority-data: B_CA
+    server: https://b.example
+    custom-field: keep
+  name: b
+users:
+- name: a
+  user:
+    token: a-token
+- name: b
+  user:
+    token: b-token
+contexts:
+- context:
+    cluster: a
+    user: a
+    namespace: kube-system
+  name: a
+- context:
+    cluster: b
+    user: b
+    namespace: default
+  name: b
+current-context: a

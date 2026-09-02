@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: OTHER_CA
+    server: https://other.example
+  name: other
+- cluster:
+    certificate-authority-data: CA_DATA
+    server: https://127.0.0.1:16443
+  name: gmak8
+users:
+- name: other
+  user:
+    token: other-token
+- name: gmak8
+  user:
+    client-certificate-data: CERT_DATA
+    client-key-data: KEY_DATA
+contexts:
+- context:
+    cluster: other
+    user: other
+  name: other
+- context:
+    cluster: gmak8
+    user: gmak8
+  name: gmak8
+current-context: other
