@@ -24,7 +24,9 @@ agent that `Requires=` that mount would never start — mkfs would deadlock.
 Boot order:
 
 1. `gmak8-data-format.service` (oneshot, `Before=mnt-data.mount`) runs
-   `/usr/local/lib/gmak8/format-data-disk.sh` if the disk is unlabeled.
+   `/usr/local/lib/gmak8/format-data-disk.sh` if the whole-disk label is
+   not `GMAK8_DATA` (blank `data.img` **or** a stray filesystem). That
+   path is `mkfs.ext4 -F` and wipes the device.
 2. `mnt-data.mount` mounts `/dev/disk/by-label/GMAK8_DATA` at `/mnt/data`.
 3. `mnt-data-prep.service` (`After=mnt-data.mount`, `Before=k3s.service`)
    creates `/mnt/data/{rancher,buildkit,tmp,log,local-path}`.
@@ -44,13 +46,15 @@ file remains `/etc/rancher/k3s/k3s.yaml`.
 ## KVM
 
 The kernel package is **`linux-image-arm64`**, not `linux-image-cloud-arm64`.
-Debian cloud kernels are typically `CONFIG_KVM=m` on the regular arm64 flavor,
-which is acceptable.
+Debian arm64 KVM is a bool: regular `linux-image-arm64` is `CONFIG_KVM=y`
+(built into vmlinux; there is no `kvm.ko` file). `CONFIG_KVM=m` plus `kvm.ko`
+is also acceptable. Do not switch to the cloud flavour to “get a module”.
 
-Image CI greps `/boot/config-*` for `CONFIG_KVM=y` **or** `CONFIG_KVM=m` and
-asserts `kvm.ko` exists (compressed suffixes allowed). First boot runs
-`modprobe kvm` (and `kvm-arm` if that module is present). There is no TCG
-fallback.
+Image CI greps `/boot/config-*` for `CONFIG_KVM=y` **or** `CONFIG_KVM=m`.
+When `=m`, it asserts `kvm.ko` exists (compressed suffixes allowed). When
+`=y`, KVM is built-in (`modules.builtin` may list `kvm.ko` as a name only).
+First boot runs `modprobe kvm` (a no-op when built-in; and `kvm-arm` if that
+module is present). There is no TCG fallback.
 
 ## sshd
 

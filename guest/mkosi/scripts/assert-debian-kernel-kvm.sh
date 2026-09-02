@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download Debian trixie linux-image-arm64 (not cloud) and assert CONFIG_KVM + kvm.ko.
+# Download Debian trixie linux-image-arm64 (not cloud) and assert CONFIG_KVM=y|m.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)

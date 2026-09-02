@@ -27,12 +27,17 @@ grep -q 'mkfs.ext4 -F -L GMAK8_DATA' "$fmt" || fail "format script must mkfs.ext
 grep -q 'gmak8-data-format: labeled GMAK8_DATA' "$fmt" || fail "format script must log the serial contract line"
 
 grep -q 'Before=mnt-data.mount' "$format_unit" || fail "format unit must be Before=mnt-data.mount"
+grep -q 'Wants=dev-nvme1n1.device' "$format_unit" || fail "format unit must Wants=dev-nvme1n1.device"
+grep -q 'Conflicts=umount.target' "$format_unit" || fail "format unit must Conflicts=umount.target"
 grep -q 'ConditionPathExists=/dev/nvme1n1' "$format_unit" || fail "format unit must ConditionPathExists=/dev/nvme1n1"
 grep -q 'ExecStart=/usr/local/lib/gmak8/format-data-disk.sh' "$format_unit" || fail "format unit ExecStart"
+grep -q udevadm "$fmt" || fail "format script must udevadm settle after mkfs"
 
 grep -q 'Requires=gmak8-data-format.service' "$mount_unit" || fail "mount must Require format unit"
+grep -q 'dev-disk-by-label-GMAK8_DATA.device' "$mount_unit" || fail "mount must wait on by-label device"
 grep -q 'After=gmak8-data-format.service' "$mount_unit" || fail "mount must After format unit"
-grep -q 'Before=local-fs.target gmak8-agent.service k3s.service' "$mount_unit" || fail "mount Before= local-fs/agent/k3s"
+grep -q 'Conflicts=umount.target' "$mount_unit" || fail "mount must Conflicts=umount.target"
+grep -q 'Before=local-fs.target umount.target gmak8-agent.service k3s.service' "$mount_unit" || fail "mount Before= local-fs/umount/agent/k3s"
 grep -q 'What=/dev/disk/by-label/GMAK8_DATA' "$mount_unit" || fail "mount What= GMAK8_DATA"
 grep -q 'Where=/mnt/data' "$mount_unit" || fail "mount Where=/mnt/data"
 grep -q 'Type=ext4' "$mount_unit" || fail "mount Type=ext4"
@@ -63,6 +68,7 @@ if grep -E '^[[:space:]]+linux-image-cloud-arm64([[:space:]]|$)' "$mkosi_conf"; 
 fi
 grep -q 'openssh-server' "$mkosi_conf" || fail "mkosi must include openssh-server"
 grep -q 'Ssh=never' "$mkosi_conf" || fail "mkosi must set Ssh=never (sshd disabled until PR 30)"
+grep -q 'systemd.ssh_auto=no' "$mkosi_conf" || fail "mkosi must set systemd.ssh_auto=no"
 if grep -E '^[[:space:]]+(k3s|docker|docker-ce|containerd)([[:space:]]|$)' "$mkosi_conf"; then
   fail "this PR must not install k3s/docker/containerd in the image"
 fi
@@ -74,9 +80,13 @@ cmp -s "$k3s_cfg" "$image_k3s" || fail "guest/k3s/config.yaml must match mkosi.e
 grep -q 'efi-nvram.bin' "$readme" || fail "README must document efi-nvram.bin recreate"
 grep -q 'data.img' "$readme" || fail "README must document keeping data.img"
 grep -q 'GMAK8_DATA' "$readme" || fail "README must document GMAK8_DATA"
+grep -q 'whole-disk label is' "$readme" || fail "README must document non-GMAK8_DATA labels are reformatted"
 
 if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/guest.yml"; then
   fail "guest.yml must not run Virtualization.framework"
+fi
+if grep -E '^[[:space:]]+continue-on-error: true' "$root/.github/workflows/guest.yml"; then
+  fail "guest.yml mkosi job must not continue-on-error"
 fi
 
 echo "validate: ok"

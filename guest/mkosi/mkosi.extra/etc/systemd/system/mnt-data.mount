@@ -1,8 +1,9 @@
 [Unit]
 DefaultDependencies=no
-Requires=gmak8-data-format.service
-After=gmak8-data-format.service
-Before=local-fs.target gmak8-agent.service k3s.service
+Requires=gmak8-data-format.service dev-disk-by-label-GMAK8_DATA.device
+After=gmak8-data-format.service dev-disk-by-label-GMAK8_DATA.device
+Conflicts=umount.target
+Before=local-fs.target umount.target gmak8-agent.service k3s.service
 
 [Mount]
 What=/dev/disk/by-label/GMAK8_DATA

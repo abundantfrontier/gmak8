@@ -27,6 +27,8 @@ jobs:
         run: bash guest/mkosi/tests/validate.sh
       - name: format-data-disk.sh idempotency
         run: bash guest/mkosi/tests/format-data-disk-test.sh
+      - name: assert-kvm.sh y-vs-m
+        run: bash guest/mkosi/tests/assert-kvm-test.sh
       - name: shellcheck
         run: |
           shellcheck \
@@ -35,6 +37,7 @@ jobs:
             guest/mkosi/mkosi.postinst.chroot \
             guest/mkosi/tests/validate.sh \
             guest/mkosi/tests/format-data-disk-test.sh \
+            guest/mkosi/tests/assert-kvm-test.sh \
             guest/mkosi/scripts/assert-kvm.sh \
             guest/mkosi/scripts/assert-debian-kernel-kvm.sh
 
@@ -42,7 +45,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: CONFIG_KVM=y-or-m and kvm.ko (Debian linux-image-arm64)
+      - name: CONFIG_KVM=y-or-m (kvm.ko required only when =m)
         run: bash guest/mkosi/scripts/assert-debian-kernel-kvm.sh
 
   mkosi:
@@ -59,19 +62,16 @@ jobs:
             systemd-container uidmap bubblewrap \
             ca-certificates curl e2fsprogs dosfstools \
             binutils
-          pipx install mkosi
+          pipx install 'git+https://github.com/systemd/mkosi.git@v25.3'
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build directory image
-        id: mkosi
-        continue-on-error: true
         working-directory: guest/mkosi
         run: |
           mkosi --version
           mkosi summary
-          # Directory + --bootable no is enough to inspect /boot/config-* and kvm.ko.
+          # Directory + --bootable no is enough to inspect /boot/config-* and KVM.
           sudo "$(command -v mkosi)" --format directory --bootable no --force
-      - name: Assert CONFIG_KVM and kvm.ko in image
-        if: steps.mkosi.outcome == 'success'
+      - name: Assert CONFIG_KVM in image
         run: |
           if [ -d guest/mkosi/mkosi.output/os ]; then
             root=guest/mkosi/mkosi.output/os

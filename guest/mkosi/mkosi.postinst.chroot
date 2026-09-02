@@ -6,9 +6,40 @@ systemctl enable mnt-data.mount
 systemctl enable mnt-data-prep.service
 systemctl enable gmak8-kvm.service
 
+unit_present() {
+  unit=$1
+  for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
+    if [ -e "$d/$unit" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # openssh-server postinst enables ssh; keep the unit installed but not started.
+# Do not mask — PR 30 starts sshd. Do not || true: a missing unit is skipped,
+# a present unit must actually disable.
 for unit in ssh.service ssh.socket sshd.service sshd.socket; do
-  systemctl disable "$unit" 2>/dev/null || true
+  if unit_present "$unit"; then
+    systemctl disable "$unit"
+  fi
+done
+
+rm -f \
+  /etc/systemd/system/multi-user.target.wants/ssh.service \
+  /etc/systemd/system/multi-user.target.wants/sshd.service \
+  /etc/systemd/system/sockets.target.wants/ssh.socket \
+  /etc/systemd/system/sockets.target.wants/sshd.socket
+
+for leftover in \
+  /etc/systemd/system/multi-user.target.wants/ssh.service \
+  /etc/systemd/system/multi-user.target.wants/sshd.service \
+  /etc/systemd/system/sockets.target.wants/ssh.socket \
+  /etc/systemd/system/sockets.target.wants/sshd.socket; do
+  if [ -e "$leftover" ]; then
+    echo "postinst: ssh still enabled: $leftover" >&2
+    exit 1
+  fi
 done
 
 mkdir -p /mnt/data

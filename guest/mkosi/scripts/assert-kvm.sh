@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Grep /boot/config-* for CONFIG_KVM=y or =m and assert kvm.ko exists.
+# Grep /boot/config-* for CONFIG_KVM=y or =m.
+# =y is built-in (no kvm.ko file). =m requires kvm.ko*.
 set -euo pipefail
 
 root=${1:?usage: assert-kvm.sh ROOTFS}
@@ -32,15 +33,36 @@ if [ -z "$kvm_cfg" ]; then
   exit 1
 fi
 
-ko=""
-while IFS= read -r path; do
-  ko=$path
-  break
-done < <(find "$root" \( \
-  -name kvm.ko -o -name kvm.ko.xz -o -name kvm.ko.zst -o -name kvm.ko.gz \
-  \) -type f 2>/dev/null)
-if [ -z "$ko" ]; then
-  echo "assert-kvm: kvm.ko not found under $root" >&2
-  exit 1
+find_kvm_ko() {
+  while IFS= read -r path; do
+    echo "$path"
+    return 0
+  done < <(find "$root" \( \
+    -name kvm.ko -o -name kvm.ko.xz -o -name kvm.ko.zst -o -name kvm.ko.gz \
+    \) -type f 2>/dev/null)
+  return 1
+}
+
+if [ "$kvm_cfg" = "CONFIG_KVM=y" ]; then
+  builtin=""
+  while IFS= read -r path; do
+    if grep -E -q '(^|/)kvm\.ko$' "$path"; then
+      builtin=$path
+      break
+    fi
+  done < <(find "$root" -name modules.builtin -type f 2>/dev/null)
+  if [ -n "$builtin" ]; then
+    echo "assert-kvm: built-in ($builtin)"
+  else
+    echo "assert-kvm: CONFIG_KVM=y (built-in; no kvm.ko module file)"
+  fi
+  exit 0
 fi
-echo "assert-kvm: $ko"
+
+ko=""
+if ko=$(find_kvm_ko); then
+  echo "assert-kvm: $ko"
+  exit 0
+fi
+echo "assert-kvm: CONFIG_KVM=m but kvm.ko not found under $root" >&2
+exit 1
