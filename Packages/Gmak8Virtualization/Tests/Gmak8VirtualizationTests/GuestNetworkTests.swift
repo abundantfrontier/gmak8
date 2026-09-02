@@ -21,5 +21,7 @@ struct GuestNetworkTests {
         #expect(!GuestNetwork.forbiddenHostPorts.contains(GuestNetwork.apiHostPort))
         #expect(!GuestNetwork.forbiddenHostPorts.contains(GuestNetwork.httpHostPort))
         #expect(!GuestNetwork.forbiddenHostPorts.contains(GuestNetwork.httpsHostPort))
+        #expect(GuestNetwork.apiFallbackHostPort == 16_443)
+        #expect(!GuestNetwork.forbiddenHostPorts.contains(GuestNetwork.apiFallbackHostPort))
     }
 }

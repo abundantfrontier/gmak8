@@ -45,7 +45,15 @@ public struct GVProxyExposeRequest: Equatable, Sendable, Codable {
     }()
 
     public static func isAlreadyBoundError(_ text: String) -> Bool {
-        text.lowercased().contains("already")
+        let lower = text.lowercased()
+        // Bind failures contain "already in use"; those must fall through to 16443.
+        if lower.contains("address already in use") || lower.contains("bind:") {
+            return false
+        }
+        return lower.contains("already exist")
+            || lower.contains("already running")
+            || lower.contains("already exposed")
+            || lower.contains("already bound")
     }
 
     public static func validate(local: String, remote: String) throws {

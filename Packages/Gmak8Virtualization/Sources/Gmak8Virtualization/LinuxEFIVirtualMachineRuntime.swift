@@ -6,6 +6,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     public let hardware: VMHardware
     public let isSupported: Bool
     public let network: GVProxyNetworkStack?
+    public let configShareDirectory: URL?
 
     private let flock = DiskFlock()
     private let mutex = NSLock()
@@ -26,15 +27,37 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         layout: VMDiskLayout,
         hardware: VMHardware,
         isSupported: Bool = VZVirtualMachine.isSupported,
-        network: GVProxyNetworkStack? = nil
+        network: GVProxyNetworkStack? = nil,
+        configShareDirectory: URL? = nil
     ) {
         self.layout = layout
         self.hardware = hardware
         self.isSupported = isSupported
         self.network = network
+        self.configShareDirectory = configShareDirectory
         vmDelegate.owner = self
         self.network?.onDegraded = { [weak self] message in
             self?.notifyDegraded(message)
+        }
+    }
+
+    public var apiHostPort: Int {
+        network?.apiHostPort ?? GuestNetwork.apiHostPort
+    }
+
+    public func virtioSocketDevice() async throws -> VZVirtioSocketDevice {
+        try await withCheckedThrowingContinuation { continuation in
+            VirtualMachineQueue.shared.async {
+                guard let vm = self.virtualMachine else {
+                    continuation.resume(throwing: VirtualMachineError.startFailed("VM is not running"))
+                    return
+                }
+                guard let device = vm.socketDevices.first as? VZVirtioSocketDevice else {
+                    continuation.resume(throwing: VirtualMachineError.startFailed("virtio-vsock device missing"))
+                    return
+                }
+                continuation.resume(returning: device)
+            }
         }
     }
 
@@ -217,7 +240,8 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
             let config = try VMConfigurationBuilder.make(
                 layout: layout,
                 hardware: hardware,
-                networkAttachment: networkAttachment
+                networkAttachment: networkAttachment,
+                configShareDirectory: self.configShareDirectory
             )
             do {
                 try config.validate()

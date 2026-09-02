@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -14,15 +15,32 @@ import (
 )
 
 type fakeHost struct {
-	mu        sync.Mutex
-	disks     DisksReport
-	kvm       bool
-	times     []time.Time
-	shutdowns int
+	mu            sync.Mutex
+	disks         DisksReport
+	kvm           bool
+	kubeconfig    []byte
+	kubeconfigErr error
+	k3s           K3sReport
+	node          NodeReport
+	times         []time.Time
+	shutdowns     int
 }
 
 func (f *fakeHost) Disks() DisksReport { return f.disks }
 func (f *fakeHost) KVM() bool          { return f.kvm }
+func (f *fakeHost) Kubeconfig() ([]byte, error) {
+	if f.kubeconfigErr != nil {
+		return nil, f.kubeconfigErr
+	}
+	if f.kubeconfig == nil {
+		return nil, os.ErrNotExist
+	}
+	return f.kubeconfig, nil
+}
+func (f *fakeHost) K3s() K3sReport { return f.k3s }
+func (f *fakeHost) Node() NodeReport {
+	return f.node
+}
 func (f *fakeHost) SetTime(t time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -186,6 +204,75 @@ func TestShutdownFlushesThenHalts(t *testing.T) {
 	t.Fatal("shutdown not called")
 }
 
+func TestKubeconfigBytesOr404(t *testing.T) {
+	host := &fakeHost{}
+	rec := httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/kubeconfig", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing kubeconfig status %d body %s", rec.Code, rec.Body.String())
+	}
+
+	yaml := []byte("apiVersion: v1\nkind: Config\n")
+	host.kubeconfig = yaml
+	rec = httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/kubeconfig", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != string(yaml) {
+		t.Fatalf("body %s", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "yaml") {
+		t.Fatalf("content-type %s", ct)
+	}
+}
+
+func TestK3sAndNodeJSON(t *testing.T) {
+	host := &fakeHost{
+		k3s: K3sReport{
+			Active:        true,
+			Version:       "v1.33.3+k3s1",
+			DataDirMinor:  "1.33",
+			DataDirExists: true,
+		},
+		node: NodeReport{Ready: true, Name: "gmak8"},
+	}
+	h := NewHandler(host)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/k3s", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("k3s status %d %s", rec.Code, rec.Body.String())
+	}
+	var k3s K3sReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &k3s); err != nil {
+		t.Fatal(err)
+	}
+	if !k3s.Active || k3s.Version != "v1.33.3+k3s1" || k3s.DataDirMinor != "1.33" || !k3s.DataDirExists {
+		t.Fatalf("k3s %+v", k3s)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/node", nil))
+	var node NodeReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &node); err != nil {
+		t.Fatal(err)
+	}
+	if !node.Ready || node.Name != "gmak8" {
+		t.Fatalf("node %+v", node)
+	}
+
+	host.node = NodeReport{Ready: false}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/node", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &node); err != nil {
+		t.Fatal(err)
+	}
+	if node.Ready {
+		t.Fatal("expected node not ready")
+	}
+}
+
 func TestWrongMethods(t *testing.T) {
 	h := NewHandler(&fakeHost{})
 	cases := []struct {
@@ -194,6 +281,9 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodPost, "/health"},
 		{http.MethodGet, "/time"},
 		{http.MethodGet, "/shutdown"},
+		{http.MethodPost, "/k3s"},
+		{http.MethodPost, "/node"},
+		{http.MethodPost, "/kubeconfig"},
 		{http.MethodGet, "/nope"},
 	}
 	for _, tc := range cases {

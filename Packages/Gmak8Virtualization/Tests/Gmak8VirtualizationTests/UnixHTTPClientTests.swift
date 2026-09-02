@@ -49,6 +49,26 @@ struct UnixHTTPClientTests {
         let client = UnixHTTPClient(socketURL: socket, timeout: 2)
         try client.expose(try GVProxyExposeRequest(hostPort: 6443, guestPort: 6443))
     }
+
+    @Test func exposeDoesNotTreatAddressInUseAsSuccess() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let socket = root.appending(path: "g.sock")
+        try UnixgramPath.require(socket)
+        let server = try LoopbackHTTPServer(socketURL: socket) { request in
+            if request.contains("GET /services/forwarder/all") {
+                return
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]"
+            }
+            return
+                "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\nlisten tcp 127.0.0.1:6443: bind: address already in use"
+        }
+        defer { server.stop() }
+        let client = UnixHTTPClient(socketURL: socket, timeout: 2)
+        #expect(throws: VirtualMachineError.self) {
+            try client.expose(try GVProxyExposeRequest(hostPort: 6443, guestPort: 6443))
+        }
+    }
 }
 
 private final class RequestBox: @unchecked Sendable {

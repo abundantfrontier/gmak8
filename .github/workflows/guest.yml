@@ -36,6 +36,8 @@ jobs:
           shellcheck \
             guest/mkosi/mkosi.extra/usr/local/lib/gmak8/format-data-disk.sh \
             guest/mkosi/mkosi.extra/usr/local/lib/gmak8/modprobe-kvm.sh \
+            guest/k3s/install.sh \
+            guest/mkosi/mkosi.extra/usr/local/lib/gmak8/install-k3s.sh \
             guest/mkosi/mkosi.postinst.chroot \
             guest/mkosi/tests/validate.sh \
             guest/mkosi/tests/format-data-disk-test.sh \
@@ -74,7 +76,7 @@ jobs:
           mkosi --version
           mkosi summary
           # Directory + --bootable no is enough to inspect /boot/config-* and KVM.
-          sudo "$(command -v mkosi)" --format directory --bootable no --force
+          sudo "$(command -v mkosi)" --format directory --bootable no --force --with-network
       - name: Assert CONFIG_KVM in image
         run: |
           if [ -d guest/mkosi/mkosi.output/os ]; then
@@ -88,3 +90,5 @@ jobs:
           bash guest/mkosi/scripts/assert-kvm.sh "$root"
           test -x "$root/usr/local/bin/gmak8-agent"
           test -f "$root/etc/systemd/system/gmak8-agent.service"
+          test -x "$root/usr/local/bin/k3s"
+          test -f "$root/etc/systemd/system/k3s.service"

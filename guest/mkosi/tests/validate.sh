@@ -82,8 +82,55 @@ test -L "$extra/etc/systemd/system/multi-user.target.wants/gmak8-agent.service" 
 
 grep -qx 'data-dir: /mnt/data/rancher' "$k3s_cfg" || fail "k3s config data-dir"
 grep -qx 'default-local-storage-path: /mnt/data/local-path' "$k3s_cfg" || fail "k3s config default-local-storage-path"
+grep -qx 'cluster-cidr: 10.42.0.0/16' "$k3s_cfg" || fail "k3s config cluster-cidr"
+grep -qx 'service-cidr: 10.43.0.0/16' "$k3s_cfg" || fail "k3s config service-cidr"
+grep -qx 'cluster-dns: 10.43.0.10' "$k3s_cfg" || fail "k3s config cluster-dns"
+grep -qx 'node-name: gmak8' "$k3s_cfg" || fail "k3s config node-name"
+grep -qx 'https-listen-port: 6443' "$k3s_cfg" || fail "k3s config https-listen-port"
+grep -q '192.168.127.2' "$k3s_cfg" || fail "k3s config tls-san must include guest IP"
 if grep -E '^[[:space:]]*(disable-helm-controller|write-kubeconfig)[[:space:]]*:' "$k3s_cfg"; then
   fail "k3s template must not set disable-helm-controller or write-kubeconfig"
+fi
+if grep -E '^[[:space:]]*disable[[:space:]]*:' "$k3s_cfg"; then
+  fail "k3s template must not set a disable: list yet"
+fi
+
+k3s_unit="$extra/etc/systemd/system/k3s.service"
+test -f "$k3s_unit" || fail "missing k3s.service"
+grep -q 'Requires=mnt-data.mount' "$k3s_unit" || fail "k3s.service must Requires=mnt-data.mount"
+grep -q 'After=.*mnt-data.mount' "$k3s_unit" || fail "k3s.service must After=mnt-data.mount"
+grep -q 'ExecStart=/usr/local/bin/k3s server' "$k3s_unit" || fail "k3s.service ExecStart must be the pinned static binary"
+if grep -Eiq 'disable-helm-controller' "$k3s_unit"; then
+  fail "k3s.service must not disable helm-controller"
+fi
+if grep -Eiq 'write-kubeconfig' "$k3s_unit"; then
+  fail "k3s.service must not set a custom write-kubeconfig path"
+fi
+test -L "$extra/etc/systemd/system/multi-user.target.wants/k3s.service" || fail "multi-user.target.wants/k3s.service symlink missing"
+grep -q 'enable k3s.service' "$extra/etc/systemd/system-preset/90-gmak8.preset" || fail "preset must enable k3s.service"
+grep -q 'systemctl enable k3s.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must enable k3s.service"
+grep -q 'install-k3s.sh' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must install pinned k3s"
+
+k3s_pin="$root/guest/k3s/k3s.pin"
+k3s_install="$root/guest/k3s/install.sh"
+image_pin="$extra/usr/local/lib/gmak8/k3s.pin"
+image_install="$extra/usr/local/lib/gmak8/install-k3s.sh"
+test -f "$k3s_pin" || fail "missing guest/k3s/k3s.pin"
+test -f "$k3s_install" || fail "missing guest/k3s/install.sh"
+test -x "$k3s_install" || fail "guest/k3s/install.sh must be executable"
+test -x "$image_install" || fail "install-k3s.sh must be executable"
+cmp -s "$k3s_pin" "$image_pin" || fail "guest/k3s/k3s.pin must match mkosi.extra copy"
+cmp -s "$k3s_install" "$image_install" || fail "guest/k3s/install.sh must match mkosi.extra copy"
+grep -q 'v1.33.3+k3s1' "$k3s_pin" || fail "k3s pin must be v1.33.3+k3s1"
+grep -q '%2B' "$k3s_pin" || fail "k3s pin URL must encode + as %2B"
+grep -q '152c961aae4aa7553865481c21902a3cc8e02550df97587379a409494c3626c4' "$k3s_pin" || fail "k3s pin must include the official arm64 SHA256"
+grep -q 'k3s-arm64' "$root/guest/k3s/k3s-arm64.sha256sum" || fail "missing guest/k3s/k3s-arm64.sha256sum"
+test -f "$extra/etc/systemd/system/mnt-config.mount" || fail "missing mnt-config.mount"
+grep -q 'What=gmak8-config' "$extra/etc/systemd/system/mnt-config.mount" || fail "mnt-config.mount must use virtiofs tag gmak8-config"
+grep -q 'Type=virtiofs' "$extra/etc/systemd/system/mnt-config.mount" || fail "mnt-config.mount Type=virtiofs"
+grep -q 'Where=/mnt/config' "$extra/etc/systemd/system/mnt-config.mount" || fail "mnt-config.mount Where=/mnt/config"
+if grep -E '^Requires=mnt-config.mount' "$k3s_unit"; then
+  fail "k3s must not Requires=mnt-config.mount (share is optional)"
 fi
 
 grep -q 'linux-image-arm64' "$mkosi_conf" || fail "mkosi must install linux-image-arm64"
@@ -93,9 +140,10 @@ fi
 grep -q 'openssh-server' "$mkosi_conf" || fail "mkosi must include openssh-server"
 grep -q 'Ssh=never' "$mkosi_conf" || fail "mkosi must set Ssh=never (sshd disabled until PR 30)"
 grep -q 'systemd.ssh_auto=no' "$mkosi_conf" || fail "mkosi must set systemd.ssh_auto=no"
-if grep -E '^[[:space:]]+(k3s|docker|docker-ce|containerd)([[:space:]]|$)' "$mkosi_conf"; then
-  fail "this PR must not install k3s/docker/containerd in the image"
+if grep -E '^[[:space:]]+(k3s|docker|docker-ce|docker.io|containerd)([[:space:]]|$)' "$mkosi_conf"; then
+  fail "must not install k3s/docker/containerd as Debian packages"
 fi
+grep -q 'curl' "$mkosi_conf" || fail "mkosi must install curl to fetch k3s"
 
 image_k3s="$extra/etc/rancher/k3s/config.yaml"
 test -f "$image_k3s" || fail "appliance must ship /etc/rancher/k3s/config.yaml"
@@ -107,6 +155,12 @@ grep -q 'GMAK8_DATA' "$readme" || fail "README must document GMAK8_DATA"
 grep -q 'whole-disk label is' "$readme" || fail "README must document non-GMAK8_DATA labels are reformatted"
 grep -q 'vsock port 1024' "$readme" || fail "README must document vsock 1024 agent"
 grep -q 'gmak8-agent.service' "$readme" || fail "README must document gmak8-agent.service"
+grep -q 'v1.33.3+k3s1' "$readme" || fail "README must document pinned k3s version"
+grep -q '/etc/rancher/k3s/k3s.yaml' "$readme" || fail "README must document admin kubeconfig path"
+grep -q 'helm-controller' "$readme" || fail "README must document helm-controller left enabled"
+grep -q '/kubeconfig' "$readme" || fail "README must document GET /kubeconfig"
+grep -q '/k3s' "$readme" || fail "README must document GET /k3s"
+grep -q '/node' "$readme" || fail "README must document GET /node"
 
 if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/guest.yml"; then
   fail "guest.yml must not run Virtualization.framework"

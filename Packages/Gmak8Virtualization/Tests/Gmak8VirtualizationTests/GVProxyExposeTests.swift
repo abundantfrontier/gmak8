@@ -53,6 +53,30 @@ struct GVProxyExposeTests {
         }
     }
 
+    @Test func alreadyBoundDoesNotTreatAddressInUseAsSuccess() {
+        #expect(GVProxyExposeRequest.isAlreadyBoundError("proxy already running"))
+        #expect(GVProxyExposeRequest.isAlreadyBoundError("already exists"))
+        #expect(!GVProxyExposeRequest.isAlreadyBoundError("listen tcp 127.0.0.1:6443: bind: address already in use"))
+        #expect(!GVProxyExposeRequest.isAlreadyBoundError("bind: address already in use"))
+    }
+
+    @Test func apiPortFallsBackTo16443OnBindFailure() throws {
+        var attempted: [Int] = []
+        let port = try APIPortExpose.choose { request in
+            attempted.append(request.localPort ?? -1)
+            if request.localPort == GuestNetwork.apiHostPort {
+                throw VirtualMachineError.networkFailed("listen tcp 127.0.0.1:6443: bind: address already in use")
+            }
+        }
+        #expect(port == GuestNetwork.apiFallbackHostPort)
+        #expect(attempted == [GuestNetwork.apiHostPort, GuestNetwork.apiFallbackHostPort])
+    }
+
+    @Test func apiPortKeeps6443WhenExposeSucceeds() throws {
+        let port = try APIPortExpose.choose { _ in }
+        #expect(port == GuestNetwork.apiHostPort)
+    }
+
     @Test func decodeRunsValidate() {
         let json = Data("{\"local\":\"0.0.0.0:6443\",\"remote\":\"192.168.127.2:6443\"}".utf8)
         #expect(throws: VirtualMachineError.self) {

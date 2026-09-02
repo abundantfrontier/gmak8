@@ -37,6 +37,16 @@ struct GuestAgentClientTests {
 
         let kvm = try JSONDecoder().decode(GuestKVM.self, from: Data(#"{"kvm":false}"#.utf8))
         #expect(!kvm.kvm)
+
+        let k3s = try JSONDecoder().decode(
+            GuestK3s.self,
+            from: Data(#"{"active":true,"version":"v1.33.3+k3s1","data_dir_minor":"1.33","data_dir_exists":true}"#.utf8)
+        )
+        #expect(k3s.active)
+        #expect(k3s.dataDirMinor == "1.33")
+        let node = try JSONDecoder().decode(GuestNode.self, from: Data(#"{"ready":true,"name":"gmak8"}"#.utf8))
+        #expect(node.ready)
+        #expect(node.name == "gmak8")
     }
 
     @Test func healthJSONDoesNotCarryDiskKeys() throws {
@@ -86,6 +96,21 @@ struct GuestAgentClientTests {
 
         try await client.shutdown()
         #expect(state.shutdowns == 1)
+
+        let kubeconfig = try await client.kubeconfig()
+        #expect(String(data: kubeconfig, encoding: .utf8)?.contains("kind: Config") == true)
+        let k3s = try await client.k3s()
+        #expect(k3s.active)
+        #expect(k3s.dataDirMinor == "1.33")
+        #expect(try await client.node().ready)
+
+        state.kubeconfig = nil
+        do {
+            _ = try await client.kubeconfig()
+            Issue.record("expected 404")
+        } catch GuestAgentError.httpStatus(let code, _) {
+            #expect(code == 404)
+        }
     }
 
     @Test func urlSessionClientTalksHTTPWithoutAVM() async throws {

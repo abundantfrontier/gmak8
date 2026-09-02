@@ -60,6 +60,32 @@ struct VMConfigurationBuilderTests {
         #expect(config.socketDevices[0] is VZVirtioSocketDeviceConfiguration)
         #expect(config.cpuCount == 2)
         #expect(config.memorySize == 256 * 1024 * 1024)
+        #expect(config.directorySharingDevices.isEmpty)
+    }
+
+    @Test func configShareIsOptionalAndUsesGmak8ConfigTag() throws {
+        let env = try makeLayoutHarness()
+        defer { env.cleanup() }
+
+        let missing = env.root.appending(path: "no-such-config")
+        let withoutShare = try VMConfigurationBuilder.make(
+            layout: env.layout,
+            hardware: env.hardware,
+            configShareDirectory: missing
+        )
+        #expect(withoutShare.directorySharingDevices.isEmpty)
+
+        let shareDir = env.root.appending(path: "config", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        let withShare = try VMConfigurationBuilder.make(
+            layout: env.layout,
+            hardware: env.hardware,
+            configShareDirectory: shareDir
+        )
+        #expect(withShare.directorySharingDevices.count == 1)
+        let fs = withShare.directorySharingDevices[0] as? VZVirtioFileSystemDeviceConfiguration
+        #expect(fs?.tag == VMConfigurationBuilder.configShareTag)
+        #expect(VMConfigurationBuilder.configShareTag == "gmak8-config")
     }
 
     @Test func configurationPinsGuestMACOnFileHandleNIC() throws {

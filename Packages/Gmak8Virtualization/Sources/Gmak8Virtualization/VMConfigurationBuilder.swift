@@ -4,11 +4,13 @@ import Virtualization
 public enum VMConfigurationBuilder {
     public static let diskCachingMode = VZDiskImageCachingMode.cached
     public static let diskSynchronizationMode = VZDiskImageSynchronizationMode.full
+    public static let configShareTag = "gmak8-config"
 
     public static func make(
         layout: VMDiskLayout,
         hardware: VMHardware,
-        networkAttachment: VZNetworkDeviceAttachment? = nil
+        networkAttachment: VZNetworkDeviceAttachment? = nil,
+        configShareDirectory: URL? = nil
     ) throws -> VZVirtualMachineConfiguration {
         let config = VZVirtualMachineConfiguration()
         config.cpuCount = clampedCPUCount(hardware.cpuCount)
@@ -31,6 +33,15 @@ public enum VMConfigurationBuilder {
 
         // virtio-vsock: guest agent 1024, buildkitd 1025 later. gvproxy is vfkit unixgram, not vsock.
         config.socketDevices = [VZVirtioSocketDeviceConfiguration()]
+
+        if let configShareDirectory,
+            FileManager.default.fileExists(atPath: configShareDirectory.path(percentEncoded: false))
+        {
+            let share = VZSharedDirectory(url: configShareDirectory, readOnly: true)
+            let device = VZVirtioFileSystemDeviceConfiguration(tag: configShareTag)
+            device.share = VZSingleDirectoryShare(directory: share)
+            config.directorySharingDevices = [device]
+        }
 
         return config
     }

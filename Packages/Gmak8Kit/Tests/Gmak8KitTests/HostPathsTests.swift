@@ -12,6 +12,8 @@ struct HostPathsTests {
         #expect(paths.settingsFile.lastPathComponent == "settings.json")
         #expect(paths.engineSocket.lastPathComponent == "engine.sock")
         #expect(paths.kubeconfigFile.lastPathComponent == "kubeconfig")
+        #expect(paths.configDirectory.lastPathComponent == "config")
+        #expect(paths.configDirectory.deletingLastPathComponent() == paths.applicationSupport)
         #expect(paths.vmDirectory.lastPathComponent == "vm")
         #expect(paths.osImage.lastPathComponent == "os.img")
         #expect(paths.dataImage.lastPathComponent == "data.img")

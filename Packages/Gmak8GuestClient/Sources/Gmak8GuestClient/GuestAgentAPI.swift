@@ -57,6 +57,37 @@ public struct GuestKVM: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestK3s: Codable, Equatable, Sendable {
+    public var active: Bool
+    public var version: String?
+    public var dataDirMinor: String?
+    public var dataDirExists: Bool
+
+    public init(active: Bool, version: String? = nil, dataDirMinor: String? = nil, dataDirExists: Bool) {
+        self.active = active
+        self.version = version
+        self.dataDirMinor = dataDirMinor
+        self.dataDirExists = dataDirExists
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case active
+        case version
+        case dataDirMinor = "data_dir_minor"
+        case dataDirExists = "data_dir_exists"
+    }
+}
+
+public struct GuestNode: Codable, Equatable, Sendable {
+    public var ready: Bool
+    public var name: String?
+
+    public init(ready: Bool, name: String? = nil) {
+        self.ready = ready
+        self.name = name
+    }
+}
+
 public struct GuestOK: Codable, Equatable, Sendable {
     public var ok: Bool
     public var error: String?

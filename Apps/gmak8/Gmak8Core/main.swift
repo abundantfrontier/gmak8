@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Gmak8GuestClient
 import Gmak8Kit
 import Gmak8Virtualization
 import Gmak8XPC
@@ -35,14 +36,40 @@ do {
         vfkitSocket: paths.vfkitSocket,
         logFile: paths.gvproxyLog
     )
+    try FileManager.default.createDirectory(
+        at: paths.configDirectory,
+        withIntermediateDirectories: true
+    )
+    try K3sConfig.writeHostFile(directory: paths.configDirectory)
+
     let controller = LinuxEFIVirtualMachineRuntime(
         layout: layout,
         hardware: hardware,
-        network: network
+        network: network,
+        configShareDirectory: paths.configDirectory
+    )
+    let setCurrentContext: Bool = {
+        guard FileManager.default.fileExists(atPath: paths.settingsFile.path(percentEncoded: false)) else {
+            return false
+        }
+        return (try? Settings.load(from: paths.settingsFile))?.setCurrentContextOnStart ?? false
+    }()
+    let bringUp = KubernetesBringUp(
+        makeClient: {
+            let device = try await controller.virtioSocketDevice()
+            return VZGuestAgentConnector.makeClient(device: device, queue: VirtualMachineQueue.shared)
+        },
+        kubeconfigStore: KubeconfigStore.current(),
+        setCurrentContext: setCurrentContext,
+        apiPort: { controller.apiHostPort }
     )
     let engine = ClusterEngine(
         scheduler: DispatchEngineScheduler(),
-        runtime: CoreVirtualMachineRuntime(controller: controller)
+        runtime: CoreVirtualMachineRuntime(
+            controller: controller,
+            configDirectory: paths.configDirectory
+        ),
+        bringUp: bringUp
     )
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
     Gmak8Log.core.info("gmak8-core listening on engine.sock")

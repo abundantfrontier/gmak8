@@ -3,3 +3,14 @@
 # Do not set a custom write-kubeconfig path.
 data-dir: /mnt/data/rancher
 default-local-storage-path: /mnt/data/local-path
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+cluster-dns: 10.43.0.10
+tls-san:
+  - 127.0.0.1
+  - localhost
+  - gmak8
+  - gmak8.internal
+  - 192.168.127.2
+node-name: gmak8
+https-listen-port: 6443

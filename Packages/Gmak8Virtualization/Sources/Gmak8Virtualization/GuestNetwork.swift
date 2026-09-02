@@ -14,6 +14,7 @@ public enum GuestNetwork {
     public static let forbiddenHostPorts: Set<Int> = [22, 80, 443]
 
     public static let apiHostPort = 6443
+    public static let apiFallbackHostPort = 16_443
     public static let apiGuestPort = 6443
     public static let httpHostPort = 8080
     public static let httpGuestPort = 80

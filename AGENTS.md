@@ -14,7 +14,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - Do not copy Eureka into this repository (it is an external profile / proving workload)
 - Do not enable App Sandbox on the app or `gmak8-core`
 - Do not set `com.apple.security.virtualization` on the UI target. Set it true on `gmak8-core` only.
-- Do not implement k3s or the menu bar extra unless the current PR asks for them
+- Do not implement the menu bar extra unless the current PR asks for it
 
 ## Layout
 
@@ -27,5 +27,5 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - `Packages/Gmak8GuestClient` — vsock HTTP client to the guest agent on port 1024
 - `docs/design.md` — product and implementation design
 - `guest/mkosi` — Debian 13 arm64 appliance (data-disk format unit, KVM)
-- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `PUT /time`, `POST /shutdown`)
-- `guest/k3s` — k3s config templates (binary install is a later PR)
+- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `/node`, `PUT /time`, `POST /shutdown`)
+- `guest/k3s` — k3s `v1.33.3+k3s1` pin, install script, config template (helm-controller on; admin kubeconfig `/etc/rancher/k3s/k3s.yaml`)

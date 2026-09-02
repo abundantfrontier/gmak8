@@ -34,17 +34,38 @@ Boot order:
    listens on **vsock port 1024**. gvproxy is vfkit unixgram, not vsock.
    Port **1025** is reserved for buildkitd (not in this image yet).
 
-k3s is **not** installed in this image yet. The config template shipped at
-`/etc/rancher/k3s/config.yaml` (source: [`k3s/config.yaml`](k3s/config.yaml)) is:
+k3s **`v1.33.3+k3s1`** is installed as a static arm64 binary (`/usr/local/bin/k3s`),
+not a Debian k3s/containerd/docker package. mkosi postinst fetches
+`https://github.com/k3s-io/k3s/releases/download/v1.33.3%2Bk3s1/k3s-arm64`
+and checks the SHA256 in [`k3s/k3s.pin`](k3s/k3s.pin). `k3s.service`
+`Requires=`/`After=` `mnt-data.mount`. `mnt-data-prep.service` is already
+`Before=k3s.service`.
+
+The config template shipped at `/etc/rancher/k3s/config.yaml` (source:
+[`k3s/config.yaml`](k3s/config.yaml)) is also written by the host onto
+virtio-fs tag `gmak8-config` at `/mnt/config/k3s/config.yaml` when that
+share is attached:
 
 ```yaml
 data-dir: /mnt/data/rancher
 default-local-storage-path: /mnt/data/local-path
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+cluster-dns: 10.43.0.10
+tls-san:
+  - 127.0.0.1
+  - localhost
+  - gmak8
+  - gmak8.internal
+  - 192.168.127.2
+node-name: gmak8
+https-listen-port: 6443
 ```
 
 Do **not** set `disable-helm-controller` (Traefik and metrics-server are
 HelmChart addons). Do **not** set a custom `write-kubeconfig` path. The admin
-file remains `/etc/rancher/k3s/k3s.yaml`.
+file remains `/etc/rancher/k3s/k3s.yaml`. The agent reads that file for
+`GET /kubeconfig`.
 
 ## Guest agent (vsock 1024)
 
@@ -55,6 +76,9 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | `GET` | `/health` | Agent process is up. Does **not** report data-disk mount. |
 | `GET` | `/disks` | `gmak8_data` / `kite_data` are `mounted` when `/mnt/data` is `GMAK8_DATA`. |
 | `GET` | `/kvm` | `kvm` is true iff `/dev/kvm` exists as a character device. |
+| `GET` | `/kubeconfig` | Bytes of `/etc/rancher/k3s/k3s.yaml`, or 404 if missing. |
+| `GET` | `/k3s` | JSON: systemd active, installed version, on-disk data-dir minor if known. |
+| `GET` | `/node` | JSON: Node.Ready from `kubectl get nodes` (false if k3s is not up). |
 | `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
 | `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |
 

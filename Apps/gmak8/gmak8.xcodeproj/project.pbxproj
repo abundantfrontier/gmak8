@@ -32,6 +32,7 @@
 		A30000000000000000000018 /* gmak8 in Embed gmak8 CLI */ = {isa = PBXBuildFile; fileRef = A30000000000000000000004 /* gmak8 */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		A40000000000000000000003 /* Gmak8Virtualization in Frameworks */ = {isa = PBXBuildFile; productRef = A40000000000000000000002 /* Gmak8Virtualization */; };
 		A40000000000000000000005 /* CoreVirtualMachineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000004 /* CoreVirtualMachineRuntime.swift */; };
+		A60000000000000000000003 /* Gmak8GuestClient in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000002 /* Gmak8GuestClient */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -140,6 +141,7 @@
 				A20000000000000000000010 /* Gmak8Kit in Frameworks */,
 				A2000000000000000000000E /* Gmak8XPC in Frameworks */,
 				A40000000000000000000003 /* Gmak8Virtualization in Frameworks */,
+				A60000000000000000000003 /* Gmak8GuestClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -295,6 +297,7 @@
 				A2000000000000000000000F /* Gmak8Kit */,
 				A2000000000000000000000D /* Gmak8XPC */,
 				A40000000000000000000002 /* Gmak8Virtualization */,
+				A60000000000000000000002 /* Gmak8GuestClient */,
 			);
 			productName = "gmak8-core";
 			productReference = A20000000000000000000004 /* gmak8-core */;
@@ -358,6 +361,7 @@
 				A10000000000000000000010 /* XCLocalSwiftPackageReference "Gmak8Kit" */,
 				A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */,
 				A40000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Virtualization" */,
+				A60000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8GuestClient" */,
 				A30000000000000000000001 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			productRefGroup = A10000000000000000000009 /* Products */;
@@ -898,6 +902,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../Packages/Gmak8Virtualization;
 		};
+		A60000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8GuestClient" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Packages/Gmak8GuestClient;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -961,6 +969,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A40000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Virtualization" */;
 			productName = Gmak8Virtualization;
+		};
+		A60000000000000000000002 /* Gmak8GuestClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A60000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8GuestClient" */;
+			productName = Gmak8GuestClient;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

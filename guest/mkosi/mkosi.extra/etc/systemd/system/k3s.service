@@ -1,0 +1,24 @@
+[Unit]
+Description=Lightweight Kubernetes
+Documentation=https://k3s.io
+Requires=mnt-data.mount
+Wants=network-online.target mnt-data-prep.service mnt-config.mount k3s-config-sync.service
+After=network-online.target mnt-data.mount mnt-data-prep.service mnt-config.mount k3s-config-sync.service
+
+[Service]
+Type=notify
+KillMode=process
+Delegate=yes
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+TimeoutStartSec=0
+Restart=always
+RestartSec=5s
+ExecStartPre=-/sbin/modprobe br_netfilter
+ExecStartPre=-/sbin/modprobe overlay
+ExecStart=/usr/local/bin/k3s server
+
+[Install]
+WantedBy=multi-user.target

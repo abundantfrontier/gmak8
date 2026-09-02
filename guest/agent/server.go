@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,9 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /disks", s.handleDisks)
 	mux.HandleFunc("GET /kvm", s.handleKVM)
+	mux.HandleFunc("GET /kubeconfig", s.handleKubeconfig)
+	mux.HandleFunc("GET /k3s", s.handleK3s)
+	mux.HandleFunc("GET /node", s.handleNode)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
 	return mux
@@ -37,6 +41,30 @@ func (s *Server) handleDisks(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleKVM(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, kvmResponse{KVM: s.host.KVM()})
+}
+
+func (s *Server) handleKubeconfig(w http.ResponseWriter, _ *http.Request) {
+	data, err := s.host.Kubeconfig()
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", "application/yaml")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+func (s *Server) handleK3s(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.host.K3s())
+}
+
+func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.host.Node())
 }
 
 func (s *Server) handleTime(w http.ResponseWriter, r *http.Request) {

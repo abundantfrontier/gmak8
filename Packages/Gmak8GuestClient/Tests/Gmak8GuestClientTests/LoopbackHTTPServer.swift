@@ -184,6 +184,22 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
             )
         case ("GET", "/kvm"):
             return .json(200, state.kvm ? #"{"kvm":true}"# : #"{"kvm":false}"#)
+        case ("GET", "/kubeconfig"):
+            if let kubeconfig = state.kubeconfig {
+                return LoopbackHTTPServer.Response(status: 200, body: kubeconfig)
+            }
+            return .json(404, #"{"ok":false,"error":"not found"}"#)
+        case ("GET", "/k3s"):
+            let minor = state.dataDirMinor
+            let minorJSON = minor.isEmpty ? "null" : "\"\(minor)\""
+            return .json(
+                200,
+                """
+                {"active":\(state.k3sActive),"version":"v1.33.3+k3s1","data_dir_minor":\(minorJSON),"data_dir_exists":\(state.dataDirExists)}
+                """
+            )
+        case ("GET", "/node"):
+            return .json(200, state.nodeReady ? #"{"ready":true,"name":"gmak8"}"# : #"{"ready":false,"name":"gmak8"}"#)
         case ("PUT", "/time"):
             if request.body.isEmpty {
                 return .json(400, #"{"ok":false,"error":"expected unix timestamp or RFC3339"}"#)
@@ -205,4 +221,9 @@ final class FixtureState: @unchecked Sendable {
     var kvm = false
     var shutdowns = 0
     var lastTimeBody = Data()
+    var kubeconfig: Data? = Data("apiVersion: v1\nkind: Config\n".utf8)
+    var k3sActive = true
+    var dataDirMinor = "1.33"
+    var dataDirExists = true
+    var nodeReady = true
 }

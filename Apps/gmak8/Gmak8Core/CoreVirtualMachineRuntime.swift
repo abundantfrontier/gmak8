@@ -1,14 +1,17 @@
 import Foundation
+import Gmak8Kit
 import Gmak8Virtualization
 import Gmak8XPC
 
 struct CoreVirtualMachineRuntime: VirtualMachineRuntime {
     let controller: LinuxEFIVirtualMachineRuntime
+    let configDirectory: URL
 
     var stepName: String { "vm" }
 
     func preflight() -> VirtualMachinePreflightError? {
         do {
+            try K3sConfig.writeHostFile(directory: configDirectory)
             try controller.prepare()
             return nil
         } catch let error as VirtualMachineError {

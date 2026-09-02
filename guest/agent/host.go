@@ -12,6 +12,9 @@ import (
 type Host interface {
 	Disks() DisksReport
 	KVM() bool
+	Kubeconfig() ([]byte, error)
+	K3s() K3sReport
+	Node() NodeReport
 	SetTime(t time.Time) error
 	Shutdown() error
 }
@@ -30,20 +33,28 @@ type kvmResponse struct {
 }
 
 type realHost struct {
-	kvmPath       string
-	mountPoint    string
-	expectedLabel string
-	labelSymlink  string
-	mountinfoPath string
+	kvmPath        string
+	mountPoint     string
+	expectedLabel  string
+	labelSymlink   string
+	mountinfoPath  string
+	kubeconfigPath string
+	k3sPath        string
+	serverDBDir    string
+	k3sVersionFile string
 }
 
 func defaultHost() *realHost {
 	return &realHost{
-		kvmPath:       kvmDevicePath,
-		mountPoint:    dataMountPoint,
-		expectedLabel: dataLabel,
-		labelSymlink:  labelByPath,
-		mountinfoPath: mountinfoPath,
+		kvmPath:        kvmDevicePath,
+		mountPoint:     dataMountPoint,
+		expectedLabel:  dataLabel,
+		labelSymlink:   labelByPath,
+		mountinfoPath:  mountinfoPath,
+		kubeconfigPath: k3sKubeconfigPath,
+		k3sPath:        k3sBinaryPath,
+		serverDBDir:    k3sServerDBDir,
+		k3sVersionFile: k3sVersionFile,
 	}
 }
 

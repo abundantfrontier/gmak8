@@ -1,0 +1,14 @@
+[Unit]
+Description=gmak8 host config share (virtiofs tag gmak8-config)
+DefaultDependencies=no
+Conflicts=umount.target
+Before=k3s.service k3s-config-sync.service umount.target
+
+[Mount]
+What=gmak8-config
+Where=/mnt/config
+Type=virtiofs
+Options=ro,x-systemd.mount-timeout=3s
+
+[Install]
+WantedBy=multi-user.target

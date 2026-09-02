@@ -13,13 +13,25 @@ let package = Package(
             targets: ["Gmak8XPC"]
         )
     ],
+    dependencies: [
+        .package(path: "../Gmak8Kit"),
+        .package(path: "../Gmak8GuestClient"),
+    ],
     targets: [
         .target(
-            name: "Gmak8XPC"
+            name: "Gmak8XPC",
+            dependencies: [
+                .product(name: "Gmak8Kit", package: "Gmak8Kit"),
+                .product(name: "Gmak8GuestClient", package: "Gmak8GuestClient"),
+            ]
         ),
         .testTarget(
             name: "Gmak8XPCTests",
-            dependencies: ["Gmak8XPC"]
+            dependencies: [
+                "Gmak8XPC",
+                .product(name: "Gmak8Kit", package: "Gmak8Kit"),
+                .product(name: "Gmak8GuestClient", package: "Gmak8GuestClient"),
+            ]
         ),
     ],
     swiftLanguageModes: [.v6]

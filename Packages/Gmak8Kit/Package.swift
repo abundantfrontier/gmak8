@@ -21,6 +21,9 @@ let package = Package(
             name: "Gmak8Kit",
             dependencies: [
                 .product(name: "Yams", package: "Yams")
+            ],
+            resources: [
+                .copy("Compatibility/compatibility-matrix.json")
             ]
         ),
         .testTarget(

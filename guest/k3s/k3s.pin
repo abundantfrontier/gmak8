@@ -1,0 +1,5 @@
+# Pin for the static k3s-arm64 asset. Encode + as %2B in the URL.
+# Checksum from https://github.com/k3s-io/k3s/releases/download/v1.33.3%2Bk3s1/sha256sum-arm64.txt
+K3S_VERSION=v1.33.3+k3s1
+K3S_URL=https://github.com/k3s-io/k3s/releases/download/v1.33.3%2Bk3s1/k3s-arm64
+K3S_SHA256=152c961aae4aa7553865481c21902a3cc8e02550df97587379a409494c3626c4

@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply host-generated k3s config from virtiofs when present
+DefaultDependencies=no
+After=mnt-config.mount
+Before=k3s.service
+ConditionPathExists=/mnt/config/k3s/config.yaml
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/cp /mnt/config/k3s/config.yaml /etc/rancher/k3s/config.yaml
+
+[Install]
+WantedBy=k3s.service

@@ -15,6 +15,13 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
     private var process: GVProxyProcess?
     private var connection: VfkitConnection?
     private var initialExposeCompleted = false
+    private var chosenAPIHostPort = GuestNetwork.apiHostPort
+
+    public var apiHostPort: Int {
+        mutex.lock()
+        defer { mutex.unlock() }
+        return chosenAPIHostPort
+    }
 
     public init(
         executable: URL?,
@@ -83,14 +90,21 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
         }
     }
 
-    public func exposeDefaultPorts() throws {
+    @discardableResult
+    public func exposeDefaultPorts() throws -> Int {
         let client = UnixHTTPClient(socketURL: httpSocket)
-        for request in GVProxyExposeRequest.defaultPorts {
-            try client.expose(request)
-        }
+        let apiPort = try APIPortExpose.choose { try client.expose($0) }
+        try client.expose(
+            try GVProxyExposeRequest(hostPort: GuestNetwork.httpHostPort, guestPort: GuestNetwork.httpGuestPort)
+        )
+        try client.expose(
+            try GVProxyExposeRequest(hostPort: GuestNetwork.httpsHostPort, guestPort: GuestNetwork.httpsGuestPort)
+        )
         mutex.lock()
         initialExposeCompleted = true
+        chosenAPIHostPort = apiPort
         mutex.unlock()
+        return apiPort
     }
 
     public func stop() {
@@ -106,6 +120,20 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
         try? FileManager.default.removeItem(at: clientSocket)
     }
 
+    private func reexposeChosenPorts() throws {
+        let client = UnixHTTPClient(socketURL: httpSocket)
+        mutex.lock()
+        let apiPort = chosenAPIHostPort
+        mutex.unlock()
+        try client.expose(try GVProxyExposeRequest(hostPort: apiPort, guestPort: GuestNetwork.apiGuestPort))
+        try client.expose(
+            try GVProxyExposeRequest(hostPort: GuestNetwork.httpHostPort, guestPort: GuestNetwork.httpGuestPort)
+        )
+        try client.expose(
+            try GVProxyExposeRequest(hostPort: GuestNetwork.httpsHostPort, guestPort: GuestNetwork.httpsGuestPort)
+        )
+    }
+
     private func handleHelperRestart() {
         mutex.lock()
         let shouldExpose = initialExposeCompleted
@@ -113,7 +141,7 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
         var message = GVProxyProcess.datapathMayBeDeadMessage
         if shouldExpose {
             do {
-                try exposeDefaultPorts()
+                try reexposeChosenPorts()
             } catch {
                 message += "; re-expose failed: \(error.localizedDescription)"
             }

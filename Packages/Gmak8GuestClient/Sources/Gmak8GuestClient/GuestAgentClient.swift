@@ -27,6 +27,23 @@ public struct GuestAgentClient: Sendable {
         try await send(method: "GET", path: "/kvm", body: nil, as: GuestKVM.self)
     }
 
+    public func kubeconfig() async throws -> Data {
+        let response = try await transport.send(method: "GET", path: "/kubeconfig", body: nil)
+        if response.statusCode < 200 || response.statusCode >= 300 {
+            let message = (try? JSONDecoder().decode(GuestOK.self, from: response.body))?.error
+            throw GuestAgentError.httpStatus(response.statusCode, message)
+        }
+        return response.body
+    }
+
+    public func k3s() async throws -> GuestK3s {
+        try await send(method: "GET", path: "/k3s", body: nil, as: GuestK3s.self)
+    }
+
+    public func node() async throws -> GuestNode {
+        try await send(method: "GET", path: "/node", body: nil, as: GuestNode.self)
+    }
+
     public func setTime(_ time: GuestTime) async throws {
         _ = try await send(method: "PUT", path: "/time", body: try time.encodeBody(), as: GuestOK.self)
     }

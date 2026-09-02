@@ -62,6 +62,11 @@ public struct HostPaths: Equatable, Sendable {
         applicationSupport.appending(path: "kubeconfig")
     }
 
+    /// Host side of virtio-fs tag `gmak8-config` (`/mnt/config` in the guest).
+    public var configDirectory: URL {
+        applicationSupport.appending(path: "config", directoryHint: .isDirectory)
+    }
+
     public var vmDirectory: URL {
         applicationSupport.appending(path: "vm", directoryHint: .isDirectory)
     }
