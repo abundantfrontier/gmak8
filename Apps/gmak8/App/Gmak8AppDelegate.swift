@@ -34,13 +34,21 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let pendingRelaunch = AppUpdatePendingStart.consume()
         if !settingsStore.needsOnboarding {
-            settingsStore.ensureCoreAgentRegistered()
             settingsStore.applyLaunchAtLoginIfNeeded()
         }
         session.startListening()
-        if AppUpdatePendingStart.consume() && !settingsStore.needsOnboarding {
-            session.startCluster(waitForEngine: true)
+        if let pendingRelaunch {
+            let startCluster = pendingRelaunch.startCluster && !settingsStore.needsOnboarding
+            sparkle.completePostSwap { [weak self] in
+                guard startCluster else {
+                    return
+                }
+                self?.session.startCluster(waitForEngine: true)
+            }
+        } else if !settingsStore.needsOnboarding {
+            settingsStore.ensureCoreAgentRegistered()
         }
         NotificationCenter.default.addObserver(
             self,

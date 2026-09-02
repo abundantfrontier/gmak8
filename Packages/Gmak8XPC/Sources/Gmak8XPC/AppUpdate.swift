@@ -37,6 +37,8 @@ public enum AppUpdateFinishAction: Equatable, Sendable {
 
 public enum AppUpdatePolicy {
     public static let waitTimeout: TimeInterval = 60
+    /// How long to wait for `SMAppService.register()` / RunAtLoad to bring `engine.sock` up.
+    public static let agentStartTimeout: TimeInterval = 5
 
     /// Unregister `gmak8-core` only. The menu extra login item stays.
     public static func duringSwap() -> LoginItemMutation {
@@ -52,31 +54,56 @@ public enum AppUpdatePolicy {
     }
 }
 
+public struct AppUpdatePendingRelaunch: Equatable, Sendable {
+    public var startCluster: Bool
+
+    public init(startCluster: Bool) {
+        self.startCluster = startCluster
+    }
+}
+
 public enum AppUpdatePendingStart {
     public static let defaultsKey = "gmak8.pendingStartAfterUpdate"
+    public static let postSwapKey = "gmak8.pendingPostSwap"
 
     public static func mark(keepClusterRunningOnQuit: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: postSwapKey)
         defaults.set(keepClusterRunningOnQuit, forKey: defaultsKey)
     }
 
-    public static func consume(defaults: UserDefaults = .standard) -> Bool {
-        let value = defaults.bool(forKey: defaultsKey)
+    public static func consume(defaults: UserDefaults = .standard) -> AppUpdatePendingRelaunch? {
+        guard defaults.bool(forKey: postSwapKey) else {
+            return nil
+        }
+        let startCluster = defaults.bool(forKey: defaultsKey)
+        clear(defaults: defaults)
+        return AppUpdatePendingRelaunch(startCluster: startCluster)
+    }
+
+    public static func clear(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: postSwapKey)
         defaults.removeObject(forKey: defaultsKey)
-        return value
     }
 }
 
 public enum AppUpdateInstall {
-    /// Send `prepareUpdate`, wait until the core process is gone, then unregister the agent.
-    public static func prepareWillInstall(
+    public static func waitForCoreExit(
         submitPrepareUpdate: () throws -> AppUpdatePrepareSubmit,
-        wait: () -> Bool,
-        unregisterAgent: () throws -> Void
+        wait: () -> Bool
     ) throws {
         _ = try submitPrepareUpdate()
         if !wait() {
             throw AppUpdateError.timeoutWaitingForCore
         }
+    }
+
+    /// Unregister only after sock+flocks are gone so launchd does not SIGTERM a still-stopping core.
+    public static func prepareWillInstall(
+        submitPrepareUpdate: () throws -> AppUpdatePrepareSubmit,
+        wait: () -> Bool,
+        unregisterAgent: () throws -> Void
+    ) throws {
+        try waitForCoreExit(submitPrepareUpdate: submitPrepareUpdate, wait: wait)
         try unregisterAgent()
     }
 
@@ -84,14 +111,53 @@ public enum AppUpdateInstall {
         bundleURL: URL,
         keepClusterRunningOnQuit: Bool,
         registerAgent: (URL) throws -> Void,
+        waitUntilLive: () -> Bool,
         launchCore: (URL) throws -> Void
     ) throws -> AppUpdateFinishAction {
         try registerAgent(bundleURL)
-        try launchCore(bundleURL)
+        if !waitUntilLive() {
+            try launchCore(bundleURL)
+        }
         if AppUpdatePolicy.shouldStartAfterSwap(keepClusterRunningOnQuit: keepClusterRunningOnQuit) {
             return .startCluster
         }
         return .idle
+    }
+
+    public static func restoreCoreAfterFailedPrepare(
+        bundleURL: URL,
+        unregisterAgent: () throws -> Void,
+        registerAgent: (URL) throws -> Void,
+        waitUntilLive: () -> Bool,
+        launchCore: (URL) throws -> Void
+    ) throws {
+        try unregisterAgent()
+        try registerAgent(bundleURL)
+        if waitUntilLive() {
+            return
+        }
+        try launchCore(bundleURL)
+    }
+}
+
+public enum EngineSocketProbe {
+    /// True only if `connect(2)` succeeds. A leftover `engine.sock` inode is not live.
+    public static func isLive(_ url: URL) -> Bool {
+        let path = url.path(percentEncoded: false)
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
+            return false
+        }
+        defer { Darwin.close(fd) }
+        guard var addr = unixAddress(path: path) else {
+            return false
+        }
+        let result = withUnsafePointer(to: &addr) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                Darwin.connect(fd, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        return result == 0
     }
 }
 
@@ -103,14 +169,32 @@ public enum AppUpdateGate {
         pollInterval: TimeInterval = 0.05,
         now: () -> Date = Date.init,
         sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
-        socketExists: (URL) -> Bool = {
-            FileManager.default.fileExists(atPath: $0.path(percentEncoded: false))
-        },
+        socketLive: (URL) -> Bool = EngineSocketProbe.isLive,
         locksHeld: ([URL]) -> Bool = DiskLockProbe.anyHeld
     ) -> Bool {
         let deadline = now().addingTimeInterval(timeout)
         while true {
-            if !socketExists(socketURL) && !locksHeld(lockURLs) {
+            if !socketLive(socketURL) && !locksHeld(lockURLs) {
+                return true
+            }
+            if now() >= deadline {
+                return false
+            }
+            sleep(pollInterval)
+        }
+    }
+
+    public static func waitUntilCoreLive(
+        socketURL: URL,
+        timeout: TimeInterval = AppUpdatePolicy.agentStartTimeout,
+        pollInterval: TimeInterval = 0.05,
+        now: () -> Date = Date.init,
+        sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
+        socketLive: (URL) -> Bool = EngineSocketProbe.isLive
+    ) -> Bool {
+        let deadline = now().addingTimeInterval(timeout)
+        while true {
+            if socketLive(socketURL) {
                 return true
             }
             if now() >= deadline {
@@ -144,6 +228,23 @@ public enum DiskLockProbe {
         _ = flock(fd, LOCK_UN)
         return false
     }
+}
+
+private func unixAddress(path: String) -> sockaddr_un? {
+    var addr = sockaddr_un()
+    let maxPath = MemoryLayout.size(ofValue: addr.sun_path)
+    let pathBytes = path.utf8.count
+    guard pathBytes + 1 <= maxPath else {
+        return nil
+    }
+    addr.sun_family = sa_family_t(AF_UNIX)
+    addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+    withUnsafeMutableBytes(of: &addr.sun_path) { buffer in
+        path.withCString { cString in
+            buffer.copyMemory(from: UnsafeRawBufferPointer(start: cString, count: pathBytes + 1))
+        }
+    }
+    return addr
 }
 
 public enum BundledCoreLauncher {

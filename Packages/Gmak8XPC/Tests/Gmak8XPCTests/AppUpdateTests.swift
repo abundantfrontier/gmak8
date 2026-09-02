@@ -35,10 +35,13 @@ struct AppUpdateTests {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         AppUpdatePendingStart.mark(keepClusterRunningOnQuit: true, defaults: defaults)
-        #expect(AppUpdatePendingStart.consume(defaults: defaults))
-        #expect(!AppUpdatePendingStart.consume(defaults: defaults))
+        #expect(AppUpdatePendingStart.consume(defaults: defaults)?.startCluster == true)
+        #expect(AppUpdatePendingStart.consume(defaults: defaults) == nil)
         AppUpdatePendingStart.mark(keepClusterRunningOnQuit: false, defaults: defaults)
-        #expect(!AppUpdatePendingStart.consume(defaults: defaults))
+        #expect(AppUpdatePendingStart.consume(defaults: defaults)?.startCluster == false)
+        AppUpdatePendingStart.mark(keepClusterRunningOnQuit: true, defaults: defaults)
+        AppUpdatePendingStart.clear(defaults: defaults)
+        #expect(AppUpdatePendingStart.consume(defaults: defaults) == nil)
     }
 
     @Test func prepareUnregistersAgentAfterWait() throws {
@@ -86,7 +89,7 @@ struct AppUpdateTests {
             pollInterval: 0.05,
             now: { clock.now },
             sleep: { clock.sleep($0) },
-            socketExists: { _ in false },
+            socketLive: { _ in false },
             locksHeld: { _ in false }
         )
         #expect(released)
@@ -102,7 +105,7 @@ struct AppUpdateTests {
             pollInterval: 1,
             now: { clock.now },
             sleep: { clock.sleep($0) },
-            socketExists: { _ in true },
+            socketLive: { _ in true },
             locksHeld: { _ in false }
         )
         #expect(!released)
@@ -118,7 +121,7 @@ struct AppUpdateTests {
             pollInterval: 1,
             now: { clock.now },
             sleep: { clock.sleep($0) },
-            socketExists: { _ in false },
+            socketLive: { _ in false },
             locksHeld: { _ in true }
         )
         #expect(!released)
@@ -126,7 +129,7 @@ struct AppUpdateTests {
 
     @Test func waitRequiresBothSocketAndFlock() {
         let clock = FakeClock()
-        var socketExists = true
+        var socketLive = true
         var locksHeld = true
         var polls = 0
         let released = AppUpdateGate.waitUntilCoreReleased(
@@ -138,14 +141,14 @@ struct AppUpdateTests {
             sleep: { interval in
                 polls += 1
                 if polls == 1 {
-                    socketExists = false
+                    socketLive = false
                 }
                 if polls == 2 {
                     locksHeld = false
                 }
                 clock.sleep(interval)
             },
-            socketExists: { _ in socketExists },
+            socketLive: { _ in socketLive },
             locksHeld: { _ in locksHeld }
         )
         #expect(released)
@@ -180,6 +183,7 @@ struct AppUpdateTests {
             registerAgent: { url in
                 try CoreLaunchAgent.register(bundleURL: url, service: agent)
             },
+            waitUntilLive: { false },
             launchCore: { url in
                 launched = BundledCoreLauncher.executableURL(bundleURL: url)
             }
@@ -190,11 +194,25 @@ struct AppUpdateTests {
         #expect(action == .startCluster)
     }
 
+    @Test func finishAfterSwapDoesNotLaunchWhenAgentAlreadyLive() throws {
+        var launched = false
+        let action = try AppUpdateInstall.finishAfterSwap(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            keepClusterRunningOnQuit: false,
+            registerAgent: { _ in },
+            waitUntilLive: { true },
+            launchCore: { _ in launched = true }
+        )
+        #expect(!launched)
+        #expect(action == .idle)
+    }
+
     @Test func finishAfterSwapSkipsStartWhenKeepRunningOff() throws {
         let action = try AppUpdateInstall.finishAfterSwap(
             bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
             keepClusterRunningOnQuit: false,
             registerAgent: { _ in },
+            waitUntilLive: { false },
             launchCore: { _ in }
         )
         #expect(action == .idle)
@@ -209,10 +227,69 @@ struct AppUpdateTests {
                 registerAgent: { url in
                     try CoreLaunchAgent.register(bundleURL: url, service: agent)
                 },
+                waitUntilLive: { false },
                 launchCore: { _ in }
             )
         }
         #expect(agent.registerCount == 0)
+    }
+
+    @Test func leftoverSocketFileIsNotLive() throws {
+        let sock = URL(fileURLWithPath: "/tmp/gmak8-stale-\(UUID().uuidString.prefix(8)).sock")
+        try Data("stale".utf8).write(to: sock)
+        defer { try? FileManager.default.removeItem(at: sock) }
+        #expect(!EngineSocketProbe.isLive(sock))
+        let clock = FakeClock()
+        let released = AppUpdateGate.waitUntilCoreReleased(
+            socketURL: sock,
+            lockURLs: [],
+            timeout: AppUpdatePolicy.waitTimeout,
+            pollInterval: 1,
+            now: { clock.now },
+            sleep: { clock.sleep($0) },
+            socketLive: EngineSocketProbe.isLive,
+            locksHeld: { _ in false }
+        )
+        #expect(released)
+        #expect(clock.sleeps.isEmpty)
+    }
+
+    @Test func liveUnixSocketIsDetectedByConnect() throws {
+        let sock = URL(fileURLWithPath: "/tmp/gmak8-live-\(UUID().uuidString.prefix(8)).sock")
+        let listener = try listenUnix(sock)
+        defer { listener.close() }
+        #expect(EngineSocketProbe.isLive(sock))
+        listener.close()
+        #expect(!EngineSocketProbe.isLive(sock))
+    }
+
+    @Test func restoreReregistersAndLaunchesIfStillDead() throws {
+        let agent = MockUpdateLaunchAgent()
+        var launched = false
+        try AppUpdateInstall.restoreCoreAfterFailedPrepare(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            unregisterAgent: { try agent.unregister() },
+            registerAgent: { url in
+                try CoreLaunchAgent.register(bundleURL: url, service: agent)
+            },
+            waitUntilLive: { false },
+            launchCore: { _ in launched = true }
+        )
+        #expect(agent.unregisterCount == 1)
+        #expect(agent.registerCount == 1)
+        #expect(launched)
+    }
+
+    @Test func restoreDoesNotLaunchWhenRegisterBringsCoreBack() throws {
+        var launched = false
+        try AppUpdateInstall.restoreCoreAfterFailedPrepare(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            unregisterAgent: {},
+            registerAgent: { _ in },
+            waitUntilLive: { true },
+            launchCore: { _ in launched = true }
+        )
+        #expect(!launched)
     }
 
     @Test func launchAgentPlistDoesNotKeepAliveSuccessfulExit() throws {
@@ -267,6 +344,56 @@ struct AppUpdateTests {
             }
         }
         #expect(forbidden.isEmpty)
+    }
+}
+
+private func listenUnix(_ url: URL) throws -> UnixListener {
+    try UnixListener(url: url)
+}
+
+private final class UnixListener: @unchecked Sendable {
+    private var fd: Int32
+    private let path: String
+
+    init(url: URL) throws {
+        path = url.path(percentEncoded: false)
+        unlink(path)
+        fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
+            throw EngineErrorCode.invalidRequest
+        }
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        let pathBytes = path.utf8.count
+        let maxPath = MemoryLayout.size(ofValue: addr.sun_path)
+        guard pathBytes + 1 <= maxPath else {
+            Darwin.close(fd)
+            throw EngineErrorCode.invalidRequest
+        }
+        withUnsafeMutableBytes(of: &addr.sun_path) { buffer in
+            path.withCString { cString in
+                buffer.copyMemory(from: UnsafeRawBufferPointer(start: cString, count: pathBytes + 1))
+            }
+        }
+        let bindResult = withUnsafePointer(to: &addr) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                bind(fd, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard bindResult == 0, listen(fd, 8) == 0 else {
+            Darwin.close(fd)
+            throw EngineErrorCode.invalidRequest
+        }
+    }
+
+    func close() {
+        guard fd >= 0 else {
+            return
+        }
+        Darwin.close(fd)
+        fd = -1
+        unlink(path)
     }
 }
 
