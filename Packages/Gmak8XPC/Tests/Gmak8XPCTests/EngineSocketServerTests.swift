@@ -101,6 +101,43 @@ struct EngineSocketServerTests {
         #expect(flock(fd, LOCK_EX | LOCK_NB) != 0)
     }
 
+    @Test func instanceLockFileKeepsInodeAcrossStop() throws {
+        let socketURL = URL(fileURLWithPath: "/tmp/g8-\(getpid())-\(UUID().uuidString.prefix(8)).sock")
+        let lockURL = EngineSocketServer.instanceLockURL(for: socketURL)
+        defer {
+            try? FileManager.default.removeItem(at: socketURL)
+            try? FileManager.default.removeItem(at: lockURL)
+        }
+
+        func makeServer() throws -> EngineSocketServer {
+            try EngineSocketServer(
+                socketURL: socketURL,
+                engine: ClusterEngine(scheduler: ManualEngineScheduler()),
+                identityResolver: FixedPeerIdentityResolver(teamID: nil),
+                daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+            )
+        }
+
+        let first = try makeServer()
+        try first.start()
+        let firstInode =
+            try FileManager.default.attributesOfItem(
+                atPath: lockURL.path(percentEncoded: false)
+            )[.systemFileNumber] as? NSNumber
+        first.stop()
+        #expect(FileManager.default.fileExists(atPath: lockURL.path(percentEncoded: false)))
+
+        let second = try makeServer()
+        try second.start()
+        defer { second.stop() }
+        let secondInode =
+            try FileManager.default.attributesOfItem(
+                atPath: lockURL.path(percentEncoded: false)
+            )[.systemFileNumber] as? NSNumber
+        #expect(firstInode != nil)
+        #expect(firstInode == secondInode)
+    }
+
     @Test func crlfLinesAreAccepted() throws {
         let harness = try SocketHarness()
         defer { harness.stop() }

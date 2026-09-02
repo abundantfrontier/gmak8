@@ -182,7 +182,7 @@ public final class EngineSocketServer: @unchecked Sendable {
         _ = flock(lockFD, LOCK_UN)
         Darwin.close(lockFD)
         lockFD = -1
-        unlink(instanceLockURL.path(percentEncoded: false))
+        // Leave the 0600 lock file so the next open reuses this inode.
     }
 
     private func enforceOwnerReadWrite(path: String, fd: Int32) throws {
