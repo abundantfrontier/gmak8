@@ -7,7 +7,7 @@ struct MenuBarLabel: View {
     var body: some View {
         let appearance = MenuBarIconAppearance(state: session.status.state)
         Image(systemName: appearance.systemImage)
-            .symbolRenderingMode(.hierarchical)
+            .symbolRenderingMode(.palette)
             .foregroundStyle(tint(for: appearance))
             .accessibilityLabel("gmak8 \(StatusText.displayName(session.status.state))")
     }

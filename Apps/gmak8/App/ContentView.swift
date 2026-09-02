@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var session: ClusterSession
+    @EnvironmentObject private var appDelegate: Gmak8AppDelegate
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -46,10 +48,8 @@ struct ContentView: View {
         .padding(40)
         .frame(minWidth: 360, minHeight: 240)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear {
+            appDelegate.bindOpenWindow(openWindow)
+        }
     }
-}
-
-#Preview {
-    ContentView()
-        .environmentObject(ClusterSession())
 }

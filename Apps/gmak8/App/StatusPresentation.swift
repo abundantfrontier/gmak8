@@ -1,6 +1,12 @@
 import Gmak8Kit
 import Gmak8XPC
 
+enum EngineStatusAfterDisconnect {
+    static func status() -> EngineStatus {
+        EngineStatus(state: .stopped)
+    }
+}
+
 enum StatusPresentation {
     static let kubeVirtVersion = "1.6.1"
 

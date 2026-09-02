@@ -99,6 +99,26 @@ struct ExtraLoginItemTests {
     }
 }
 
+struct LaunchAtLoginPolicyTests {
+    @Test func enablingRegistersExtraAndAgent() {
+        let mutation = LaunchAtLoginPolicy.mutation(enabling: true)
+        #expect(mutation.extra == .register)
+        #expect(mutation.agent == .register)
+    }
+
+    @Test func disablingUnregistersExtraOnly() {
+        let mutation = LaunchAtLoginPolicy.mutation(enabling: false)
+        #expect(mutation.extra == .unregister)
+        #expect(mutation.agent == .keep)
+    }
+
+    @Test func extraLaunchRegistersAgentNotExtra() {
+        let mutation = LaunchAtLoginPolicy.extraDidLaunch()
+        #expect(mutation.extra == .keep)
+        #expect(mutation.agent == .register)
+    }
+}
+
 private final class MockLaunchAgent: LaunchAgentRegistering, @unchecked Sendable {
     var registerCount = 0
     var unregisterCount = 0

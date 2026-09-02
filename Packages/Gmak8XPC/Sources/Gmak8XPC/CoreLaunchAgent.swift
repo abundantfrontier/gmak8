@@ -10,11 +10,11 @@ public struct SMAppServiceAgent: LaunchAgentRegistering, Sendable {
     public init() {}
 
     public func register() throws {
-        try SMAppService.agent(plistName: CoreLaunchAgent.plistName).register()
+        try SMAppServiceStatusGate.register(SMAppService.agent(plistName: CoreLaunchAgent.plistName))
     }
 
     public func unregister() throws {
-        try SMAppService.agent(plistName: CoreLaunchAgent.plistName).unregister()
+        try SMAppServiceStatusGate.unregister(SMAppService.agent(plistName: CoreLaunchAgent.plistName))
     }
 }
 
@@ -23,7 +23,7 @@ public enum CoreLaunchAgent {
     public static let plistName = "dev.gmak8.core.plist"
     public static let bundleProgram = "Contents/MacOS/gmak8-core"
 
-    /// Settings / onboarding copy. gmak8 registers two Login Items.
+    /// Settings copy for the two Login Items rows.
     public static let twoLoginItemsExplanation =
         "gmak8 uses two Login Items: (1) gmak8-core LaunchAgent, which owns the background cluster, "
         + "and (2) the gmak8 menu extra, which shows status at login. The agent is required for the "
@@ -49,19 +49,89 @@ public struct SMAppServiceMainApp: LaunchAgentRegistering, Sendable {
     public init() {}
 
     public func register() throws {
-        let service = SMAppService.mainApp
-        if service.status == .enabled {
-            return
-        }
-        try service.register()
+        try SMAppServiceStatusGate.register(SMAppService.mainApp)
     }
 
     public func unregister() throws {
-        let service = SMAppService.mainApp
+        try SMAppServiceStatusGate.unregister(SMAppService.mainApp)
+    }
+}
+
+private enum SMAppServiceStatusGate {
+    static func register(_ service: SMAppService) throws {
+        if service.status == .enabled {
+            return
+        }
+        do {
+            try service.register()
+        } catch {
+            if service.status == .enabled {
+                return
+            }
+            throw error
+        }
+    }
+
+    static func unregister(_ service: SMAppService) throws {
         if service.status == .notRegistered {
             return
         }
-        try service.unregister()
+        do {
+            try service.unregister()
+        } catch {
+            if service.status == .notRegistered {
+                return
+            }
+            throw error
+        }
+    }
+}
+
+public enum LoginItemAction: Equatable, Sendable {
+    case register
+    case unregister
+    case keep
+}
+
+public struct LoginItemMutation: Equatable, Sendable {
+    public var extra: LoginItemAction
+    public var agent: LoginItemAction
+
+    public init(extra: LoginItemAction, agent: LoginItemAction) {
+        self.extra = extra
+        self.agent = agent
+    }
+}
+
+public enum LaunchAtLoginPolicy {
+    public static func mutation(enabling: Bool) -> LoginItemMutation {
+        if enabling {
+            return LoginItemMutation(extra: .register, agent: .register)
+        }
+        return LoginItemMutation(extra: .unregister, agent: .keep)
+    }
+
+    public static func extraDidLaunch() -> LoginItemMutation {
+        LoginItemMutation(extra: .keep, agent: .register)
+    }
+
+    public static func apply(_ mutation: LoginItemMutation, bundleURL: URL) throws {
+        switch mutation.extra {
+        case .register:
+            try ExtraLoginItem.register(bundleURL: bundleURL)
+        case .unregister:
+            try ExtraLoginItem.unregister()
+        case .keep:
+            break
+        }
+        switch mutation.agent {
+        case .register:
+            try CoreLaunchAgent.register(bundleURL: bundleURL)
+        case .unregister:
+            try CoreLaunchAgent.unregister()
+        case .keep:
+            break
+        }
     }
 }
 

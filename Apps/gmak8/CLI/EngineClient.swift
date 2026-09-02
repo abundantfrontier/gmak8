@@ -22,6 +22,15 @@ extension CLIError: LocalizedError {
             return "gmak8-core returned an invalid reply."
         }
     }
+
+    var resetsClusterStatus: Bool {
+        switch self {
+        case .engineNotRunning, .communicationFailed, .invalidReply:
+            return true
+        case .engineError:
+            return false
+        }
+    }
 }
 
 enum EngineClient {
@@ -208,6 +217,12 @@ final class EngineSubscription: @unchecked Sendable {
         }
     }
 
+    deinit {
+        queue.sync {
+            closeLocked(error: nil)
+        }
+    }
+
     private func closeLocked(error: CLIError?) {
         lock.lock()
         if closed {
@@ -217,12 +232,17 @@ final class EngineSubscription: @unchecked Sendable {
         closed = true
         let continuation = stoppedContinuation
         stoppedContinuation = nil
+        let sourceToCancel = source
+        source = nil
         lock.unlock()
         if let error {
             onError(error)
         }
-        source?.cancel()
-        source = nil
+        if let sourceToCancel {
+            sourceToCancel.cancel()
+        } else {
+            Darwin.close(fd)
+        }
         continuation?.resume()
     }
 }

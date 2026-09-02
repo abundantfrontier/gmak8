@@ -87,3 +87,31 @@ struct QuitPolicy: Equatable, Sendable {
         clusterStays && !extraRemains
     }
 }
+
+enum ProductWindowIdentity {
+    static let sceneID = "main"
+    static let title = "gmak8"
+
+    static func isProductWindow(identifier: String?, title: String, isStatusBar: Bool) -> Bool {
+        if isStatusBar {
+            return false
+        }
+        if identifier == sceneID {
+            return true
+        }
+        if isSettings(identifier: identifier, title: title) {
+            return false
+        }
+        return title == Self.title
+    }
+
+    static func isSettings(identifier: String?, title: String) -> Bool {
+        for value in [identifier ?? "", title] {
+            let lower = value.lowercased()
+            if lower.contains("setting") || lower.contains("preference") {
+                return true
+            }
+        }
+        return false
+    }
+}

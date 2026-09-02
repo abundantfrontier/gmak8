@@ -1,6 +1,6 @@
 import Gmak8XPC
 
-enum MenuBarIconAppearance: Equatable, Sendable {
+enum MenuBarIconAppearance: Equatable, Sendable, CaseIterable {
     case grayStopped
     case blueStarting
     case filledRunning
@@ -27,10 +27,16 @@ enum MenuBarIconAppearance: Equatable, Sendable {
 
     var systemImage: String {
         switch self {
-        case .grayStopped, .blueStarting:
+        case .grayStopped:
             return "circle"
-        case .filledRunning, .yellowDegraded, .redFailed:
+        case .blueStarting:
+            return "circle.dotted"
+        case .filledRunning:
             return "circle.fill"
+        case .yellowDegraded:
+            return "exclamationmark.triangle.fill"
+        case .redFailed:
+            return "xmark.octagon.fill"
         case .paused:
             return "pause.circle.fill"
         }

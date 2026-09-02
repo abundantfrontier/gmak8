@@ -16,13 +16,15 @@ struct Gmak8AppTests {
         #expect(MenuBarIconAppearance(state: .failed) == .redFailed)
         #expect(MenuBarIconAppearance(state: .paused) == .paused)
         #expect(MenuBarIconAppearance(state: .stopped).systemImage == "circle")
-        #expect(MenuBarIconAppearance(state: .starting).systemImage == "circle")
+        #expect(MenuBarIconAppearance(state: .starting).systemImage == "circle.dotted")
         #expect(MenuBarIconAppearance(state: .running).systemImage == "circle.fill")
-        #expect(MenuBarIconAppearance(state: .degraded).systemImage == "circle.fill")
-        #expect(MenuBarIconAppearance(state: .failed).systemImage == "circle.fill")
+        #expect(MenuBarIconAppearance(state: .degraded).systemImage == "exclamationmark.triangle.fill")
+        #expect(MenuBarIconAppearance(state: .failed).systemImage == "xmark.octagon.fill")
         #expect(MenuBarIconAppearance(state: .paused).systemImage == "pause.circle.fill")
         #expect(MenuBarIconAppearance(state: .paused).showsPauseBadge)
         #expect(!MenuBarIconAppearance(state: .running).showsPauseBadge)
+        let symbols = Set(MenuBarIconAppearance.allCases.map(\.systemImage))
+        #expect(symbols.count == MenuBarIconAppearance.allCases.count)
     }
 
     @Test func closeLastWindowDoesNotQuitExtra() {
@@ -117,6 +119,46 @@ struct Gmak8AppTests {
         #expect(source.contains("export KUBECONFIG='\(path)'"))
         #expect(TerminalLauncher.shellQuoted("a'b") == "'a'\\''b'")
         #expect(TerminalLauncher.terminalBundleIdentifier == "com.apple.Terminal")
+    }
+
+    @Test func lostEngineConnectionResetsStatusToStopped() {
+        #expect(CLIError.engineNotRunning.resetsClusterStatus)
+        #expect(CLIError.communicationFailed.resetsClusterStatus)
+        #expect(CLIError.invalidReply.resetsClusterStatus)
+        #expect(!CLIError.engineError(.conflict).resetsClusterStatus)
+        let disconnected = EngineStatusAfterDisconnect.status()
+        #expect(disconnected.state == .stopped)
+        #expect(MenuBarIconAppearance(state: disconnected.state) == .grayStopped)
+    }
+
+    @Test func productWindowIdentityIgnoresSettingsAndStatusBar() {
+        #expect(
+            ProductWindowIdentity.isProductWindow(
+                identifier: ProductWindowIdentity.sceneID,
+                title: "gmak8",
+                isStatusBar: false
+            )
+        )
+        #expect(
+            ProductWindowIdentity.isProductWindow(identifier: nil, title: "gmak8", isStatusBar: false)
+        )
+        #expect(
+            !ProductWindowIdentity.isProductWindow(
+                identifier: "com.apple.SwiftUI.Settings",
+                title: "gmak8",
+                isStatusBar: false
+            )
+        )
+        #expect(
+            !ProductWindowIdentity.isProductWindow(identifier: nil, title: "Settings", isStatusBar: false)
+        )
+        #expect(
+            !ProductWindowIdentity.isProductWindow(
+                identifier: ProductWindowIdentity.sceneID,
+                title: "gmak8",
+                isStatusBar: true
+            )
+        )
     }
 
     @Test func statusPresentationFormatsPinAndMetrics() {

@@ -43,24 +43,28 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         guard settings.launchAtLogin else {
             return
         }
+        apply(LaunchAtLoginPolicy.mutation(enabling: true))
+    }
+
+    func ensureCoreAgentRegistered() {
+        apply(LaunchAtLoginPolicy.extraDidLaunch())
+    }
+
+    private func applyLaunchAtLogin(_ enabled: Bool) throws {
+        try LaunchAtLoginPolicy.apply(
+            LaunchAtLoginPolicy.mutation(enabling: enabled),
+            bundleURL: Bundle.main.bundleURL
+        )
+    }
+
+    private func apply(_ mutation: LoginItemMutation) {
         do {
-            try applyLaunchAtLogin(true)
+            try LaunchAtLoginPolicy.apply(mutation, bundleURL: Bundle.main.bundleURL)
             lastError = nil
         } catch EngineErrorCode.translocated {
             lastError = "Move gmak8 to /Applications and re-open."
         } catch {
             lastError = error.localizedDescription
-        }
-    }
-
-    private func applyLaunchAtLogin(_ enabled: Bool) throws {
-        let bundleURL = Bundle.main.bundleURL
-        if enabled {
-            try ExtraLoginItem.register(bundleURL: bundleURL)
-            try CoreLaunchAgent.register(bundleURL: bundleURL)
-        } else {
-            try ExtraLoginItem.unregister()
-            try CoreLaunchAgent.unregister()
         }
     }
 

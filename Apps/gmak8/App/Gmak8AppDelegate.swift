@@ -3,7 +3,7 @@ import Combine
 import SwiftUI
 
 enum Gmak8SceneID {
-    static let main = "main"
+    static let main = ProductWindowIdentity.sceneID
 }
 
 @MainActor
@@ -23,6 +23,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        settingsStore.ensureCoreAgentRegistered()
         session.startListening()
         settingsStore.applyLaunchAtLoginIfNeeded()
         NotificationCenter.default.addObserver(
@@ -80,12 +81,14 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
         } else {
             self.openWindow?()
         }
-        for window in NSApp.windows where isMainWindow(window) {
+        for window in NSApp.windows where isProductWindow(window) {
             window.makeKeyAndOrderFront(nil)
         }
     }
 
     func openSettingsWindow() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
@@ -102,7 +105,9 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
             becomeAccessory(stopCluster: stopCluster)
             return .terminateCancel
         case .showFirstQuitSheet(let defaultKeepRunning):
-            presentFirstQuitSheet(defaultKeepRunning: defaultKeepRunning)
+            DispatchQueue.main.async { [weak self] in
+                self?.presentFirstQuitSheet(defaultKeepRunning: defaultKeepRunning)
+            }
             return .terminateLater
         case .hideWindowsKeepExtra, .refuseHeadlessKeepExtra:
             keepExtraHideWindows()
@@ -135,7 +140,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
             )
             self?.finishFirstQuit(keepRunning: keep)
         }
-        if let window = NSApp.windows.first(where: { isMainWindow($0) && $0.isVisible }) {
+        if let window = NSApp.windows.first(where: { isProductWindow($0) && $0.isVisible }) {
             alert.beginSheetModal(for: window, completionHandler: complete)
         } else {
             complete(alert.runModal())
@@ -179,36 +184,27 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     private func keepExtraHideWindows() {
-        for window in NSApp.windows where isMainWindow(window) {
+        for window in NSApp.windows where isProductWindow(window) {
             window.orderOut(nil)
         }
         NSApp.setActivationPolicy(.accessory)
     }
 
     @objc private func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, isProductWindow(window) else {
+            return
+        }
         DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-            let visibleMains = NSApp.windows.filter { self.isMainWindow($0) && $0.isVisible }
-            if visibleMains.isEmpty {
-                self.applyCloseLastWindow()
-            }
+            self?.applyCloseLastWindow()
         }
     }
 
-    private func isMainWindow(_ window: NSWindow) -> Bool {
-        guard window.canBecomeMain else {
-            return false
-        }
-        if window.level == .statusBar {
-            return false
-        }
-        let name = String(describing: type(of: window))
-        if name.contains("StatusBar") || name.contains("NSStatusBar") {
-            return false
-        }
-        return true
+    private func isProductWindow(_ window: NSWindow) -> Bool {
+        ProductWindowIdentity.isProductWindow(
+            identifier: window.identifier?.rawValue,
+            title: window.title,
+            isStatusBar: window.level == .statusBar
+        )
     }
 
     private func launchedAsLoginItem() -> Bool {

@@ -49,6 +49,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
     }
 
     func startCluster() {
+        ensureCoreAgentRegistered()
         submit(.start)
     }
 
@@ -64,6 +65,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
             }.value
             connectionError = nil
         } catch let error as CLIError where error == .engineNotRunning {
+            markDisconnected(.engineNotRunning)
             connectionError = nil
         } catch let error as CLIError {
             connectionError = error
@@ -84,9 +86,9 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
                 }.value
                 self.connectionError = nil
             } catch let error as CLIError {
-                self.connectionError = error
+                self.markDisconnected(error)
             } catch {
-                self.connectionError = .communicationFailed
+                self.markDisconnected(.communicationFailed)
             }
         }
     }
@@ -96,7 +98,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
             subscription?.cancel()
             subscription = nil
             if !fileManager.fileExists(atPath: socketURL.path(percentEncoded: false)) {
-                connectionError = .engineNotRunning
+                markDisconnected(.engineNotRunning)
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 continue
             }
@@ -142,6 +144,24 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         if Task.isCancelled {
             return
         }
+        markDisconnected(error)
+    }
+
+    private func markDisconnected(_ error: CLIError) {
         connectionError = error
+        if error.resetsClusterStatus {
+            status = EngineStatusAfterDisconnect.status()
+        }
+    }
+
+    private func ensureCoreAgentRegistered() {
+        do {
+            try LaunchAtLoginPolicy.apply(
+                LaunchAtLoginPolicy.extraDidLaunch(),
+                bundleURL: Bundle.main.bundleURL
+            )
+        } catch {
+            return
+        }
     }
 }
