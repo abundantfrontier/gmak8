@@ -1,0 +1,12 @@
+[Unit]
+Description=Load KVM modules for nested virtualization
+After=systemd-modules-load.service
+Before=k3s.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/gmak8/modprobe-kvm.sh
+
+[Install]
+WantedBy=multi-user.target

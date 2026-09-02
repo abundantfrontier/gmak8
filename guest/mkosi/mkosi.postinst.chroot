@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+# Wants/ symlinks also ship in mkosi.extra; enable is idempotent.
+systemctl enable mnt-data.mount
+systemctl enable mnt-data-prep.service
+systemctl enable gmak8-kvm.service
+
+# openssh-server postinst enables ssh; keep the unit installed but not started.
+for unit in ssh.service ssh.socket sshd.service sshd.socket; do
+  systemctl disable "$unit" 2>/dev/null || true
+done
+
+mkdir -p /mnt/data

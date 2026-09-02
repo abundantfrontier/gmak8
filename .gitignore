@@ -40,3 +40,10 @@ DerivedData/
 .idea/
 .vscode/
 .env
+
+# mkosi build artifacts — never vendor guest disk images
+guest/mkosi/mkosi.output/
+guest/mkosi/mkosi.cache/
+guest/mkosi/mkosi.builddir/
+guest/mkosi/mkosi.workspace/
+guest/mkosi/mkosi.local.conf

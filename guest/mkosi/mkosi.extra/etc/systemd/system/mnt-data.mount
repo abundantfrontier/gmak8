@@ -1,0 +1,14 @@
+[Unit]
+DefaultDependencies=no
+Requires=gmak8-data-format.service
+After=gmak8-data-format.service
+Before=local-fs.target gmak8-agent.service k3s.service
+
+[Mount]
+What=/dev/disk/by-label/GMAK8_DATA
+Where=/mnt/data
+Type=ext4
+Options=defaults,noatime
+
+[Install]
+WantedBy=local-fs.target

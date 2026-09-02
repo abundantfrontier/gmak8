@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepare gmak8 data directories
+After=mnt-data.mount
+Requires=mnt-data.mount
+Before=k3s.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /mnt/data/rancher /mnt/data/buildkit /mnt/data/tmp /mnt/data/log /mnt/data/local-path
+
+[Install]
+WantedBy=multi-user.target

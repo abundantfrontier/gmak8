@@ -1,0 +1,12 @@
+[Unit]
+Description=Format gmak8 data NVMe if unlabeled
+DefaultDependencies=no
+After=local-fs-pre.target dev-nvme1n1.device
+Before=mnt-data.mount
+ConditionPathExists=/dev/nvme1n1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=10min
+ExecStart=/usr/local/lib/gmak8/format-data-disk.sh

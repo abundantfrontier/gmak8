@@ -1,0 +1,5 @@
+# k3s config template. Admin kubeconfig stays /etc/rancher/k3s/k3s.yaml.
+# Do not set disable-helm-controller (Traefik/metrics-server are HelmCharts).
+# Do not set a custom write-kubeconfig path.
+data-dir: /mnt/data/rancher
+default-local-storage-path: /mnt/data/local-path

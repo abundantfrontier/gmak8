@@ -25,3 +25,5 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - `Packages/Gmak8XPC` — NDJSON engine protocol, fake cluster state machine, peer/Team ID policy
 - `Packages/Gmak8Virtualization` — VZ on `dev.gmak8.vm`, NVMe/EFI/serial, disk flock
 - `docs/design.md` — product and implementation design
+- `guest/mkosi` — Debian 13 arm64 appliance (data-disk format unit, KVM)
+- `guest/k3s` — k3s config templates (binary install is a later PR)

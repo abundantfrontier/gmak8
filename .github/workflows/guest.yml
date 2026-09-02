@@ -1,0 +1,84 @@
+name: guest
+
+# Linux arm64 only. Does not run Virtualization.framework or QEMU.
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - "guest/**"
+      - ".github/workflows/guest.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "guest/**"
+      - ".github/workflows/guest.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+      - name: Validate units and k3s template
+        run: bash guest/mkosi/tests/validate.sh
+      - name: format-data-disk.sh idempotency
+        run: bash guest/mkosi/tests/format-data-disk-test.sh
+      - name: shellcheck
+        run: |
+          shellcheck \
+            guest/mkosi/mkosi.extra/usr/local/lib/gmak8/format-data-disk.sh \
+            guest/mkosi/mkosi.extra/usr/local/lib/gmak8/modprobe-kvm.sh \
+            guest/mkosi/mkosi.postinst.chroot \
+            guest/mkosi/tests/validate.sh \
+            guest/mkosi/tests/format-data-disk-test.sh \
+            guest/mkosi/scripts/assert-kvm.sh \
+            guest/mkosi/scripts/assert-debian-kernel-kvm.sh
+
+  kernel-kvm:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: CONFIG_KVM=y-or-m and kvm.ko (Debian linux-image-arm64)
+        run: bash guest/mkosi/scripts/assert-debian-kernel-kvm.sh
+
+  mkosi:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mkosi tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-pip python3-venv pipx \
+            debian-archive-keyring apt dpkg \
+            systemd-container uidmap bubblewrap \
+            ca-certificates curl e2fsprogs dosfstools \
+            binutils
+          pipx install mkosi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build directory image
+        id: mkosi
+        continue-on-error: true
+        working-directory: guest/mkosi
+        run: |
+          mkosi --version
+          mkosi summary
+          # Directory + --bootable no is enough to inspect /boot/config-* and kvm.ko.
+          sudo "$(command -v mkosi)" --format directory --bootable no --force
+      - name: Assert CONFIG_KVM and kvm.ko in image
+        if: steps.mkosi.outcome == 'success'
+        run: |
+          if [ -d guest/mkosi/mkosi.output/os ]; then
+            root=guest/mkosi/mkosi.output/os
+          elif [ -d guest/mkosi/mkosi.output/os.img ]; then
+            root=guest/mkosi/mkosi.output/os.img
+          else
+            root=$(find guest/mkosi/mkosi.output -mindepth 1 -maxdepth 1 -type d | awk 'NR==1')
+          fi
+          test -n "${root:-}"
+          bash guest/mkosi/scripts/assert-kvm.sh "$root"

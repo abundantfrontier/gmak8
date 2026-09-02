@@ -1,0 +1,8 @@
+# sshd ships in the appliance but stays off until PR 30 publishes L1:22.
+disable ssh.service
+disable ssh.socket
+disable sshd.service
+disable sshd.socket
+enable mnt-data.mount
+enable mnt-data-prep.service
+enable gmak8-kvm.service
