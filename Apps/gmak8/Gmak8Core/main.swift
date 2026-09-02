@@ -16,6 +16,10 @@ do {
         at: paths.caches,
         withIntermediateDirectories: true
     )
+    try FileManager.default.createDirectory(
+        at: paths.logs,
+        withIntermediateDirectories: true
+    )
     try TimeMachineExclusion.excludeVMDirectory(at: paths.vmDirectory)
 
     var layout = VMDiskLayout.under(vmDirectory: paths.vmDirectory)
@@ -28,7 +32,8 @@ do {
     let network = GVProxyNetworkStack(
         executable: GVProxyLaunch.resolveExecutable(),
         httpSocket: paths.gvproxySocket,
-        vfkitSocket: paths.vfkitSocket
+        vfkitSocket: paths.vfkitSocket,
+        logFile: paths.gvproxyLog
     )
     let controller = LinuxEFIVirtualMachineRuntime(
         layout: layout,

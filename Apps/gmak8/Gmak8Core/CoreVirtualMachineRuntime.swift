@@ -33,6 +33,10 @@ struct CoreVirtualMachineRuntime: VirtualMachineRuntime {
     func cancelInFlightStart() {
         controller.cancelInFlightStart()
     }
+
+    func setDegradedHandler(_ handler: (@Sendable (String) -> Void)?) {
+        controller.setDegradedHandler(handler)
+    }
 }
 
 private func engineErrorCode(for error: VirtualMachineError) -> EngineErrorCode {

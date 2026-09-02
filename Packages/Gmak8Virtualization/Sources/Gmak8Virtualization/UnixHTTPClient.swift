@@ -12,13 +12,32 @@ public struct UnixHTTPClient: Sendable {
     }
 
     public func expose(_ request: GVProxyExposeRequest) throws {
+        if currentlyExposed().contains(where: { $0.local == request.local }) {
+            return
+        }
         let body = try request.jsonUTF8()
         let response = try perform(method: "POST", path: "/services/forwarder/expose", body: body)
-        guard (200..<300).contains(response.status) else {
-            let text = String(data: response.body, encoding: .utf8) ?? ""
-            throw VirtualMachineError.networkFailed(
-                "expose \(request.local) failed (\(response.status)): \(text)"
-            )
+        if (200..<300).contains(response.status) {
+            return
+        }
+        let text = String(data: response.body, encoding: .utf8) ?? ""
+        if GVProxyExposeRequest.isAlreadyBoundError(text) {
+            return
+        }
+        throw VirtualMachineError.networkFailed(
+            "expose \(request.local) failed (\(response.status)): \(text)"
+        )
+    }
+
+    public func currentlyExposed() -> [GVProxyExposeRequest] {
+        do {
+            let response = try perform(method: "GET", path: "/services/forwarder/all")
+            guard (200..<300).contains(response.status) else {
+                return []
+            }
+            return (try? JSONDecoder().decode([GVProxyExposeRequest].self, from: response.body)) ?? []
+        } catch {
+            return []
         }
     }
 

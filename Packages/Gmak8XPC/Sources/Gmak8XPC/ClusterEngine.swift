@@ -86,6 +86,9 @@ public final class ClusterEngine: @unchecked Sendable {
         self.runtime.setUnexpectedStopHandler { [weak self] error in
             self?.handleUnexpectedStop(error)
         }
+        self.runtime.setDegradedHandler { [weak self] message in
+            self?.handleDegraded(message)
+        }
     }
 
     public func currentStatus() -> EngineStatus {
@@ -290,6 +293,26 @@ public final class ClusterEngine: @unchecked Sendable {
             }
             events.append(.status(currentStatusLocked()))
             events.append(.log(source: .engine, line: "stopped"))
+        }
+        broadcast(events)
+    }
+
+    private func handleDegraded(_ message: String) {
+        var events: [EngineEvent] = []
+        withLock {
+            switch state {
+            case .running, .degraded:
+                state = .degraded
+                lastError = message
+                events.append(.status(currentStatusLocked()))
+                events.append(.log(source: .engine, line: message))
+            case .starting:
+                lastError = message
+                events.append(.status(currentStatusLocked()))
+                events.append(.log(source: .engine, line: message))
+            case .stopped, .stopping, .paused, .failed:
+                break
+            }
         }
         broadcast(events)
     }

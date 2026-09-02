@@ -6,6 +6,9 @@ import Foundation
 /// Restart re-exposes the port table; the VZ file-handle NIC stays bound to the
 /// old datagram fd, so datapath recovery may still need a VM restart.
 public final class GVProxyProcess: @unchecked Sendable {
+    public static let datapathMayBeDeadMessage =
+        "gvproxy restarted; guest overlay datapath may be dead until the VM is restarted (unixgram ENOBUFS)"
+
     public struct Config: Sendable {
         public var executable: URL
         public var httpSocket: URL
@@ -13,6 +16,7 @@ public final class GVProxyProcess: @unchecked Sendable {
         public var mtu: Int
         public var readyTimeout: TimeInterval
         public var maximumRestarts: Int?
+        public var logFile: URL?
         public var backoff: @Sendable (Int) -> TimeInterval
 
         public init(
@@ -22,6 +26,7 @@ public final class GVProxyProcess: @unchecked Sendable {
             mtu: Int = GuestNetwork.mtu,
             readyTimeout: TimeInterval = 10,
             maximumRestarts: Int? = nil,
+            logFile: URL? = nil,
             backoff: @escaping @Sendable (Int) -> TimeInterval = GVProxyProcess.restartBackoff
         ) {
             self.executable = executable
@@ -30,6 +35,7 @@ public final class GVProxyProcess: @unchecked Sendable {
             self.mtu = mtu
             self.readyTimeout = readyTimeout
             self.maximumRestarts = maximumRestarts
+            self.logFile = logFile
             self.backoff = backoff
         }
     }
@@ -41,10 +47,12 @@ public final class GVProxyProcess: @unchecked Sendable {
     public let config: Config
     public var onRestarted: (@Sendable () -> Void)?
 
-    private let mutex = NSLock()
+    private let condition = NSCondition()
     private let supervisorQueue = DispatchQueue(label: "dev.gmak8.gvproxy")
     private var process: Process?
+    private var logHandle: FileHandle?
     private var stopRequested = false
+    private var restartGeneration: UInt64 = 0
     private var restartAttempt = 0
     public private(set) var restartCount = 0
 
@@ -53,25 +61,32 @@ public final class GVProxyProcess: @unchecked Sendable {
     }
 
     public var isRunning: Bool {
-        mutex.lock()
-        defer { mutex.unlock() }
+        condition.lock()
+        defer { condition.unlock() }
         return process?.isRunning == true
     }
 
     public func start() throws {
-        mutex.lock()
+        condition.lock()
         stopRequested = false
-        mutex.unlock()
-        try launchLocked()
-        try waitUntilSocketsExist()
+        condition.unlock()
+        do {
+            try launchLocked()
+            try waitUntilSocketsExist()
+        } catch {
+            stop()
+            throw error
+        }
     }
 
     public func stop() {
-        mutex.lock()
+        condition.lock()
         stopRequested = true
+        restartGeneration += 1
         let running = process
         process = nil
-        mutex.unlock()
+        condition.broadcast()
+        condition.unlock()
         running?.terminate()
         running?.waitUntilExit()
         unlinkSockets()
@@ -95,35 +110,53 @@ public final class GVProxyProcess: @unchecked Sendable {
         child.executableURL = config.executable
         child.arguments = args
         child.standardOutput = FileHandle.nullDevice
-        child.standardError = FileHandle.nullDevice
+        let log = try openLogFile()
+        child.standardError = log ?? FileHandle.nullDevice
         child.terminationHandler = { [weak self] _ in
             self?.handleExit()
         }
 
-        mutex.lock()
+        condition.lock()
+        if stopRequested {
+            condition.unlock()
+            throw VirtualMachineError.stoppedDuringStart
+        }
+        logHandle = log
         process = child
-        mutex.unlock()
         do {
             try child.run()
         } catch {
-            mutex.lock()
             process = nil
-            mutex.unlock()
+            logHandle = nil
+            condition.unlock()
             throw VirtualMachineError.networkFailed(
                 "failed to launch gvproxy: \(error.localizedDescription)"
             )
         }
+        if stopRequested {
+            let running = process
+            process = nil
+            condition.unlock()
+            running?.terminate()
+            running?.waitUntilExit()
+            throw VirtualMachineError.stoppedDuringStart
+        }
+        condition.unlock()
     }
 
     private func waitUntilSocketsExist() throws {
         let deadline = Date().addingTimeInterval(config.readyTimeout)
         let httpPath = UnixgramPath.fileSystemPath(config.httpSocket)
         let vfkitPath = UnixgramPath.fileSystemPath(config.vfkitSocket)
-        while Date() < deadline {
-            if isStopRequested() {
+        while true {
+            condition.lock()
+            let stopping = stopRequested
+            let running = process?.isRunning == true
+            condition.unlock()
+            if stopping {
                 throw VirtualMachineError.stoppedDuringStart
             }
-            if !isRunning {
+            if !running {
                 throw VirtualMachineError.networkFailed("gvproxy exited during start")
             }
             if FileManager.default.fileExists(atPath: httpPath)
@@ -131,21 +164,36 @@ public final class GVProxyProcess: @unchecked Sendable {
             {
                 return
             }
-            Thread.sleep(forTimeInterval: 0.05)
+            if Date() >= deadline {
+                throw VirtualMachineError.networkFailed(
+                    "gvproxy sockets did not appear within \(config.readyTimeout)s"
+                )
+            }
+            condition.lock()
+            if stopRequested {
+                condition.unlock()
+                throw VirtualMachineError.stoppedDuringStart
+            }
+            let slice = min(0.05, deadline.timeIntervalSinceNow)
+            if slice > 0 {
+                _ = condition.wait(until: Date().addingTimeInterval(slice))
+            }
+            condition.unlock()
         }
-        throw VirtualMachineError.networkFailed("gvproxy sockets did not appear within \(config.readyTimeout)s")
     }
 
     private func handleExit() {
-        mutex.lock()
-        let stopping = stopRequested
+        condition.lock()
+        if stopRequested {
+            process = nil
+            condition.unlock()
+            return
+        }
         process = nil
         let attempt = restartAttempt + 1
         let cap = config.maximumRestarts
-        mutex.unlock()
-        if stopping {
-            return
-        }
+        let generation = restartGeneration
+        condition.unlock()
         if let cap, attempt > cap {
             return
         }
@@ -154,30 +202,69 @@ public final class GVProxyProcess: @unchecked Sendable {
             guard let self else {
                 return
             }
-            if self.isStopRequested() {
+            self.condition.lock()
+            let cancelled = self.stopRequested || self.restartGeneration != generation
+            self.condition.unlock()
+            if cancelled {
                 return
             }
             do {
                 try self.launchLocked()
                 try self.waitUntilSocketsExist()
-                self.mutex.lock()
+                self.condition.lock()
+                if self.stopRequested || self.restartGeneration != generation {
+                    let running = self.process
+                    self.process = nil
+                    self.condition.unlock()
+                    running?.terminate()
+                    running?.waitUntilExit()
+                    return
+                }
                 self.restartAttempt = attempt
                 self.restartCount += 1
-                self.mutex.unlock()
+                self.condition.unlock()
+                self.appendLogLine(Self.datapathMayBeDeadMessage)
                 self.onRestarted?()
             } catch {
-                self.mutex.lock()
+                self.condition.lock()
                 self.restartAttempt = attempt
-                self.mutex.unlock()
-                self.handleExit()
+                let stopping = self.stopRequested
+                self.condition.unlock()
+                if !stopping {
+                    self.handleExit()
+                }
             }
         }
     }
 
-    private func isStopRequested() -> Bool {
-        mutex.lock()
-        defer { mutex.unlock() }
-        return stopRequested
+    private func openLogFile() throws -> FileHandle? {
+        guard let url = config.logFile else {
+            return nil
+        }
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let path = UnixgramPath.fileSystemPath(url)
+        if fileManager.fileExists(atPath: path) {
+            let size = (try? fileManager.attributesOfItem(atPath: path)[.size] as? NSNumber)?.uint64Value ?? 0
+            if size > 5 * 1024 * 1024 {
+                let rotated = url.appendingPathExtension("1")
+                try? fileManager.removeItem(at: rotated)
+                try? fileManager.moveItem(at: url, to: rotated)
+            }
+        }
+        if !fileManager.fileExists(atPath: path) {
+            fileManager.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600])
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        handle.seekToEndOfFile()
+        return handle
+    }
+
+    private func appendLogLine(_ line: String) {
+        guard let handle = logHandle, let data = (line + "\n").data(using: .utf8) else {
+            return
+        }
+        handle.write(data)
     }
 
     private func unlinkSockets() {

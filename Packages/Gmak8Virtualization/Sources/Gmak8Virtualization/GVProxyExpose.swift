@@ -2,13 +2,20 @@ import Foundation
 
 /// gvproxy `POST /services/forwarder/expose` body. `local` is always 127.0.0.1, never 0.0.0.0.
 public struct GVProxyExposeRequest: Equatable, Sendable, Codable {
-    public var local: String
-    public var remote: String
+    public let local: String
+    public let remote: String
 
     public init(local: String, remote: String) throws {
         try Self.validate(local: local, remote: remote)
         self.local = local
         self.remote = remote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let local = try container.decode(String.self, forKey: .local)
+        let remote = try container.decode(String.self, forKey: .remote)
+        try self.init(local: local, remote: remote)
     }
 
     public init(hostPort: Int, guestPort: Int) throws {
@@ -37,12 +44,16 @@ public struct GVProxyExposeRequest: Equatable, Sendable, Codable {
         ]
     }()
 
+    public static func isAlreadyBoundError(_ text: String) -> Bool {
+        text.lowercased().contains("already")
+    }
+
     public static func validate(local: String, remote: String) throws {
-        if local.contains(GuestNetwork.anyAddress) || remote.contains(GuestNetwork.anyAddress) {
-            throw VirtualMachineError.networkFailed("expose must not use \(GuestNetwork.anyAddress)")
-        }
         guard let host = Self.host(in: local), let port = Self.port(in: local) else {
             throw VirtualMachineError.networkFailed("invalid expose local address: \(local)")
+        }
+        if host == GuestNetwork.anyAddress {
+            throw VirtualMachineError.networkFailed("expose must not use \(GuestNetwork.anyAddress)")
         }
         if host != GuestNetwork.hostLoopback {
             throw VirtualMachineError.networkFailed(
@@ -51,8 +62,11 @@ public struct GVProxyExposeRequest: Equatable, Sendable, Codable {
         if GuestNetwork.forbiddenHostPorts.contains(port) {
             throw VirtualMachineError.networkFailed("refuse host port \(port)")
         }
-        if Self.port(in: remote) == nil {
+        guard let remoteHost = Self.host(in: remote), Self.port(in: remote) != nil else {
             throw VirtualMachineError.networkFailed("invalid expose remote address: \(remote)")
+        }
+        if remoteHost == GuestNetwork.anyAddress {
+            throw VirtualMachineError.networkFailed("expose must not use \(GuestNetwork.anyAddress)")
         }
     }
 

@@ -13,7 +13,11 @@ struct UnixHTTPClientTests {
 
         let recorded = RequestBox()
         let server = try LoopbackHTTPServer(socketURL: socket) { request in
-            recorded.body = request
+            recorded.append(request)
+            if request.contains("GET /services/forwarder/all") {
+                return
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]"
+            }
             return "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
         }
         defer { server.stop() }
@@ -21,16 +25,38 @@ struct UnixHTTPClientTests {
         let client = UnixHTTPClient(socketURL: socket, timeout: 2)
         let expose = try GVProxyExposeRequest(hostPort: 6443, guestPort: 6443)
         try client.expose(expose)
-        try #require(recorded.body != nil)
-        #expect(recorded.body?.contains("POST /services/forwarder/expose") == true)
-        #expect(recorded.body?.contains("127.0.0.1:6443") == true)
-        #expect(recorded.body?.contains("192.168.127.2:6443") == true)
-        #expect(recorded.body?.contains("0.0.0.0") == false)
+        let joined = recorded.joined
+        #expect(joined.contains("POST /services/forwarder/expose"))
+        #expect(joined.contains("127.0.0.1:6443"))
+        #expect(joined.contains("192.168.127.2:6443"))
+        #expect(!joined.contains("0.0.0.0"))
+    }
+
+    @Test func exposeTreatsAlreadyBoundAsSuccess() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let socket = root.appending(path: "g.sock")
+        try UnixgramPath.require(socket)
+        let server = try LoopbackHTTPServer(socketURL: socket) { request in
+            if request.contains("GET /services/forwarder/all") {
+                return
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]"
+            }
+            return
+                "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\nproxy already running"
+        }
+        defer { server.stop() }
+        let client = UnixHTTPClient(socketURL: socket, timeout: 2)
+        try client.expose(try GVProxyExposeRequest(hostPort: 6443, guestPort: 6443))
     }
 }
 
 private final class RequestBox: @unchecked Sendable {
-    var body: String?
+    private var parts: [String] = []
+    var joined: String { parts.joined(separator: "\n") }
+    func append(_ body: String) {
+        parts.append(body)
+    }
 }
 
 private final class LoopbackHTTPServer: @unchecked Sendable {

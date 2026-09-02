@@ -40,4 +40,26 @@ struct GVProxyExposeTests {
             try GVProxyExposeRequest(local: "10.0.0.1:6443", remote: "192.168.127.2:6443")
         }
     }
+
+    @Test func tenDotZeroIsNotTreatedAsAnyAddress() {
+        do {
+            _ = try GVProxyExposeRequest(local: "10.0.0.0:6443", remote: "192.168.127.2:6443")
+            Issue.record("expected rejection for non-loopback")
+        } catch let error as VirtualMachineError {
+            #expect(!error.recoveryMessage.contains("must not use \(GuestNetwork.anyAddress)"))
+            #expect(error.recoveryMessage.contains("127.0.0.1"))
+        } catch {
+            Issue.record("unexpected \(error)")
+        }
+    }
+
+    @Test func decodeRunsValidate() {
+        let json = Data("{\"local\":\"0.0.0.0:6443\",\"remote\":\"192.168.127.2:6443\"}".utf8)
+        #expect(throws: VirtualMachineError.self) {
+            _ = try JSONDecoder().decode(GVProxyExposeRequest.self, from: json)
+        }
+        let ok = Data("{\"local\":\"127.0.0.1:6443\",\"remote\":\"192.168.127.2:6443\"}".utf8)
+        let decoded = try? JSONDecoder().decode(GVProxyExposeRequest.self, from: ok)
+        #expect(decoded?.local == "127.0.0.1:6443")
+    }
 }

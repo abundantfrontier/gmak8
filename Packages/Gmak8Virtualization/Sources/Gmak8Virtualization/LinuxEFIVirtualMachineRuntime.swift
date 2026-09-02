@@ -1,5 +1,5 @@
 import Foundation
-import Virtualization
+@preconcurrency import Virtualization
 
 public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     public let layout: VMDiskLayout
@@ -19,6 +19,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     private var pendingCancel = false
     private var pendingStopCompletions: [@Sendable (Result<Void, any Error>) -> Void] = []
     private var unexpectedStopHandler: (@Sendable (Error?) -> Void)?
+    private var degradedHandler: (@Sendable (String) -> Void)?
     var prepareHook: (() -> Void)?
 
     public init(
@@ -32,6 +33,9 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         self.isSupported = isSupported
         self.network = network
         vmDelegate.owner = self
+        self.network?.onDegraded = { [weak self] message in
+            self?.notifyDegraded(message)
+        }
     }
 
     public var holdsDiskLocks: Bool {
@@ -44,11 +48,21 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         mutex.unlock()
     }
 
+    public func setDegradedHandler(_ handler: (@Sendable (String) -> Void)?) {
+        mutex.lock()
+        degradedHandler = handler
+        mutex.unlock()
+        network?.onDegraded = { [weak self] message in
+            self?.notifyDegraded(message)
+        }
+    }
+
     public func cancelInFlightStart() {
         mutex.lock()
         pendingCancel = true
         rejectedTicket = max(rejectedTicket, nextTicket)
         mutex.unlock()
+        network?.cancel()
     }
 
     public func prepare() throws {
@@ -104,8 +118,30 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
             completion(.failure(VirtualMachineError.stoppedDuringStart))
             return
         }
+        let attachment: VZNetworkDeviceAttachment?
+        do {
+            attachment = try network?.start()
+        } catch let error as VirtualMachineError where error == .stoppedDuringStart {
+            flock.release()
+            completion(.failure(error))
+            return
+        } catch {
+            flock.release()
+            if shouldAbortStart(ticket) {
+                completion(.failure(VirtualMachineError.stoppedDuringStart))
+                return
+            }
+            completion(.failure(error))
+            return
+        }
+        if shouldAbortStart(ticket) {
+            network?.stop()
+            flock.release()
+            completion(.failure(VirtualMachineError.stoppedDuringStart))
+            return
+        }
         VirtualMachineQueue.shared.async {
-            self.startOnVMQueue(ticket: ticket, completion: completion)
+            self.startOnVMQueue(ticket: ticket, networkAttachment: attachment, completion: completion)
         }
     }
 
@@ -114,6 +150,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         pendingCancel = false
         rejectedTicket = max(rejectedTicket, nextTicket)
         mutex.unlock()
+        network?.cancel()
         VirtualMachineQueue.shared.async {
             self.stopOnVMQueue(completion: completion)
         }
@@ -155,6 +192,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
 
     private func startOnVMQueue(
         ticket: UInt64,
+        networkAttachment: VZNetworkDeviceAttachment?,
         completion: @escaping @Sendable (Result<Void, any Error>) -> Void
     ) {
         if isRejected(ticket) {
@@ -172,16 +210,14 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
             if !flock.isHolding {
                 try flock.acquire(urls: layout.lockURLs)
             }
-            let attachment = try network?.start()
             if isRejected(ticket) {
-                network?.stop()
                 cancelUnstarted(completion: completion)
                 return
             }
             let config = try VMConfigurationBuilder.make(
                 layout: layout,
                 hardware: hardware,
-                networkAttachment: attachment
+                networkAttachment: networkAttachment
             )
             do {
                 try config.validate()
@@ -344,6 +380,13 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         let handler = unexpectedStopHandler
         mutex.unlock()
         handler?(error)
+    }
+
+    private func notifyDegraded(_ message: String) {
+        mutex.lock()
+        let handler = degradedHandler
+        mutex.unlock()
+        handler?(message)
     }
 
     private final class VMDelegate: NSObject, VZVirtualMachineDelegate {

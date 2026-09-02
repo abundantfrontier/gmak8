@@ -82,6 +82,10 @@ public struct HostPaths: Equatable, Sendable {
         vmDirectory.appending(path: "serial.log")
     }
 
+    public var gvproxyLog: URL {
+        logs.appending(path: "gvproxy.log")
+    }
+
     public var vfkitSocket: URL {
         caches.appending(path: "n.sock")
     }

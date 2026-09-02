@@ -43,6 +43,8 @@ struct HostPathsTests {
         let paths = HostPaths.current()
         #expect(paths.logs.lastPathComponent == "gmak8")
         #expect(paths.logs.deletingLastPathComponent().lastPathComponent == "Logs")
+        #expect(paths.gvproxyLog.lastPathComponent == "gvproxy.log")
+        #expect(paths.gvproxyLog.deletingLastPathComponent() == paths.logs)
     }
 
     @Test func unixgramSocketsFitDarwinSunPath() {

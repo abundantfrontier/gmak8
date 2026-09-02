@@ -13,6 +13,7 @@ struct GVProxyProcessTests {
         let counter = root.appending(path: "starts")
         try writeFakeGVProxy(at: script, counter: counter)
 
+        let logFile = root.appending(path: "gvproxy.log")
         let process = GVProxyProcess(
             config: GVProxyProcess.Config(
                 executable: script,
@@ -20,6 +21,7 @@ struct GVProxyProcessTests {
                 vfkitSocket: vfkit,
                 readyTimeout: 5,
                 maximumRestarts: 2,
+                logFile: logFile,
                 backoff: { _ in 0.05 }
             )
         )
@@ -40,6 +42,82 @@ struct GVProxyProcessTests {
         #expect(restarts.value >= 1)
         #expect(process.restartCount >= 1)
         #expect(process.isRunning)
+        let log = try String(contentsOf: logFile, encoding: .utf8)
+        #expect(
+            log.contains("datapath may be dead")
+                || FileManager.default.fileExists(atPath: UnixgramPath.fileSystemPath(logFile)))
+    }
+
+    @Test func stopUnblocksReadyWaitWithoutSleepingTheTimeout() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let script = root.appending(path: "hang-gvproxy")
+        try """
+        #!/bin/sh
+        exec sleep 3600
+        """.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: UnixgramPath.fileSystemPath(script)
+        )
+        let process = GVProxyProcess(
+            config: GVProxyProcess.Config(
+                executable: script,
+                httpSocket: root.appending(path: "g.sock"),
+                vfkitSocket: root.appending(path: "n.sock"),
+                readyTimeout: 8,
+                backoff: { _ in 0.05 }
+            )
+        )
+        let box = ResultBox()
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try process.start()
+                box.set(.success(()))
+            } catch {
+                box.set(.failure(error))
+            }
+            group.leave()
+        }
+        Thread.sleep(forTimeInterval: 0.15)
+        let started = Date()
+        process.stop()
+        #expect(group.wait(timeout: .now() + 1.5) == .success)
+        #expect(Date().timeIntervalSince(started) < 2)
+        if case .failure(let error as VirtualMachineError) = box.result {
+            #expect(error == .stoppedDuringStart)
+        } else {
+            Issue.record("expected stoppedDuringStart, got \(String(describing: box.result))")
+        }
+        #expect(!process.isRunning)
+    }
+
+    @Test func stopInvalidatesPendingRestart() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let http = root.appending(path: "g.sock")
+        let vfkit = root.appending(path: "n.sock")
+        let script = root.appending(path: "fake-gvproxy")
+        let counter = root.appending(path: "starts")
+        try writeFakeGVProxy(at: script, counter: counter)
+        let process = GVProxyProcess(
+            config: GVProxyProcess.Config(
+                executable: script,
+                httpSocket: http,
+                vfkitSocket: vfkit,
+                readyTimeout: 5,
+                maximumRestarts: 4,
+                backoff: { _ in 0.2 }
+            )
+        )
+        try process.start()
+        process.stop()
+        Thread.sleep(forTimeInterval: 0.6)
+        #expect(!process.isRunning)
+        #expect(!FileManager.default.fileExists(atPath: UnixgramPath.fileSystemPath(http)))
+        #expect(!FileManager.default.fileExists(atPath: UnixgramPath.fileSystemPath(vfkit)))
     }
 
     @Test func backoffDoublesAndCaps() {
@@ -47,6 +125,13 @@ struct GVProxyProcessTests {
         #expect(GVProxyProcess.restartBackoff(attempt: 2) == 2)
         #expect(GVProxyProcess.restartBackoff(attempt: 3) == 4)
         #expect(GVProxyProcess.restartBackoff(attempt: 10) == 30)
+    }
+}
+
+private final class ResultBox: @unchecked Sendable {
+    var result: Result<Void, any Error>?
+    func set(_ result: Result<Void, any Error>) {
+        self.result = result
     }
 }
 

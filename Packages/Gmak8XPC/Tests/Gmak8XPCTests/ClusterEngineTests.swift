@@ -254,6 +254,19 @@ struct ClusterEngineTests {
         #expect(engine.submit(.start) == .ok)
     }
 
+    @Test func gvproxyRestartMarksRunningClusterDegraded() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = StubVirtualMachineRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        let message = "gvproxy restarted; guest overlay datapath may be dead"
+        runtime.fireDegraded(message)
+        #expect(engine.currentStatus().state == .degraded)
+        #expect(engine.currentStatus().lastError == message)
+    }
+
     private func statusStates(_ events: [EngineEvent]) -> [ClusterState] {
         events.compactMap { event in
             if case .status(let status) = event {
@@ -295,6 +308,16 @@ private final class StubVirtualMachineRuntime: VirtualMachineRuntime, @unchecked
 
     func fireUnexpectedStop(_ error: Error?) {
         unexpectedStopHandler?(error)
+    }
+
+    private var degradedHandler: (@Sendable (String) -> Void)?
+
+    func setDegradedHandler(_ handler: (@Sendable (String) -> Void)?) {
+        degradedHandler = handler
+    }
+
+    func fireDegraded(_ message: String) {
+        degradedHandler?(message)
     }
 }
 

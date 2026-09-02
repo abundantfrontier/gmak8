@@ -240,6 +240,7 @@
 				A20000000000000000000015 /* Embed gmak8-core */,
 				A20000000000000000000017 /* Embed LaunchAgents */,
 				A3000000000000000000001A /* Embed gmak8 CLI */,
+				A50000000000000000000001 /* Embed gvproxy */,
 			);
 			buildRules = (
 			);
@@ -387,6 +388,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A50000000000000000000001 /* Embed gvproxy */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../../ThirdParty/gvproxy/bin/gvproxy",
+			);
+			name = "Embed gvproxy";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(WRAPPER_NAME)/Contents/Helpers/gvproxy",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"${SRCROOT}/../../scripts/embed-gvproxy.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A10000000000000000000003 /* Sources */ = {
