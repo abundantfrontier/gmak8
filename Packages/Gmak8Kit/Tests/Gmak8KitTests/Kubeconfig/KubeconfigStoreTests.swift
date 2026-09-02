@@ -207,6 +207,45 @@ struct KubeconfigStoreTests {
                 != true)
     }
 
+    @Test func twoHopSymlinkWritesThroughToUltimateTarget() throws {
+        let harness = try Harness()
+        defer { harness.tearDown() }
+
+        let kubeDir = harness.store.userKubeconfigFile.deletingLastPathComponent()
+        let midDir = harness.root.appending(path: ".config/kube", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: kubeDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: midDir, withIntermediateDirectories: true)
+        let target = harness.root.appending(path: "dotfiles/config")
+        try FileManager.default.createDirectory(
+            at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let existing = try golden("comments.before.yaml")
+        try existing.write(to: target, atomically: true, encoding: .utf8)
+        let mid = midDir.appending(path: "config")
+        try FileManager.default.createSymbolicLink(
+            atPath: mid.path(percentEncoded: false),
+            withDestinationPath: target.path(percentEncoded: false)
+        )
+        try FileManager.default.createSymbolicLink(
+            atPath: harness.store.userKubeconfigFile.path(percentEncoded: false),
+            withDestinationPath: mid.path(percentEncoded: false)
+        )
+
+        _ = try harness.store.apply(material: material)
+
+        #expect(
+            try FileManager.default.destinationOfSymbolicLink(
+                atPath: harness.store.userKubeconfigFile.path(percentEncoded: false)
+            ) == mid.path(percentEncoded: false))
+        #expect(
+            try FileManager.default.destinationOfSymbolicLink(atPath: mid.path(percentEncoded: false))
+                == target.path(percentEncoded: false))
+        #expect(
+            try harness.store.userKubeconfigFile.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true)
+        #expect(try mid.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true)
+        #expect(try String(contentsOf: target, encoding: .utf8) == (try golden("comments.after.yaml")))
+        #expect(try String(contentsOf: harness.store.userKubeconfigBackupFile, encoding: .utf8) == existing)
+    }
+
     @Test func spliceIntoExistingUserConfigPreservesForeignStanzas() throws {
         let harness = try Harness()
         defer { harness.tearDown() }

@@ -537,7 +537,7 @@ private func looksLikeFlowRoot(_ text: String) -> Bool {
     var i = text.startIndex
     while i < text.endIndex {
         let character = text[i]
-        if character == " " || character == "\t" || character.isNewline {
+        if character == " " || character == "\t" || character.isNewline || character == "\u{FEFF}" {
             i = text.index(after: i)
             continue
         }

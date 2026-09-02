@@ -258,17 +258,27 @@ private func isSymbolicLink(_ url: URL) -> Bool {
     return (info.st_mode & S_IFMT) == S_IFLNK
 }
 
-/// Follow a symlink so rename/replace updates the target and leaves the link in place.
+/// Follow symlink hops to the ultimate regular file so rename does not replace an intermediate link.
 private func publishURL(for url: URL, fileManager: FileManager) throws -> URL {
-    let path = url.path(percentEncoded: false)
-    guard isSymbolicLink(url) else {
-        return url
+    var current = url.standardizedFileURL
+    var seen: Set<String> = []
+    for _ in 0..<32 {
+        let path = current.path(percentEncoded: false)
+        if seen.contains(path) {
+            throw posixError(ELOOP, path: path)
+        }
+        seen.insert(path)
+        guard isSymbolicLink(current) else {
+            return current
+        }
+        let destination = try fileManager.destinationOfSymbolicLink(atPath: path)
+        if destination.hasPrefix("/") {
+            current = URL(fileURLWithPath: destination).standardizedFileURL
+        } else {
+            current = current.deletingLastPathComponent().appending(path: destination).standardizedFileURL
+        }
     }
-    let destination = try fileManager.destinationOfSymbolicLink(atPath: path)
-    if destination.hasPrefix("/") {
-        return URL(fileURLWithPath: destination).standardizedFileURL
-    }
-    return url.deletingLastPathComponent().appending(path: destination).standardizedFileURL
+    throw posixError(ELOOP, path: url.path(percentEncoded: false))
 }
 
 private final class ExclusiveFileLock {

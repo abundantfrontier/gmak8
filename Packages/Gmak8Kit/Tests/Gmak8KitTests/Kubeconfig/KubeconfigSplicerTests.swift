@@ -105,6 +105,8 @@ struct KubeconfigSplicerTests {
             "{}",
             "{\"clusters\":[],\"users\":[],\"contexts\":[]}\n",
             "{apiVersion: v1, clusters: []}\n",
+            "\u{FEFF}{\"apiVersion\":\"v1\",\"clusters\":[]}\n",
+            "\u{FEFF} {}\n",
         ]
         for document in documents {
             #expect(throws: KubeconfigSpliceError.unspliceable) {
