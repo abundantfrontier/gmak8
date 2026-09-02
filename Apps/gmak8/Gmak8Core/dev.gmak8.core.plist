@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Two Login Items: (1) this LaunchAgent (gmak8-core, label dev.gmak8.core) owns the
+  background cluster; (2) a separate login item for the gmak8.app menu extra is the
+  status surface at login. This PR ships only the agent; the menu extra is later.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.gmak8.core</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/gmak8-core</string>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

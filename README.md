@@ -14,6 +14,7 @@ This repository is early. The app currently opens a window; it does **not** star
 
 ```bash
 swift test --package-path Packages/Gmak8Kit
+swift test --package-path Packages/Gmak8XPC
 
 xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
   -scheme gmak8 \

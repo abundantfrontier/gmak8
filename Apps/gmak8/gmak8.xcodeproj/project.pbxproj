@@ -12,6 +12,14 @@
 		A10000000000000000000016 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* ContentView.swift */; };
 		A10000000000000000000023 /* Gmak8AppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* Gmak8AppTests.swift */; };
 		A10000000000000000000024 /* Gmak8Kit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000025 /* Gmak8Kit */; };
+		A20000000000000000000003 /* Gmak8XPC in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000002 /* Gmak8XPC */; };
+		A20000000000000000000006 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* main.swift */; };
+		A2000000000000000000000E /* Gmak8XPC in Frameworks */ = {isa = PBXBuildFile; productRef = A2000000000000000000000D /* Gmak8XPC */; };
+		A20000000000000000000010 /* Gmak8Kit in Frameworks */ = {isa = PBXBuildFile; productRef = A2000000000000000000000F /* Gmak8Kit */; };
+		A20000000000000000000016 /* gmak8-core in Embed gmak8-core */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* gmak8-core */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		A20000000000000000000018 /* dev.gmak8.core.plist in Embed LaunchAgents */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* dev.gmak8.core.plist */; };
+		A2000000000000000000001C /* Gmak8XPC in Frameworks */ = {isa = PBXBuildFile; productRef = A2000000000000000000001B /* Gmak8XPC */; };
+		A2000000000000000000001E /* EngineStubTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* EngineStubTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -22,7 +30,39 @@
 			remoteGlobalIDString = A10000000000000000000002;
 			remoteInfo = gmak8;
 		};
+		A20000000000000000000019 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A20000000000000000000007;
+			remoteInfo = "gmak8-core";
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A20000000000000000000015 /* Embed gmak8-core */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				A20000000000000000000016 /* gmak8-core in Embed gmak8-core */,
+			);
+			name = "Embed gmak8-core";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A20000000000000000000017 /* Embed LaunchAgents */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchAgents;
+			dstSubfolderSpec = 1;
+			files = (
+				A20000000000000000000018 /* dev.gmak8.core.plist in Embed LaunchAgents */,
+			);
+			name = "Embed LaunchAgents";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000006 /* gmak8.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = gmak8.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -31,6 +71,11 @@
 		A10000000000000000000018 /* gmak8.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = gmak8.entitlements; sourceTree = "<group>"; };
 		A1000000000000000000001A /* Gmak8AppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmak8AppTests.swift; sourceTree = "<group>"; };
 		A1000000000000000000001C /* gmak8Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = gmak8Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000004 /* gmak8-core */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "gmak8-core"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000005 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* gmak8-core.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "gmak8-core.entitlements"; sourceTree = "<group>"; };
+		A20000000000000000000013 /* dev.gmak8.core.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "dev.gmak8.core.plist"; sourceTree = "<group>"; };
+		A2000000000000000000001D /* EngineStubTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineStubTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,6 +84,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000012 /* Gmak8Kit in Frameworks */,
+				A20000000000000000000003 /* Gmak8XPC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -47,6 +93,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000024 /* Gmak8Kit in Frameworks */,
+				A2000000000000000000001C /* Gmak8XPC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A20000000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A20000000000000000000010 /* Gmak8Kit in Frameworks */,
+				A2000000000000000000000E /* Gmak8XPC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,6 +113,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000008 /* App */,
+				A20000000000000000000014 /* Gmak8Core */,
 				A10000000000000000000019 /* Tests */,
 				A10000000000000000000017 /* Entitlements */,
 				A10000000000000000000009 /* Products */,
@@ -77,6 +134,7 @@
 			children = (
 				A10000000000000000000006 /* gmak8.app */,
 				A1000000000000000000001C /* gmak8Tests.xctest */,
+				A20000000000000000000004 /* gmak8-core */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000018 /* gmak8.entitlements */,
+				A20000000000000000000011 /* gmak8-core.entitlements */,
 			);
 			path = Entitlements;
 			sourceTree = "<group>";
@@ -93,8 +152,18 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000001A /* Gmak8AppTests.swift */,
+				A2000000000000000000001D /* EngineStubTests.swift */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		A20000000000000000000014 /* Gmak8Core */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000005 /* main.swift */,
+				A20000000000000000000013 /* dev.gmak8.core.plist */,
+			);
+			path = Gmak8Core;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -107,14 +176,18 @@
 				A10000000000000000000003 /* Sources */,
 				A10000000000000000000004 /* Frameworks */,
 				A10000000000000000000005 /* Resources */,
+				A20000000000000000000015 /* Embed gmak8-core */,
+				A20000000000000000000017 /* Embed LaunchAgents */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A2000000000000000000001A /* PBXTargetDependency */,
 			);
 			name = gmak8;
 			packageProductDependencies = (
 				A10000000000000000000011 /* Gmak8Kit */,
+				A20000000000000000000002 /* Gmak8XPC */,
 			);
 			productName = gmak8;
 			productReference = A10000000000000000000006 /* gmak8.app */;
@@ -136,10 +209,31 @@
 			name = gmak8Tests;
 			packageProductDependencies = (
 				A10000000000000000000025 /* Gmak8Kit */,
+				A2000000000000000000001B /* Gmak8XPC */,
 			);
 			productName = gmak8Tests;
 			productReference = A1000000000000000000001C /* gmak8Tests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A20000000000000000000007 /* gmak8-core */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2000000000000000000000C /* Build configuration list for PBXNativeTarget "gmak8-core" */;
+			buildPhases = (
+				A20000000000000000000008 /* Sources */,
+				A20000000000000000000009 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "gmak8-core";
+			packageProductDependencies = (
+				A2000000000000000000000F /* Gmak8Kit */,
+				A2000000000000000000000D /* Gmak8XPC */,
+			);
+			productName = "gmak8-core";
+			productReference = A20000000000000000000004 /* gmak8-core */;
+			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
@@ -157,6 +251,9 @@
 					A1000000000000000000001B = {
 						CreatedOnToolsVersion = 26.0;
 					};
+					A20000000000000000000007 = {
+						CreatedOnToolsVersion = 26.0;
+					};
 				};
 			};
 			buildConfigurationList = A1000000000000000000000A /* Build configuration list for PBXProject "gmak8" */;
@@ -170,6 +267,7 @@
 			mainGroup = A10000000000000000000007;
 			packageReferences = (
 				A10000000000000000000010 /* XCLocalSwiftPackageReference "Gmak8Kit" */,
+				A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */,
 			);
 			productRefGroup = A10000000000000000000009 /* Products */;
 			projectDirPath = "";
@@ -177,6 +275,7 @@
 			targets = (
 				A10000000000000000000002 /* gmak8 */,
 				A1000000000000000000001B /* gmak8Tests */,
+				A20000000000000000000007 /* gmak8-core */,
 			);
 		};
 /* End PBXProject section */
@@ -213,6 +312,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000023 /* Gmak8AppTests.swift in Sources */,
+				A2000000000000000000001E /* EngineStubTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A20000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A20000000000000000000006 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -223,6 +331,11 @@
 			isa = PBXTargetDependency;
 			target = A10000000000000000000002 /* gmak8 */;
 			targetProxy = A10000000000000000000027 /* PBXContainerItemProxy */;
+		};
+		A2000000000000000000001A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A20000000000000000000007 /* gmak8-core */;
+			targetProxy = A20000000000000000000019 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -465,6 +578,68 @@
 			};
 			name = Release;
 		};
+		A2000000000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_ENTITLEMENTS = "Entitlements/gmak8-core.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.gmak8.core;
+				PRODUCT_MODULE_NAME = Gmak8Core;
+				PRODUCT_NAME = "gmak8-core";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A2000000000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_ENTITLEMENTS = "Entitlements/gmak8-core.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.gmak8.core;
+				PRODUCT_MODULE_NAME = Gmak8Core;
+				PRODUCT_NAME = "gmak8-core";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -495,12 +670,25 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A2000000000000000000000C /* Build configuration list for PBXNativeTarget "gmak8-core" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2000000000000000000000A /* Debug */,
+				A2000000000000000000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
 		A10000000000000000000010 /* XCLocalSwiftPackageReference "Gmak8Kit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../Packages/Gmak8Kit;
+		};
+		A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Packages/Gmak8XPC;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -514,6 +702,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A10000000000000000000010 /* XCLocalSwiftPackageReference "Gmak8Kit" */;
 			productName = Gmak8Kit;
+		};
+		A20000000000000000000002 /* Gmak8XPC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */;
+			productName = Gmak8XPC;
+		};
+		A2000000000000000000000D /* Gmak8XPC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */;
+			productName = Gmak8XPC;
+		};
+		A2000000000000000000000F /* Gmak8Kit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000010 /* XCLocalSwiftPackageReference "Gmak8Kit" */;
+			productName = Gmak8Kit;
+		};
+		A2000000000000000000001B /* Gmak8XPC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */;
+			productName = Gmak8XPC;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
