@@ -34,4 +34,30 @@ struct HostPortLsofTests {
         #expect(HostPortLsof.occupancyLine(port: 6443, occupants: occupants).contains("in use by pid 4321 (kubectl)"))
         #expect(HostPortLsof.parse("COMMAND PID USER\n", port: 80).isEmpty)
     }
+
+    @Test func probePortsIncludeIngressFallbacks() {
+        #expect(
+            HostPortLsof.probePorts(kind: .apiPortConflict, collidingNodePorts: [])
+                == [RecoveryPorts.api, RecoveryPorts.apiFallback]
+        )
+        #expect(
+            HostPortLsof.probePorts(kind: .ingressPortConflict, collidingNodePorts: [])
+                == [
+                    RecoveryPorts.http, RecoveryPorts.httpFallback, RecoveryPorts.https,
+                    RecoveryPorts.httpsFallback,
+                ]
+        )
+        #expect(HostPortLsof.probePorts(kind: .nodePortCollision, collidingNodePorts: [30_663]) == [30_663])
+        #expect(HostPortLsof.probePorts(kind: .vmPanic, collidingNodePorts: [80]).isEmpty)
+    }
+
+    @Test func occupancyLinesShowFailureInsteadOfFree() {
+        let lines = HostPortLsof.occupancyLines(ports: [8080, 18_080]) { _, _ in
+            throw HostPortLsofError.failed(status: 2)
+        }
+        #expect(lines.count == 2)
+        #expect(lines[0].contains("lsof failed"))
+        #expect(!lines[0].contains("is free"))
+        #expect(lines[1].contains("18080"))
+    }
 }

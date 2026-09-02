@@ -80,11 +80,18 @@ public enum DiagnosticsArchive {
         return result.mapValues { Data($0.utf8) }
     }
 
+    public static let kubectlExecutable = "/usr/bin/env"
+
+    public static func kubectlArguments(resource: String, kubeconfig: String) -> [String] {
+        ["kubectl", "--kubeconfig", kubeconfig, "get", resource, "-A"]
+    }
+
     public static func collect(
         paths: HostPaths,
         status: EngineStatus,
         includeCredentials: Bool,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        runKubectl: ((String, [String]) throws -> String)? = nil
     ) -> DiagnosticsArchiveRequest {
         func read(_ url: URL) -> String {
             let path = url.path(percentEncoded: false)
@@ -107,6 +114,22 @@ public enum DiagnosticsArchive {
         if !gvproxy.isEmpty {
             engine += "\n--- gvproxy.log ---\n" + gvproxy
         }
+        let kubeconfigPath = paths.kubeconfigFile.path(percentEncoded: false)
+        var kubectlNodes: String?
+        var kubectlPods: String?
+        if fileManager.fileExists(atPath: kubeconfigPath) {
+            let runner = runKubectl ?? runKubectlProcess
+            kubectlNodes = captureKubectl(
+                resource: "nodes",
+                kubeconfig: kubeconfigPath,
+                run: runner
+            )
+            kubectlPods = captureKubectl(
+                resource: "pods",
+                kubeconfig: kubeconfigPath,
+                run: runner
+            )
+        }
         let kubeconfig: String?
         if includeCredentials {
             let text = read(paths.kubeconfigFile)
@@ -118,15 +141,63 @@ public enum DiagnosticsArchive {
             settingsJSON: read(paths.settingsFile),
             engineLog: engine,
             serialLog: read(paths.serialLog),
+            kubectlNodes: kubectlNodes,
+            kubectlPods: kubectlPods,
             versions: "gmak8 \(Gmak8Kit.version)\nk3s \(K3sPin.version)\n",
             kubeconfig: kubeconfig,
             includeCredentials: includeCredentials
         )
     }
 
-    public static func writeZip(files: [String: Data], to url: URL, fileManager: FileManager = .default) throws {
+    public static func writeZip(
+        files: [String: Data],
+        to url: URL,
+        fileManager: FileManager = .default,
+        ownerReadWrite: Bool = false
+    ) throws {
         try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try StoredZip.data(files: files).write(to: url, options: .atomic)
+        if ownerReadWrite {
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: url.path(percentEncoded: false)
+            )
+        }
+    }
+
+    private static func captureKubectl(
+        resource: String,
+        kubeconfig: String,
+        run: (String, [String]) throws -> String
+    ) -> String {
+        let arguments = kubectlArguments(resource: resource, kubeconfig: kubeconfig)
+        do {
+            return try run(kubectlExecutable, arguments)
+        } catch {
+            return "kubectl get \(resource) -A failed: \(error.localizedDescription)"
+        }
+    }
+
+    static func runKubectlProcess(executable: String, arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardInput = FileHandle.nullDevice
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        let out = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        if process.terminationStatus == 0 {
+            return out
+        }
+        let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let detail = err.isEmpty ? out : err
+        throw ClusterBringUpError(
+            message: "exit \(process.terminationStatus)\(detail.isEmpty ? "" : ": \(detail)")"
+        )
     }
 }
 

@@ -1,3 +1,5 @@
+import Gmak8XPC
+
 enum QuitIntent: Equatable, Sendable {
     case closeLastWindow
     case quitRequested
@@ -88,12 +90,23 @@ struct QuitPolicy: Equatable, Sendable {
     }
 }
 
+enum ClusterRestart {
+    static func shouldStart(pending: Bool, state: ClusterState) -> Bool {
+        pending && (state == .stopped || state == .failed)
+    }
+}
+
 enum ProductWindowIdentity {
     static let sceneID = "main"
     static let title = "gmak8"
+    static let recoverySceneID = "recovery"
+    static let recoveryTitle = "Recovery"
 
     static func isProductWindow(identifier: String?, title: String, isStatusBar: Bool) -> Bool {
         if isStatusBar {
+            return false
+        }
+        if isRecoveryWindow(identifier: identifier, title: title, isStatusBar: isStatusBar) {
             return false
         }
         if identifier == sceneID {
@@ -103,6 +116,24 @@ enum ProductWindowIdentity {
             return false
         }
         return title == Self.title
+    }
+
+    static func isRecoveryWindow(identifier: String?, title: String, isStatusBar: Bool) -> Bool {
+        if isStatusBar {
+            return false
+        }
+        if identifier == recoverySceneID {
+            return true
+        }
+        return title == recoveryTitle
+    }
+
+    static func isResetSheetHost(identifier: String?, title: String, isStatusBar: Bool, isPanel: Bool) -> Bool {
+        if isStatusBar || isPanel {
+            return false
+        }
+        return isRecoveryWindow(identifier: identifier, title: title, isStatusBar: false)
+            || isProductWindow(identifier: identifier, title: title, isStatusBar: false)
     }
 
     static func isSettings(identifier: String?, title: String) -> Bool {

@@ -225,4 +225,76 @@ struct Gmak8AppTests {
         #expect(ResetConfirmation.engineRequest == .reset(force: true))
         #expect(!RecoveryAction.allCases.map(\.rawValue).contains { $0.lowercased().contains("snapshot") })
     }
+
+    @Test func restartStartsAfterStopNotInsteadOfStart() {
+        #expect(ClusterRestart.shouldStart(pending: true, state: .stopped))
+        #expect(ClusterRestart.shouldStart(pending: true, state: .failed))
+        #expect(!ClusterRestart.shouldStart(pending: true, state: .running))
+        #expect(!ClusterRestart.shouldStart(pending: true, state: .degraded))
+        #expect(!ClusterRestart.shouldStart(pending: true, state: .stopping))
+        #expect(!ClusterRestart.shouldStart(pending: false, state: .stopped))
+    }
+
+    @Test func recoveryWindowHoldsResetSheetNotMenuExtra() {
+        #expect(
+            ProductWindowIdentity.isRecoveryWindow(
+                identifier: ProductWindowIdentity.recoverySceneID,
+                title: "Recovery",
+                isStatusBar: false
+            )
+        )
+        #expect(
+            !ProductWindowIdentity.isProductWindow(
+                identifier: ProductWindowIdentity.recoverySceneID,
+                title: "Recovery",
+                isStatusBar: false
+            )
+        )
+        #expect(
+            ProductWindowIdentity.isResetSheetHost(
+                identifier: ProductWindowIdentity.recoverySceneID,
+                title: "Recovery",
+                isStatusBar: false,
+                isPanel: false
+            )
+        )
+        #expect(
+            ProductWindowIdentity.isResetSheetHost(
+                identifier: ProductWindowIdentity.sceneID,
+                title: "gmak8",
+                isStatusBar: false,
+                isPanel: false
+            )
+        )
+        #expect(
+            !ProductWindowIdentity.isResetSheetHost(
+                identifier: ProductWindowIdentity.sceneID,
+                title: "gmak8",
+                isStatusBar: false,
+                isPanel: true
+            )
+        )
+        #expect(
+            !ProductWindowIdentity.isResetSheetHost(
+                identifier: nil,
+                title: "Item-0",
+                isStatusBar: false,
+                isPanel: true
+            )
+        )
+    }
+
+    @Test func unimplementedRecoveryActionsAreDisabled() {
+        #expect(!RecoveryAction.pruneImages.isAvailable)
+        #expect(!RecoveryAction.switchAPIPort16443.isAvailable)
+        #expect(!RecoveryAction.pickAPIPort.isAvailable)
+        #expect(!RecoveryAction.pickIngressHostPorts.isAvailable)
+        #expect(!RecoveryAction.skipNodePort.isAvailable)
+        #expect(!RecoveryAction.remapNodePort.isAvailable)
+        #expect(!RecoveryAction.showK3sJournal.isAvailable)
+        #expect(RecoveryAction.showLsof.isAvailable)
+        #expect(RecoveryAction.showSerial.isAvailable)
+        #expect(RecoveryAction.reset.isAvailable)
+        #expect(RecoveryAction.restartVM.isAvailable)
+    }
 }

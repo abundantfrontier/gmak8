@@ -5,7 +5,7 @@ import SwiftUI
 
 enum Gmak8SceneID {
     static let main = ProductWindowIdentity.sceneID
-    static let recovery = "recovery"
+    static let recovery = ProductWindowIdentity.recoverySceneID
 }
 
 @MainActor
@@ -95,7 +95,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     func confirmAndResetCluster() {
-        ResetAlert.present { [weak self] in
+        ResetAlert.present(sheetWindow: resetSheetWindow()) { [weak self] in
             self?.session.resetCluster()
         }
     }
@@ -218,16 +218,59 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
     }
 
     @objc private func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, isProductWindow(window) else {
+        guard let window = notification.object as? NSWindow else {
             return
         }
-        DispatchQueue.main.async { [weak self] in
-            self?.applyCloseLastWindow()
+        if isProductWindow(window) {
+            DispatchQueue.main.async { [weak self] in
+                self?.applyCloseLastWindow()
+            }
+            return
+        }
+        if isRecoveryWindow(window) {
+            DispatchQueue.main.async { [weak self] in
+                self?.applyRecoveryWindowClosed(excluding: window)
+            }
+        }
+    }
+
+    private func applyRecoveryWindowClosed(excluding window: NSWindow) {
+        let productVisible = NSApp.windows.contains {
+            $0 !== window && $0.isVisible && isProductWindow($0)
+        }
+        let recoveryVisible = NSApp.windows.contains {
+            $0 !== window && $0.isVisible && isRecoveryWindow($0)
+        }
+        if !productVisible && !recoveryVisible {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    private func resetSheetWindow() -> NSWindow? {
+        if let recovery = NSApp.windows.first(where: { $0.isVisible && isRecoveryWindow($0) && !($0 is NSPanel) }) {
+            return recovery
+        }
+        return NSApp.windows.first { window in
+            window.isVisible
+                && ProductWindowIdentity.isResetSheetHost(
+                    identifier: window.identifier?.rawValue,
+                    title: window.title,
+                    isStatusBar: window.level == .statusBar,
+                    isPanel: window is NSPanel
+                )
         }
     }
 
     private func isProductWindow(_ window: NSWindow) -> Bool {
         ProductWindowIdentity.isProductWindow(
+            identifier: window.identifier?.rawValue,
+            title: window.title,
+            isStatusBar: window.level == .statusBar
+        )
+    }
+
+    private func isRecoveryWindow(_ window: NSWindow) -> Bool {
+        ProductWindowIdentity.isRecoveryWindow(
             identifier: window.identifier?.rawValue,
             title: window.title,
             isStatusBar: window.level == .statusBar

@@ -12,6 +12,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
     private let fileManager: FileManager
     private var subscription: EngineSubscription?
     private var listenTask: Task<Void, Never>?
+    private var startAfterStop = false
 
     init(
         socketURL: URL = HostPaths.current().engineSocket,
@@ -66,10 +67,12 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
     }
 
     func restartCluster() {
-        if canStart {
+        if ClusterRestart.shouldStart(pending: true, state: status.state) {
+            startAfterStop = false
             startCluster()
             return
         }
+        startAfterStop = true
         stopCluster()
     }
 
@@ -177,6 +180,10 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         connectionError = nil
         if case .status(let status) = event {
             self.status = status
+            if ClusterRestart.shouldStart(pending: startAfterStop, state: status.state) {
+                startAfterStop = false
+                startCluster()
+            }
         }
     }
 
@@ -188,6 +195,7 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
     }
 
     private func markDisconnected(_ error: CLIError) {
+        startAfterStop = false
         connectionError = error
         if error.resetsClusterStatus {
             status = EngineStatusAfterDisconnect.status()

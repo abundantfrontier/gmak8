@@ -12,11 +12,37 @@ public struct HostPortOccupant: Equatable, Sendable {
     }
 }
 
+public enum HostPortLsofError: Error, Equatable, LocalizedError, Sendable {
+    case failed(status: Int32)
+
+    public var errorDescription: String? {
+        switch self {
+        case .failed(let status):
+            return "lsof exited \(status)"
+        }
+    }
+}
+
 public enum HostPortLsof {
     public static let executable = "/usr/sbin/lsof"
 
     public static func arguments(port: Int) -> [String] {
         ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN"]
+    }
+
+    public static func probePorts(kind: RecoveryKind, collidingNodePorts: [Int]) -> [Int] {
+        switch kind {
+        case .apiPortConflict:
+            return [RecoveryPorts.api, RecoveryPorts.apiFallback]
+        case .ingressPortConflict:
+            return [
+                RecoveryPorts.http, RecoveryPorts.httpFallback, RecoveryPorts.https, RecoveryPorts.httpsFallback,
+            ]
+        case .nodePortCollision:
+            return collidingNodePorts
+        default:
+            return []
+        }
     }
 
     public static func parse(_ output: String, port: Int) -> [HostPortOccupant] {
@@ -48,6 +74,24 @@ public enum HostPortLsof {
         return "\(port) in use by \(parts.joined(separator: ", "))"
     }
 
+    public static func occupancyLines(
+        ports: [Int],
+        run: (String, [String]) throws -> String
+    ) -> [String] {
+        ports.map { port in
+            do {
+                let occupants = try occupants(port: port, run: run)
+                return occupancyLine(port: port, occupants: occupants)
+            } catch {
+                return "\(port) lsof failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    public static func occupancyLines(ports: [Int]) -> [String] {
+        occupancyLines(ports: ports, run: runProcess)
+    }
+
     public static func occupants(
         port: Int,
         run: (String, [String]) throws -> String
@@ -70,6 +114,10 @@ public enum HostPortLsof {
         process.standardError = FileHandle.nullDevice
         try process.run()
         process.waitUntilExit()
+        // lsof exits 1 when nothing matched; 2+ is a real failure.
+        if process.terminationStatus >= 2 {
+            throw HostPortLsofError.failed(status: process.terminationStatus)
+        }
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
     }

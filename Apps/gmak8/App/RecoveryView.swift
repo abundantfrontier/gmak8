@@ -12,12 +12,16 @@ struct RecoveryView: View {
     @State private var includeCredentials = false
     @State private var lsofLines: [String] = []
     @State private var statusMessage: String?
+    @State private var lsofTask: Task<Void, Never>?
+
+    private var plan: RecoveryPlan {
+        RecoveryPlan.make(
+            status: session.status,
+            extraError: RecoveryKind.settingsExtraError(settingsStore.lastError)
+        )
+    }
 
     var body: some View {
-        let plan = RecoveryPlan.make(
-            status: session.status,
-            extraError: settingsStore.lastError ?? session.connectionError?.localizedDescription
-        )
         Form {
             Section {
                 Text(plan.title)
@@ -60,10 +64,10 @@ struct RecoveryView: View {
             Section("Recovery") {
                 ForEach(plan.actions, id: \.self) { action in
                     Button(action.title) {
-                        perform(action, plan: plan)
+                        perform(action)
                     }
-                    .disabled(action == .pruneImages)
-                    .help(action == .pruneImages ? "Image prune is not available yet." : "")
+                    .disabled(!action.isAvailable)
+                    .help(action.unavailableHelp ?? "")
                 }
             }
             Section("Diagnostics") {
@@ -77,11 +81,26 @@ struct RecoveryView: View {
         .frame(minWidth: 480, minHeight: 360)
         .padding()
         .onAppear {
-            refreshLsof(for: plan.kind)
+            refreshLsof()
+        }
+        .onDisappear {
+            lsofTask?.cancel()
+        }
+        .onChange(of: plan.kind) {
+            refreshLsof()
+        }
+        .onChange(of: collidingNodePortsKey) {
+            refreshLsof()
         }
     }
 
-    private func perform(_ action: RecoveryAction, plan: RecoveryPlan) {
+    private var collidingNodePortsKey: String {
+        session.status.publishedPorts.filter { $0.collision == .collision }.map { String($0.nodePort) }.joined(
+            separator: ","
+        )
+    }
+
+    private func perform(_ action: RecoveryAction) {
         switch action {
         case .diagnosticsZip:
             saveZip()
@@ -91,11 +110,12 @@ struct RecoveryView: View {
             appDelegate.confirmAndResetCluster()
         case .revealImages:
             reveal(HostPaths.current().dataImage, fallback: HostPaths.current().vmDirectory)
-        case .pruneImages:
+        case .pruneImages, .switchAPIPort16443, .pickAPIPort, .pickIngressHostPorts, .skipNodePort, .remapNodePort,
+            .showK3sJournal:
             break
-        case .switchAPIPort16443, .pickAPIPort, .showLsof, .pickIngressHostPorts, .skipNodePort, .remapNodePort:
-            refreshLsof(for: plan.kind)
-        case .showK3sJournal, .showSerial:
+        case .showLsof:
+            refreshLsof()
+        case .showSerial:
             reveal(HostPaths.current().serialLog, fallback: HostPaths.current().vmDirectory)
         case .deleteCache:
             deleteAirgapCache()
@@ -112,24 +132,25 @@ struct RecoveryView: View {
         }
     }
 
-    private func refreshLsof(for kind: RecoveryKind) {
-        var ports: [Int] = []
-        switch kind {
-        case .apiPortConflict:
-            ports = [RecoveryPorts.api, RecoveryPorts.apiFallback]
-        case .ingressPortConflict:
-            ports = [RecoveryPorts.http, RecoveryPorts.https]
-        case .nodePortCollision:
-            ports = session.status.publishedPorts.filter { $0.collision == .collision }.map(\.nodePort)
-        default:
-            ports = []
+    private func refreshLsof() {
+        let ports = HostPortLsof.probePorts(
+            kind: plan.kind,
+            collidingNodePorts: session.status.publishedPorts.filter { $0.collision == .collision }.map(\.nodePort)
+        )
+        lsofTask?.cancel()
+        if ports.isEmpty {
+            lsofLines = []
+            return
         }
-        var lines: [String] = []
-        for port in ports {
-            let occupants = (try? HostPortLsof.occupants(port: port)) ?? []
-            lines.append(HostPortLsof.occupancyLine(port: port, occupants: occupants))
+        lsofTask = Task {
+            let lines = await Task.detached {
+                HostPortLsof.occupancyLines(ports: ports)
+            }.value
+            guard !Task.isCancelled else {
+                return
+            }
+            lsofLines = lines
         }
-        lsofLines = lines
     }
 
     private func saveZip() {
@@ -140,16 +161,28 @@ struct RecoveryView: View {
             guard response == .OK, let url = panel.url else {
                 return
             }
-            let request = DiagnosticsArchive.collect(
-                paths: HostPaths.current(),
-                status: session.status,
-                includeCredentials: includeCredentials
-            )
-            do {
-                try DiagnosticsArchive.writeZip(files: DiagnosticsArchive.files(from: request), to: url)
-                statusMessage = "Saved \(url.lastPathComponent)"
-            } catch {
-                statusMessage = error.localizedDescription
+            let status = session.status
+            let includeCredentials = includeCredentials
+            Task {
+                do {
+                    let request = await Task.detached {
+                        DiagnosticsArchive.collect(
+                            paths: HostPaths.current(),
+                            status: status,
+                            includeCredentials: includeCredentials
+                        )
+                    }.value
+                    try await Task.detached {
+                        try DiagnosticsArchive.writeZip(
+                            files: DiagnosticsArchive.files(from: request),
+                            to: url,
+                            ownerReadWrite: includeCredentials
+                        )
+                    }.value
+                    statusMessage = "Saved \(url.lastPathComponent)"
+                } catch {
+                    statusMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -202,7 +235,7 @@ struct RecoveryView: View {
 
 @MainActor
 enum ResetAlert {
-    static func present(onConfirm: @escaping () -> Void) {
+    static func present(sheetWindow: NSWindow?, onConfirm: @escaping () -> Void) {
         let alert = NSAlert()
         alert.alertStyle = .critical
         alert.messageText = ResetConfirmation.messageText
@@ -214,7 +247,7 @@ enum ResetAlert {
                 onConfirm()
             }
         }
-        if let window = NSApp.windows.first(where: { $0.isVisible && $0.level != .statusBar }) {
+        if let window = sheetWindow {
             alert.beginSheetModal(for: window, completionHandler: complete)
         } else {
             complete(alert.runModal())

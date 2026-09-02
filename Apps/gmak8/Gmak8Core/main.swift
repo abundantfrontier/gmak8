@@ -115,7 +115,8 @@ do {
             configDirectory: paths.configDirectory
         ),
         bringUp: bringUp,
-        publisher: publisher
+        publisher: publisher,
+        diskReset: HostClusterDiskReset(paths: paths)
     )
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
     Gmak8Log.core.info("gmak8-core listening on engine.sock")

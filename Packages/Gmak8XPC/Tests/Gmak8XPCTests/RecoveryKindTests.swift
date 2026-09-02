@@ -1,4 +1,5 @@
 import Foundation
+import Gmak8Kit
 import Testing
 
 @testable import Gmak8XPC
@@ -9,6 +10,8 @@ struct RecoveryKindTests {
             (RecoveryCopy.diskImagesLocked, .diskImagesLocked),
             (RecoveryCopy.translocated, .translocatedApp),
             ("SQLite database is corrupt (database disk image is malformed)", .sqliteCorrupt),
+            ("database disk image is malformed", .sqliteCorrupt),
+            ("SQLITE_CORRUPT: malformed database", .sqliteCorrupt),
             (RecoveryCopy.loginItemDenied, .loginItemDenied),
             (RecoveryCopy.nestedVirtUnavailable, .nestedVirtUnavailable),
             (RecoveryCopy.hypervisorPressure, .hypervisorPressure),
@@ -77,6 +80,49 @@ struct RecoveryKindTests {
         #expect(engine.submit(.reset(force: false)) == .error(.confirmationRequired))
         #expect(ResetConfirmation.engineRequest == .reset(force: true))
         #expect(engine.submit(.reset(force: true)) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .stopped)
+    }
+
+    @Test func stockSQLiteMalformedIsResetOnly() {
+        let plan = RecoveryPlan.make(
+            status: EngineStatus(state: .failed, lastError: "database disk image is malformed")
+        )
+        #expect(plan.kind == .sqliteCorrupt)
+        #expect(plan.actions == [.reset])
+    }
+
+    @Test func forcedResetDeletesDataImage() throws {
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-reset-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let paths = HostPaths(
+            applicationSupport: root,
+            caches: root.appending(path: "caches", directoryHint: .isDirectory),
+            logs: root.appending(path: "logs", directoryHint: .isDirectory)
+        )
+        try FileManager.default.createDirectory(at: paths.vmDirectory, withIntermediateDirectories: true)
+        try Data("corrupt-sqlite".utf8).write(to: paths.dataImage)
+        let scheduler = ManualEngineScheduler()
+        let runtime = RecoveryStubRuntime(
+            startError: ClusterBringUpError(message: "database disk image is malformed")
+        )
+        let engine = ClusterEngine(
+            scheduler: scheduler,
+            runtime: runtime,
+            diskReset: HostClusterDiskReset(paths: paths)
+        )
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(RecoveryKind.classify(status: engine.currentStatus()) == .sqliteCorrupt)
+        #expect(engine.submit(.reset(force: false)) == .error(.confirmationRequired))
+        #expect(FileManager.default.fileExists(atPath: paths.dataImage.path(percentEncoded: false)))
+        #expect(engine.submit(.reset(force: true)) == .ok)
+        scheduler.runAll()
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(!FileManager.default.fileExists(atPath: paths.dataImage.path(percentEncoded: false)))
     }
 
     @Test func translocationCopyIsExact() {
@@ -123,6 +169,38 @@ struct RecoveryKindTests {
             extraError: RecoveryCopy.translocated
         )
         #expect(plan.kind == .translocatedApp)
+        #expect(RecoveryKind.settingsExtraError(RecoveryCopy.translocated) == RecoveryCopy.translocated)
+        #expect(RecoveryKind.settingsExtraError(RecoveryCopy.loginItemDenied) == RecoveryCopy.loginItemDenied)
+    }
+
+    @Test func engineNotRunningIsNotVMPanic() {
+        let missing = "gmak8-core is not running (engine.sock is missing.)"
+        #expect(RecoveryKind.settingsExtraError(missing) == nil)
+        let plan = RecoveryPlan.make(
+            status: EngineStatus(state: .stopped),
+            extraError: missing
+        )
+        #expect(plan.kind == .none)
+        #expect(plan.actions == [.diagnosticsZip])
+    }
+
+    @Test func stickyLoginItemDoesNotHideNodePortCollision() {
+        let port = PublishedPort(
+            service: "web",
+            hostPort: 30_663,
+            guestPort: 30_663,
+            collision: .collision
+        )
+        let plan = RecoveryPlan.make(
+            status: EngineStatus(state: .running, lastError: nil, publishedPorts: [port]),
+            extraError: RecoveryCopy.loginItemDenied
+        )
+        #expect(plan.kind == .nodePortCollision)
+        #expect(!plan.actions.contains(.openLoginItems))
+        #expect(plan.actions.contains(.showLsof))
+        #expect(RecoveryAction.skipNodePort.unavailableHelp != nil)
+        #expect(RecoveryAction.remapNodePort.unavailableHelp != nil)
+        #expect(RecoveryAction.showLsof.isAvailable)
     }
 
     @Test func resetConfirmationRequiresForce() {

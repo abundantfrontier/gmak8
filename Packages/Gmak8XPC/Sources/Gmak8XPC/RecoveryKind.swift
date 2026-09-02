@@ -87,6 +87,27 @@ public enum RecoveryAction: String, Equatable, Sendable, CaseIterable {
             return "Move to /Applications"
         }
     }
+
+    public var isAvailable: Bool {
+        unavailableHelp == nil
+    }
+
+    public var unavailableHelp: String? {
+        switch self {
+        case .pruneImages:
+            return "Image prune is not available yet."
+        case .switchAPIPort16443, .pickAPIPort:
+            return "gmak8 already tries 16443 when 6443 is in use. Host port picking is not available yet."
+        case .pickIngressHostPorts:
+            return "Alternate host ports are not configurable yet. Traefik stays on guest 80/443."
+        case .skipNodePort, .remapNodePort:
+            return "NodePort skip/remap is listed on published ports; changing publishes is not available yet."
+        case .showK3sJournal:
+            return "k3s journal is in the guest. Use Serial Log on the host."
+        default:
+            return nil
+        }
+    }
 }
 
 public enum RecoveryCopy {
@@ -209,7 +230,7 @@ public struct RecoveryPlan: Equatable, Sendable {
                 kind: .kubernetesNotReady,
                 title: "Kubernetes not ready",
                 message: rawError.isEmpty ? "Kubernetes did not become ready." : rawError,
-                actions: [.showK3sJournal, .restartKubernetes, .reset]
+                actions: [.showK3sJournal, .showSerial, .restartKubernetes, .reset]
             )
         case .guestAirgapVerifyFailed:
             return RecoveryPlan(
@@ -285,15 +306,39 @@ public struct RecoveryPlan: Equatable, Sendable {
 }
 
 extension RecoveryKind {
+    /// Settings/login copy only. Connection errors and persist I/O must not become VM panic.
+    public static func settingsExtraError(_ text: String?) -> String? {
+        guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        switch classify(lastError: trimmed) {
+        case .translocatedApp, .loginItemDenied:
+            return trimmed
+        default:
+            return nil
+        }
+    }
+
     public static func classify(status: EngineStatus, extraError: String? = nil) -> RecoveryKind {
-        let text = rawError(status: status, extraError: extraError)
-        if text.isEmpty {
-            if status.publishedPorts.contains(where: { $0.collision == .collision }) {
-                return .nodePortCollision
-            }
+        let last = status.lastError?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !last.isEmpty {
+            return classify(text: last, status: status)
+        }
+        if status.publishedPorts.contains(where: { $0.collision == .collision }) {
+            return .nodePortCollision
+        }
+        let extra = extraError?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if extra.isEmpty {
             return .none
         }
-        return classify(text: text, status: status)
+        switch classify(text: extra, status: status) {
+        case .translocatedApp:
+            return .translocatedApp
+        case .loginItemDenied:
+            return .loginItemDenied
+        default:
+            return .none
+        }
     }
 
     public static func classify(lastError: String?, publishedPorts: [PublishedPort] = [], step: String? = nil)
@@ -374,10 +419,15 @@ extension RecoveryKind {
     }
 
     private static func isSQLiteCorrupt(_ lower: String) -> Bool {
+        if lower.contains("database disk image is malformed") || lower.contains("sqlite_corrupt")
+            || lower.contains("malformed database")
+        {
+            return true
+        }
         guard lower.contains("sqlite") else {
             return false
         }
-        return lower.contains("corrupt") || lower.contains("malformed") || lower.contains("disk image is malformed")
+        return lower.contains("corrupt") || lower.contains("malformed")
     }
 
     private static func isDiskFull(_ lower: String) -> Bool {

@@ -70,12 +70,14 @@ public final class ClusterEngine: @unchecked Sendable {
     private let runtime: any VirtualMachineRuntime
     private let bringUp: any ClusterBringUp
     private let publisher: any PortPublisher
+    private let diskReset: any ClusterDiskResetting
 
     private var state: ClusterState = .stopped
     private var step: String?
     private var lastError: String?
     private var apiEndpoint: String?
     private var failAfterStop: String?
+    private var wipeDisksAfterStop = false
     private var generation: UInt64 = 0
     private var imageJob: ImageJobStatus?
     private var subscribers: [UUID: @Sendable (EngineEvent) -> Void] = [:]
@@ -85,13 +87,15 @@ public final class ClusterEngine: @unchecked Sendable {
         nestedVirt: Bool = false,
         runtime: any VirtualMachineRuntime = FakeVirtualMachineRuntime(),
         bringUp: any ClusterBringUp = NoOpClusterBringUp(),
-        publisher: any PortPublisher = NoOpPortPublisher()
+        publisher: any PortPublisher = NoOpPortPublisher(),
+        diskReset: any ClusterDiskResetting = NoOpClusterDiskReset()
     ) {
         self.scheduler = scheduler
         self.nestedVirt = nestedVirt
         self.runtime = runtime
         self.bringUp = bringUp
         self.publisher = publisher
+        self.diskReset = diskReset
         self.runtime.setUnexpectedStopHandler { [weak self] error in
             self?.handleUnexpectedStop(error)
         }
@@ -146,6 +150,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 lastError = nil
                 apiEndpoint = nil
                 failAfterStop = nil
+                wipeDisksAfterStop = false
                 imageJob = nil
                 generation += 1
                 claimedGeneration = generation
@@ -211,7 +216,20 @@ public final class ClusterEngine: @unchecked Sendable {
             if !force {
                 return .error(.confirmationRequired)
             }
-            return requestStopLocked(logLine: "reset", work: &work, events: &events)
+            wipeDisksAfterStop = true
+            switch state {
+            case .stopped:
+                events.append(.log(source: .engine, line: "reset"))
+                work = { [weak self] in
+                    self?.performDiskReset()
+                }
+                return .ok
+            case .stopping:
+                events.append(.log(source: .engine, line: "reset"))
+                return .ok
+            case .starting, .running, .degraded, .paused, .failed:
+                return requestStopLocked(logLine: "reset", work: &work, events: &events)
+            }
         case .status, .subscribe:
             return .ok
         }
@@ -397,13 +415,23 @@ public final class ClusterEngine: @unchecked Sendable {
 
     private func completeStop(generation: UInt64, result: Result<Void, any Error>) {
         var events: [EngineEvent] = []
+        var shouldWipe = false
         withLock {
             guard generation == self.generation, state == .stopping else {
                 return
             }
             switch result {
             case .success:
-                if let message = failAfterStop {
+                if wipeDisksAfterStop {
+                    shouldWipe = true
+                    wipeDisksAfterStop = false
+                    failAfterStop = nil
+                    state = .stopped
+                    step = nil
+                    lastError = nil
+                    apiEndpoint = nil
+                    imageJob = nil
+                } else if let message = failAfterStop {
                     state = .failed
                     lastError = message
                     failAfterStop = nil
@@ -432,6 +460,30 @@ public final class ClusterEngine: @unchecked Sendable {
             events.append(.log(source: .engine, line: "stopped"))
         }
         broadcast(events)
+        if shouldWipe {
+            performDiskReset()
+        }
+    }
+
+    private func performDiskReset() {
+        do {
+            try diskReset.resetDisks()
+            var events: [EngineEvent] = []
+            withLock {
+                lastError = nil
+                events.append(.log(source: .engine, line: "reset disks"))
+                events.append(.status(currentStatusLocked()))
+            }
+            broadcast(events)
+        } catch {
+            var events: [EngineEvent] = []
+            withLock {
+                lastError = error.localizedDescription
+                events.append(.log(source: .engine, line: error.localizedDescription))
+                events.append(.status(currentStatusLocked()))
+            }
+            broadcast(events)
+        }
     }
 
     private func handleDegraded(_ message: String) {
