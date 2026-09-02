@@ -64,6 +64,24 @@ struct LinuxEFIVirtualMachineRuntimeTests {
         defaults?.removePersistentDomain(forName: suite)
     }
 
+    @Test func cancelDuringPrepareDoesNotCreateAVM() throws {
+        let env = try makeRuntimeHarness(isSupported: true)
+        defer { env.cleanup() }
+
+        env.runtime.prepareHook = { env.runtime.cancelInFlightStart() }
+        let box = ResultBox()
+        env.runtime.start { result in
+            box.set(result)
+        }
+        #expect(box.result != nil)
+        if case .failure(let error as VirtualMachineError) = box.result {
+            #expect(error == .stoppedDuringStart)
+        } else {
+            Issue.record("expected stoppedDuringStart")
+        }
+        #expect(!env.runtime.holdsDiskLocks)
+    }
+
     @Test func kubernetesDefaultsUseSixtyGibDataDisk() {
         let small = VMHardware.kubernetesDefaults(processorCount: 8, physicalMemoryBytes: 8 * VMHardware.gibibyte)
         #expect(small.dataDiskBytes == 60 * VMHardware.gibibyte)
@@ -109,6 +127,13 @@ private struct RuntimeHarness {
     func cleanup() {
         runtime.releaseLocks()
         try? FileManager.default.removeItem(at: root)
+    }
+}
+
+private final class ResultBox: @unchecked Sendable {
+    var result: Result<Void, any Error>?
+    func set(_ result: Result<Void, any Error>) {
+        self.result = result
     }
 }
 

@@ -16,10 +16,12 @@ public protocol VirtualMachineRuntime: Sendable {
     func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void)
     func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void)
     func setUnexpectedStopHandler(_ handler: (@Sendable (Error?) -> Void)?)
+    func cancelInFlightStart()
 }
 
 extension VirtualMachineRuntime {
     public func setUnexpectedStopHandler(_ handler: (@Sendable (Error?) -> Void)?) {}
+    public func cancelInFlightStart() {}
 }
 
 public struct FakeVirtualMachineRuntime: VirtualMachineRuntime {

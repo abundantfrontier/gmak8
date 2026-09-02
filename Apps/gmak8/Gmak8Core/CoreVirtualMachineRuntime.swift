@@ -29,6 +29,10 @@ struct CoreVirtualMachineRuntime: VirtualMachineRuntime {
     func setUnexpectedStopHandler(_ handler: (@Sendable (Error?) -> Void)?) {
         controller.setUnexpectedStopHandler(handler)
     }
+
+    func cancelInFlightStart() {
+        controller.cancelInFlightStart()
+    }
 }
 
 private func engineErrorCode(for error: VirtualMachineError) -> EngineErrorCode {

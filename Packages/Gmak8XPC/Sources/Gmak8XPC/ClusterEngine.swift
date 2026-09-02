@@ -122,58 +122,63 @@ public final class ClusterEngine: @unchecked Sendable {
     }
 
     private func submitStart() -> EngineReply {
+        var events: [EngineEvent] = []
+        var claimedGeneration: UInt64 = 0
         let conflict = withLock {
             switch state {
             case .starting, .running, .degraded, .paused, .stopping:
                 return true
             case .stopped, .failed:
+                state = .starting
+                step = runtime.stepName
+                lastError = nil
+                generation += 1
+                claimedGeneration = generation
+                events.append(.status(currentStatusLocked()))
+                events.append(.log(source: .engine, line: "start accepted"))
                 return false
             }
         }
         if conflict {
             return .error(.conflict)
         }
+        let gen = claimedGeneration
+        broadcast(events)
+        events = []
 
         if let failure = runtime.preflight() {
-            var events: [EngineEvent] = []
+            var reply = EngineReply.error(failure.code)
             withLock {
+                guard generation == gen, state == .starting else {
+                    reply = .ok
+                    return
+                }
+                state = .stopped
+                step = nil
                 lastError = failure.message
                 events.append(.status(currentStatusLocked()))
                 events.append(.log(source: .engine, line: failure.message))
             }
+            if case .error = reply {
+                runtime.stop { _ in }
+            }
             broadcast(events)
-            return .error(failure.code)
+            return reply
         }
 
         var work: (@Sendable () -> Void)?
-        var events: [EngineEvent] = []
-        let reply: EngineReply = withLock {
-            switch state {
-            case .starting, .running, .degraded, .paused, .stopping:
-                return .error(.conflict)
-            case .stopped, .failed:
-                state = .starting
-                step = runtime.stepName
-                lastError = nil
-                generation += 1
-                let gen = generation
-                events.append(.status(currentStatusLocked()))
-                events.append(.log(source: .engine, line: "start accepted"))
-                work = { [weak self] in
-                    self?.beginStart(generation: gen)
-                }
-                return .ok
+        withLock {
+            guard generation == gen, state == .starting else {
+                return
+            }
+            work = { [weak self] in
+                self?.beginStart(generation: gen)
             }
         }
-        if reply == .error(.conflict) {
-            runtime.stop { _ in }
-            return reply
-        }
-        broadcast(events)
         if let work {
             scheduler.schedule(work)
         }
-        return reply
+        return .ok
     }
 
     private func handleLocked(
@@ -210,12 +215,16 @@ public final class ClusterEngine: @unchecked Sendable {
             events.append(.log(source: .engine, line: logLine))
             return .ok
         case .starting, .running, .degraded, .paused, .failed:
+            let cancelStart = state == .starting
             state = .stopping
             step = runtime.stepName
             generation += 1
             let gen = generation
             events.append(.status(currentStatusLocked()))
             events.append(.log(source: .engine, line: logLine))
+            if cancelStart {
+                runtime.cancelInFlightStart()
+            }
             work = { [weak self] in
                 self?.beginStop(generation: gen)
             }

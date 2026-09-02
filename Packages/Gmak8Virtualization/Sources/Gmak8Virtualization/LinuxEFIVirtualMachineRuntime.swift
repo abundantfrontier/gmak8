@@ -15,8 +15,10 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     private var rejectedTicket: UInt64 = 0
     private var inFlightTicket: UInt64?
     private var stopRequested = false
+    private var pendingCancel = false
     private var pendingStopCompletions: [@Sendable (Result<Void, any Error>) -> Void] = []
     private var unexpectedStopHandler: (@Sendable (Error?) -> Void)?
+    var prepareHook: (() -> Void)?
 
     public init(
         layout: VMDiskLayout,
@@ -39,12 +41,30 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         mutex.unlock()
     }
 
+    public func cancelInFlightStart() {
+        mutex.lock()
+        pendingCancel = true
+        rejectedTicket = max(rejectedTicket, nextTicket)
+        mutex.unlock()
+    }
+
     public func prepare() throws {
         if !isSupported {
             throw VirtualMachineError.unsupported
         }
+        if isCancelled() {
+            throw VirtualMachineError.stoppedDuringStart
+        }
         try layout.ensureFiles(osSize: hardware.osDiskBytes, dataSize: hardware.dataDiskBytes)
+        if isCancelled() {
+            throw VirtualMachineError.stoppedDuringStart
+        }
         try flock.acquire(urls: layout.lockURLs)
+        prepareHook?()
+        if isCancelled() {
+            flock.release()
+            throw VirtualMachineError.stoppedDuringStart
+        }
     }
 
     public func releaseLocks() {
@@ -52,20 +72,41 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     }
 
     public func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        let ticket = nextStartTicket()
+        if shouldAbortStart(ticket) {
+            completion(.failure(VirtualMachineError.stoppedDuringStart))
+            return
+        }
         do {
             try prepare()
+        } catch let error as VirtualMachineError where error == .stoppedDuringStart {
+            flock.release()
+            completion(.failure(error))
+            return
         } catch {
+            if shouldAbortStart(ticket) {
+                flock.release()
+                completion(.failure(VirtualMachineError.stoppedDuringStart))
+                return
+            }
             completion(.failure(error))
             return
         }
-        let ticket = nextStartTicket()
+        if shouldAbortStart(ticket) {
+            flock.release()
+            completion(.failure(VirtualMachineError.stoppedDuringStart))
+            return
+        }
         VirtualMachineQueue.shared.async {
             self.startOnVMQueue(ticket: ticket, completion: completion)
         }
     }
 
     public func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-        rejectCurrentTicket()
+        mutex.lock()
+        pendingCancel = false
+        rejectedTicket = max(rejectedTicket, nextTicket)
+        mutex.unlock()
         VirtualMachineQueue.shared.async {
             self.stopOnVMQueue(completion: completion)
         }
@@ -79,16 +120,30 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         return ticket
     }
 
-    private func rejectCurrentTicket() {
-        mutex.lock()
-        rejectedTicket = nextTicket
-        mutex.unlock()
-    }
-
     private func isRejected(_ ticket: UInt64) -> Bool {
         mutex.lock()
         defer { mutex.unlock() }
         return ticket <= rejectedTicket
+    }
+
+    private func isCancelled() -> Bool {
+        mutex.lock()
+        defer { mutex.unlock() }
+        if pendingCancel {
+            return true
+        }
+        return nextTicket != 0 && nextTicket <= rejectedTicket
+    }
+
+    private func shouldAbortStart(_ ticket: UInt64) -> Bool {
+        mutex.lock()
+        defer { mutex.unlock() }
+        if ticket <= rejectedTicket || pendingCancel {
+            pendingCancel = false
+            rejectedTicket = max(rejectedTicket, ticket)
+            return true
+        }
+        return false
     }
 
     private func startOnVMQueue(

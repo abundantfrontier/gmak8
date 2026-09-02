@@ -194,6 +194,54 @@ struct ClusterEngineTests {
         #expect(runtime.stopCount == 1)
     }
 
+    @Test func stopDuringPrepareDoesNotStartVM() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = BlockingPrepareRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+        #expect(engine.submit(.start) == .ok)
+
+        let startWork = DispatchGroup()
+        startWork.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            scheduler.runNext()
+            startWork.leave()
+        }
+        runtime.waitUntilPrepareEntered()
+        #expect(engine.submit(.stop) == .ok)
+        #expect(engine.currentStatus().state == .stopping)
+        runtime.allowPrepareToFinish()
+        startWork.wait()
+        #expect(!runtime.didStartVM)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(runtime.stopCount == 1)
+    }
+
+    @Test func concurrentStartDoesNotStopTheWinner() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = BlockingPreflightRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+
+        let firstStart = DispatchGroup()
+        firstStart.enter()
+        let firstReply = ReplyBox()
+        DispatchQueue.global(qos: .userInitiated).async {
+            firstReply.value = engine.submit(.start)
+            firstStart.leave()
+        }
+        runtime.waitUntilPreflightEntered()
+        #expect(engine.submit(.start) == .error(.conflict))
+        #expect(runtime.stopCount == 0)
+        runtime.allowPreflightToFinish()
+        firstStart.wait()
+        #expect(firstReply.value == .ok)
+        #expect(engine.currentStatus().state == .starting)
+        #expect(runtime.stopCount == 0)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        #expect(runtime.stopCount == 0)
+    }
+
     @Test func unexpectedGuestStopLeavesEngineStopped() {
         let scheduler = ManualEngineScheduler()
         let runtime = StubVirtualMachineRuntime()
@@ -250,6 +298,113 @@ private final class StubVirtualMachineRuntime: VirtualMachineRuntime, @unchecked
     }
 }
 
+private final class BlockingPrepareRuntime: VirtualMachineRuntime, @unchecked Sendable {
+    var stepName: String { "vm" }
+    var didStartVM = false
+    var stopCount = 0
+    private let lock = NSCondition()
+    private var prepareEntered = false
+    private var allowPrepare = false
+    private var cancelled = false
+
+    func preflight() -> VirtualMachinePreflightError? {
+        nil
+    }
+
+    func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        lock.lock()
+        prepareEntered = true
+        lock.broadcast()
+        while !allowPrepare && !cancelled {
+            lock.wait()
+        }
+        let abort = cancelled
+        lock.unlock()
+        if abort {
+            completion(.failure(EngineErrorCode.conflict))
+            return
+        }
+        didStartVM = true
+        completion(.success(()))
+    }
+
+    func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        stopCount += 1
+        completion(.success(()))
+    }
+
+    func cancelInFlightStart() {
+        lock.lock()
+        cancelled = true
+        lock.broadcast()
+        lock.unlock()
+    }
+
+    func waitUntilPrepareEntered() {
+        lock.lock()
+        let deadline = Date().addingTimeInterval(5)
+        while !prepareEntered {
+            if !lock.wait(until: deadline) {
+                break
+            }
+        }
+        lock.unlock()
+    }
+
+    func allowPrepareToFinish() {
+        lock.lock()
+        allowPrepare = true
+        lock.broadcast()
+        lock.unlock()
+    }
+}
+
+private final class BlockingPreflightRuntime: VirtualMachineRuntime, @unchecked Sendable {
+    var stepName: String { "vm" }
+    var stopCount = 0
+    private let lock = NSCondition()
+    private var preflightEntered = false
+    private var allowPreflight = false
+
+    func preflight() -> VirtualMachinePreflightError? {
+        lock.lock()
+        preflightEntered = true
+        lock.broadcast()
+        while !allowPreflight {
+            lock.wait()
+        }
+        lock.unlock()
+        return nil
+    }
+
+    func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        completion(.success(()))
+    }
+
+    func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        stopCount += 1
+        completion(.success(()))
+    }
+
+    func waitUntilPreflightEntered() {
+        lock.lock()
+        let deadline = Date().addingTimeInterval(5)
+        while !preflightEntered {
+            if !lock.wait(until: deadline) {
+                break
+            }
+        }
+        lock.unlock()
+    }
+
+    func allowPreflightToFinish() {
+        lock.lock()
+        allowPreflight = true
+        lock.broadcast()
+        lock.unlock()
+    }
+}
+
 private final class DeferredStartRuntime: VirtualMachineRuntime, @unchecked Sendable {
     var stepName: String { "vm" }
     var stopCount = 0
@@ -277,6 +432,10 @@ private final class DeferredStartRuntime: VirtualMachineRuntime, @unchecked Send
         let completion = startCompletions.removeFirst()
         completion(result)
     }
+}
+
+private final class ReplyBox: @unchecked Sendable {
+    var value: EngineReply?
 }
 
 private final class EventBox: @unchecked Sendable {
