@@ -61,7 +61,6 @@ public struct NoOpPortPublisher: PortPublisher {
 /// Polls guest Services and exposes NodePorts on 127.0.0.1. Must not run on `dev.gmak8.vm`.
 public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
     public static let warnCap = 32
-    /// Never bind host :22/:80/:443.
     public static let forbiddenHostPorts: Set<Int> = [22, 80, 443]
 
     private let source: any GuestServiceSource
@@ -77,6 +76,7 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
     private var log: (@Sendable (String) -> Void)?
     private var snapshotStorage: [PublishedPort] = []
     private var owned: [String: OwnedBinding] = [:]
+    private var reexposeRequested = false
 
     private struct OwnedBinding {
         var hostPort: Int
@@ -107,6 +107,7 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
                 return
             }
             cancelled = false
+            reexposeRequested = false
             self.onChange = onChange
             self.log = log
             task = Task { [weak self] in
@@ -118,6 +119,7 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
     public func cancel() {
         let ports: [OwnedBinding] = withLock {
             cancelled = true
+            reexposeRequested = false
             task?.cancel()
             task = nil
             onChange = nil
@@ -133,25 +135,52 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
     }
 
     public func reexpose() {
-        let running = withLock { task != nil && !cancelled }
-        guard running else {
-            return
+        withLock {
+            if cancelled || task == nil {
+                return
+            }
+            reexposeRequested = true
         }
-        Task { await self.reconcile() }
     }
 
     private func runLoop() async {
         while !Task.isCancelled {
-            await reconcile()
+            let reexposeOwned = withLock {
+                let value = reexposeRequested
+                reexposeRequested = false
+                return value
+            }
+            await reconcile(reexposeOwnedOnFailure: reexposeOwned)
+            if withLock({ cancelled }) {
+                return
+            }
+            if withLock({ reexposeRequested }) {
+                continue
+            }
+            await sleepInterruptible()
+        }
+    }
+
+    private func sleepInterruptible() async {
+        let deadline = ContinuousClock.now + pollInterval
+        while ContinuousClock.now < deadline {
+            if withLock({ reexposeRequested || cancelled }) {
+                return
+            }
+            let remaining = deadline - ContinuousClock.now
+            let step: Duration = remaining < .milliseconds(50) ? remaining : .milliseconds(50)
+            if step <= .zero {
+                return
+            }
             do {
-                try await Task.sleep(for: pollInterval)
+                try await Task.sleep(for: step)
             } catch {
                 return
             }
         }
     }
 
-    private func reconcile() async {
+    private func reconcile(reexposeOwnedOnFailure: Bool) async {
         if withLock({ cancelled }) {
             return
         }
@@ -161,6 +190,9 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
             do {
                 services = try await source.listServices()
             } catch {
+                if reexposeOwnedOnFailure {
+                    reapplyOwned()
+                }
                 return
             }
         } else {
@@ -253,6 +285,16 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
         }
         if callbacks.changed {
             callbacks.notify?()
+        }
+    }
+
+    private func reapplyOwned() {
+        let bindings = withLock { Array(owned.values) }
+        for binding in bindings {
+            if withLock({ cancelled }) {
+                return
+            }
+            _ = applyExpose(hostPort: binding.hostPort, guestPort: binding.guestPort)
         }
     }
 

@@ -19,7 +19,7 @@ type Host interface {
 	Node() NodeReport
 	Airgap() AirgapReport
 	ImportAirgap(name string, r io.Reader, size int64) (AirgapReport, error)
-	Services() ServiceListReport
+	Services() (ServiceListReport, error)
 	SetTime(t time.Time) error
 	Shutdown() error
 }

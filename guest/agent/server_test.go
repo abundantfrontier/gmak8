@@ -24,6 +24,7 @@ type fakeHost struct {
 	k3s           K3sReport
 	node          NodeReport
 	services      ServiceListReport
+	servicesErr   error
 	times         []time.Time
 	shutdowns     int
 	k3sStarts     int
@@ -90,11 +91,14 @@ func (f *fakeHost) ImportAirgap(name string, r io.Reader, size int64) (AirgapRep
 	}
 	return f.airgap, nil
 }
-func (f *fakeHost) Services() ServiceListReport {
-	if f.services.Items == nil {
-		return ServiceListReport{Items: []Service{}}
+func (f *fakeHost) Services() (ServiceListReport, error) {
+	if f.servicesErr != nil {
+		return ServiceListReport{}, f.servicesErr
 	}
-	return f.services
+	if f.services.Items == nil {
+		return ServiceListReport{Items: []Service{}}, nil
+	}
+	return f.services, nil
 }
 func (f *fakeHost) SetTime(t time.Time) error {
 	f.mu.Lock()
@@ -362,6 +366,16 @@ func TestServicesJSON(t *testing.T) {
 	}
 	if got.Items == nil || len(got.Items) != 0 {
 		t.Fatalf("empty list %+v", got)
+	}
+
+	host.servicesErr = errString("kubectl: connection refused")
+	rec = httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/services", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("kubectl failure status %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "connection refused") {
+		t.Fatalf("error body %s", rec.Body.String())
 	}
 }
 

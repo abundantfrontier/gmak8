@@ -209,6 +209,41 @@ struct NodePortPublisherTests {
         #expect(exposer.bound[30080] == nil)
     }
 
+    @Test func listFailureKeepsExistingBinds() async throws {
+        let source = FakeServiceSource(services: [
+            nodePort("nginx", nodePort: 30080)
+        ])
+        let exposer = FakeExposer()
+        let publisher = NodePortPublisher(
+            source: source, exposer: exposer, pollInterval: .milliseconds(5))
+        publisher.start(onChange: {}, log: { _ in })
+        defer { publisher.cancel() }
+        try await waitUntil { exposer.bound[30080] == 30080 }
+        source.setError(GuestAgentError.httpStatus(500, "kubectl failed"))
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(exposer.bound[30080] == 30080)
+        #expect(!exposer.unexposeCalls.contains(30080))
+    }
+
+    @Test func reexposeRebindsOwnedWhenListFails() async throws {
+        let source = FakeServiceSource(services: [
+            nodePort("nginx", nodePort: 30080)
+        ])
+        let exposer = FakeExposer()
+        let publisher = NodePortPublisher(
+            source: source, exposer: exposer, pollInterval: .milliseconds(5))
+        publisher.start(onChange: {}, log: { _ in })
+        defer { publisher.cancel() }
+        try await waitUntil { exposer.bound[30080] == 30080 }
+        source.setError(GuestAgentError.httpStatus(500, "kubectl failed"))
+        try await Task.sleep(for: .milliseconds(20))
+        exposer.dropBinds()
+        #expect(exposer.bound[30080] == nil)
+        publisher.reexpose()
+        try await waitUntil { exposer.bound[30080] == 30080 }
+        #expect(!exposer.unexposeCalls.contains(30080))
+    }
+
     @Test func fakeEnginePathLeavesPublishedPortsEmpty() {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler)
@@ -278,6 +313,12 @@ private final class FakeServiceSource: GuestServiceSource, @unchecked Sendable {
         try current()
     }
 
+    func setError(_ error: (any Error)?) {
+        lock.lock()
+        self.error = error
+        lock.unlock()
+    }
+
     private func current() throws -> [GuestService] {
         lock.lock()
         defer { lock.unlock() }
@@ -335,6 +376,12 @@ private final class FakeExposer: HostPortExposer, @unchecked Sendable {
         defer { lock.unlock() }
         unexposes.append(hostPort)
         storage[hostPort] = nil
+    }
+
+    func dropBinds() {
+        lock.lock()
+        storage = [:]
+        lock.unlock()
     }
 }
 

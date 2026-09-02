@@ -38,7 +38,10 @@ func TestParseServiceListFiltersNodePortAndLoadBalancer(t *testing.T) {
 			}
 		]
 	}`)
-	got := parseServiceList(body)
+	got, err := parseServiceList(body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 3 {
 		t.Fatalf("len %d: %+v", len(got), got)
 	}
@@ -54,13 +57,14 @@ func TestParseServiceListFiltersNodePortAndLoadBalancer(t *testing.T) {
 }
 
 func TestParseServiceListEmptyAndInvalid(t *testing.T) {
-	if got := parseServiceList([]byte(`{"items":[]}`)); len(got) != 0 {
-		t.Fatalf("empty %+v", got)
+	got, err := parseServiceList([]byte(`{"items":[]}`))
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty %+v err %v", got, err)
 	}
-	if got := parseServiceList([]byte(`not-json`)); len(got) != 0 {
-		t.Fatalf("invalid %+v", got)
+	if _, err := parseServiceList([]byte(`not-json`)); err == nil {
+		t.Fatal("expected invalid JSON error")
 	}
-	if got := parseServiceList(nil); len(got) != 0 {
-		t.Fatalf("nil %+v", got)
+	if _, err := parseServiceList(nil); err == nil {
+		t.Fatal("expected nil body error")
 	}
 }

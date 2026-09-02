@@ -21,15 +21,19 @@ type ServicePort struct {
 	Protocol string `json:"protocol,omitempty"`
 }
 
-func (h *realHost) Services() ServiceListReport {
+func (h *realHost) Services() (ServiceListReport, error) {
 	out, err := runK3sKubectl(h.k3sPath, h.kubeconfigPath, "get", "svc", "-A", "-o", "json")
 	if err != nil {
-		return ServiceListReport{Items: []Service{}}
+		return ServiceListReport{}, err
 	}
-	return ServiceListReport{Items: parseServiceList(out)}
+	items, err := parseServiceList(out)
+	if err != nil {
+		return ServiceListReport{}, err
+	}
+	return ServiceListReport{Items: items}, nil
 }
 
-func parseServiceList(data []byte) []Service {
+func parseServiceList(data []byte) ([]Service, error) {
 	var list struct {
 		Items []struct {
 			Metadata struct {
@@ -48,7 +52,7 @@ func parseServiceList(data []byte) []Service {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(data, &list); err != nil {
-		return []Service{}
+		return nil, err
 	}
 	items := make([]Service, 0)
 	for _, item := range list.Items {
@@ -77,5 +81,5 @@ func parseServiceList(data []byte) []Service {
 			Ports:     ports,
 		})
 	}
-	return items
+	return items, nil
 }

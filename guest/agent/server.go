@@ -111,7 +111,12 @@ func (s *Server) handleAirgapImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleServices(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.host.Services())
+	report, err := s.host.Services()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (s *Server) handleTime(w http.ResponseWriter, r *http.Request) {
