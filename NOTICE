@@ -7,3 +7,7 @@ See the LICENSE file for the full license text.
 You may obtain a copy of the License at:
 
     http://www.apache.org/licenses/LICENSE-2.0
+
+This product builds gvproxy from containers/gvisor-tap-vsock
+(https://github.com/containers/gvisor-tap-vsock), Apache License 2.0.
+The version pin is ThirdParty/gvproxy/PIN.

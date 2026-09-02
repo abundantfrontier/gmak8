@@ -40,7 +40,7 @@ struct VMConfigurationBuilderTests {
         }
     }
 
-    @Test func configurationUsesEFISerialAndOptionalNAT() throws {
+    @Test func configurationUsesEFISerialWithoutNAT() throws {
         let env = try makeLayoutHarness()
         defer { env.cleanup() }
 
@@ -55,10 +55,30 @@ struct VMConfigurationBuilderTests {
         #expect(config.serialPorts.count == 1)
         #expect(config.serialPorts[0] is VZVirtioConsoleDeviceSerialPortConfiguration)
         #expect(config.serialPorts[0].attachment is VZFileSerialPortAttachment)
-        #expect(config.networkDevices.count == 1)
-        #expect(config.networkDevices[0].attachment is VZNATNetworkDeviceAttachment)
+        #expect(config.networkDevices.isEmpty)
         #expect(config.cpuCount == 2)
         #expect(config.memorySize == 256 * 1024 * 1024)
+    }
+
+    @Test func configurationPinsGuestMACOnFileHandleNIC() throws {
+        let env = try makeLayoutHarness()
+        defer { env.cleanup() }
+
+        let pair = try datagramSocketPair()
+        defer {
+            try? pair.0.close()
+            try? pair.1.close()
+        }
+        let attachment = VZFileHandleNetworkDeviceAttachment(fileHandle: pair.0)
+        let config = try VMConfigurationBuilder.make(
+            layout: env.layout,
+            hardware: env.hardware,
+            networkAttachment: attachment
+        )
+        #expect(config.networkDevices.count == 1)
+        #expect(config.networkDevices[0].attachment is VZFileHandleNetworkDeviceAttachment)
+        #expect(!(config.networkDevices[0].attachment is VZNATNetworkDeviceAttachment))
+        #expect(config.networkDevices[0].macAddress.string.lowercased() == GuestNetwork.guestMACAddress)
     }
 
     @Test func recreateNVRAMOverwritesExistingStore() throws {

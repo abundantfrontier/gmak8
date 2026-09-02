@@ -12,6 +12,10 @@ do {
         at: paths.applicationSupport,
         withIntermediateDirectories: true
     )
+    try FileManager.default.createDirectory(
+        at: paths.caches,
+        withIntermediateDirectories: true
+    )
     try TimeMachineExclusion.excludeVMDirectory(at: paths.vmDirectory)
 
     var layout = VMDiskLayout.under(vmDirectory: paths.vmDirectory)
@@ -21,7 +25,16 @@ do {
     }
 
     let hardware = loadHardware(paths: paths)
-    let controller = LinuxEFIVirtualMachineRuntime(layout: layout, hardware: hardware)
+    let network = GVProxyNetworkStack(
+        executable: GVProxyLaunch.resolveExecutable(),
+        httpSocket: paths.gvproxySocket,
+        vfkitSocket: paths.vfkitSocket
+    )
+    let controller = LinuxEFIVirtualMachineRuntime(
+        layout: layout,
+        hardware: hardware,
+        network: network
+    )
     let engine = ClusterEngine(
         scheduler: DispatchEngineScheduler(),
         runtime: CoreVirtualMachineRuntime(controller: controller)

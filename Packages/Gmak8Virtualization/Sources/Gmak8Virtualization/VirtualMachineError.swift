@@ -9,6 +9,9 @@ public enum VirtualMachineError: Error, Equatable, Sendable {
     case startFailed(String)
     case stoppedDuringStart
     case stopFailed(String)
+    case socketPathTooLong(URL)
+    case gvproxyMissing(URL?)
+    case networkFailed(String)
 
     /// Recovery copy. `unsupported` must not be described as a disk or hypervisor lock.
     public var recoveryMessage: String {
@@ -30,6 +33,14 @@ public enum VirtualMachineError: Error, Equatable, Sendable {
             return "Virtual machine start was cancelled."
         case .stopFailed(let reason):
             return "Virtual machine failed to stop: \(reason)"
+        case .socketPathTooLong(let url):
+            return
+                "network socket path too long: \(url.path(percentEncoded: false)) (Darwin sun_path is \(UnixgramPath.sunPathByteCount) bytes)"
+        case .gvproxyMissing(let url):
+            let location = url.map { UnixgramPath.fileSystemPath($0) } ?? "Contents/Helpers/gvproxy"
+            return "gvproxy helper is missing (\(location)). Build ThirdParty/gvproxy or set GMAK8_GVPROXY."
+        case .networkFailed(let reason):
+            return "Network stack failed: \(reason)"
         }
     }
 }

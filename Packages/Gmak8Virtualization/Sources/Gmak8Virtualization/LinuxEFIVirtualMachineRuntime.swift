@@ -5,6 +5,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     public let layout: VMDiskLayout
     public let hardware: VMHardware
     public let isSupported: Bool
+    public let network: GVProxyNetworkStack?
 
     private let flock = DiskFlock()
     private let mutex = NSLock()
@@ -23,11 +24,13 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     public init(
         layout: VMDiskLayout,
         hardware: VMHardware,
-        isSupported: Bool = VZVirtualMachine.isSupported
+        isSupported: Bool = VZVirtualMachine.isSupported,
+        network: GVProxyNetworkStack? = nil
     ) {
         self.layout = layout
         self.hardware = hardware
         self.isSupported = isSupported
+        self.network = network
         vmDelegate.owner = self
     }
 
@@ -52,6 +55,10 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         if !isSupported {
             throw VirtualMachineError.unsupported
         }
+        if isCancelled() {
+            throw VirtualMachineError.stoppedDuringStart
+        }
+        try network?.preflight()
         if isCancelled() {
             throw VirtualMachineError.stoppedDuringStart
         }
@@ -165,7 +172,17 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
             if !flock.isHolding {
                 try flock.acquire(urls: layout.lockURLs)
             }
-            let config = try VMConfigurationBuilder.make(layout: layout, hardware: hardware)
+            let attachment = try network?.start()
+            if isRejected(ticket) {
+                network?.stop()
+                cancelUnstarted(completion: completion)
+                return
+            }
+            let config = try VMConfigurationBuilder.make(
+                layout: layout,
+                hardware: hardware,
+                networkAttachment: attachment
+            )
             do {
                 try config.validate()
             } catch {
@@ -180,10 +197,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
                 self.handleStartCompletion(ticket: ticket, vm: vm, result: result, completion: completion)
             }
         } catch {
-            virtualMachine = nil
-            inFlightTicket = nil
-            flock.release()
-            finishPendingStops(.success(()))
+            failStartCleanup()
             completion(.failure(error))
         }
     }
@@ -208,7 +222,15 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
                     self.finishPendingStops(stopResult)
                 }
             } else {
-                completion(.success(()))
+                do {
+                    try network?.exposeDefaultPorts()
+                    completion(.success(()))
+                } catch {
+                    requestStop(vm: vm) { stopResult in
+                        completion(.failure(error))
+                        self.finishPendingStops(stopResult)
+                    }
+                }
             }
         case .failure(let error):
             retire(vm)
@@ -220,6 +242,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     private func stopOnVMQueue(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
         stopRequested = true
         guard let vm = virtualMachine else {
+            network?.stop()
             flock.release()
             stopRequested = false
             completion(.success(()))
@@ -251,12 +274,17 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     }
 
     private func cancelUnstarted(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        failStartCleanup()
+        completion(.failure(VirtualMachineError.stoppedDuringStart))
+    }
+
+    private func failStartCleanup() {
         virtualMachine = nil
         inFlightTicket = nil
-        flock.release()
         stopRequested = false
+        network?.stop()
+        flock.release()
         finishPendingStops(.success(()))
-        completion(.failure(VirtualMachineError.stoppedDuringStart))
     }
 
     private func retire(_ vm: VZVirtualMachine) {
@@ -267,6 +295,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         inFlightTicket = nil
         stopRequested = false
         flock.release()
+        network?.stop()
     }
 
     private func abandon(_ vm: VZVirtualMachine) {

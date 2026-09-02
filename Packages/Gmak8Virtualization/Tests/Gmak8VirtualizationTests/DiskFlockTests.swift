@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 import Virtualization
@@ -111,4 +112,18 @@ func makeTempRoot() throws -> URL {
     )
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     return root
+}
+
+func datagramSocketPair() throws -> (FileHandle, FileHandle) {
+    var fds: [Int32] = [-1, -1]
+    let rc = fds.withUnsafeMutableBufferPointer { buffer in
+        socketpair(AF_UNIX, SOCK_DGRAM, 0, buffer.baseAddress)
+    }
+    guard rc == 0 else {
+        throw VirtualMachineError.posix(errno: errno, path: "socketpair")
+    }
+    return (
+        FileHandle(fileDescriptor: fds[0], closeOnDealloc: true),
+        FileHandle(fileDescriptor: fds[1], closeOnDealloc: true)
+    )
 }

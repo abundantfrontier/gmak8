@@ -105,6 +105,68 @@ struct LinuxEFIVirtualMachineRuntimeTests {
         #expect(!FileManager.default.fileExists(atPath: layout.osImage.path(percentEncoded: false)))
     }
 
+    @Test func prepareFailsWhenVfkitSocketPathIsTooLong() throws {
+        let env = try makeRuntimeHarness(isSupported: true)
+        defer { env.cleanup() }
+        let tooLong = URL(
+            fileURLWithPath: "/" + String(repeating: "x", count: 120) + "/n.sock"
+        )
+        let network = GVProxyNetworkStack(
+            executable: URL(fileURLWithPath: "/usr/bin/true"),
+            httpSocket: URL(fileURLWithPath: "/tmp/g.sock"),
+            vfkitSocket: tooLong
+        )
+        let runtime = LinuxEFIVirtualMachineRuntime(
+            layout: env.layout,
+            hardware: VMHardware(
+                cpuCount: 1,
+                memoryBytes: 64 * 1024 * 1024,
+                osDiskBytes: 1_048_576,
+                dataDiskBytes: 1_048_576
+            ),
+            isSupported: true,
+            network: network
+        )
+        do {
+            try runtime.prepare()
+            Issue.record("expected socketPathTooLong")
+        } catch let error as VirtualMachineError {
+            guard case .socketPathTooLong = error else {
+                Issue.record("unexpected \(error)")
+                return
+            }
+            #expect(error.recoveryMessage.contains("too long"))
+        }
+        #expect(!runtime.holdsDiskLocks)
+    }
+
+    @Test func prepareFailsWhenGvproxyIsMissing() throws {
+        let env = try makeRuntimeHarness(isSupported: true)
+        defer { env.cleanup() }
+        let http = env.root.appending(path: "g.sock")
+        let vfkit = env.root.appending(path: "n.sock")
+        let network = GVProxyNetworkStack(
+            executable: env.root.appending(path: "missing-gvproxy"),
+            httpSocket: http,
+            vfkitSocket: vfkit
+        )
+        let runtime = LinuxEFIVirtualMachineRuntime(
+            layout: env.layout,
+            hardware: VMHardware(
+                cpuCount: 1,
+                memoryBytes: 64 * 1024 * 1024,
+                osDiskBytes: 1_048_576,
+                dataDiskBytes: 1_048_576
+            ),
+            isSupported: true,
+            network: network
+        )
+        #expect(throws: VirtualMachineError.gvproxyMissing(env.root.appending(path: "missing-gvproxy"))) {
+            try runtime.prepare()
+        }
+        #expect(!runtime.holdsDiskLocks)
+    }
+
     @Test func sparseImagesAreCreatedMode0600AndLeftInPlace() throws {
         let root = try makeTempRoot()
         defer { try? FileManager.default.removeItem(at: root) }

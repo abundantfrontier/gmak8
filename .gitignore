@@ -33,6 +33,10 @@ DerivedData/
 # SwiftPM user / resolution scratch
 .swiftpm/
 
+# Built gvproxy helper (pin + scripts live in-tree)
+ThirdParty/gvproxy/bin/
+ThirdParty/gvproxy/src/
+
 # Editors
 *~
 *.swp

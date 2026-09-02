@@ -1,0 +1,5 @@
+# Pin for containers/gvisor-tap-vsock (gvproxy).
+# Do not change VERSION without checking DHCP MAC 5a:94:ef:e4:0c:ee
+# still maps to 192.168.127.2 and --listen-vfkit unixgram:// still exists.
+VERSION=v0.8.9
+REPO=https://github.com/containers/gvisor-tap-vsock.git

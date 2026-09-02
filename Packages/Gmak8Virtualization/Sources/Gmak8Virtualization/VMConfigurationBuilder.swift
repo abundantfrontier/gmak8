@@ -8,7 +8,7 @@ public enum VMConfigurationBuilder {
     public static func make(
         layout: VMDiskLayout,
         hardware: VMHardware,
-        includeNATNetwork: Bool = true
+        networkAttachment: VZNetworkDeviceAttachment? = nil
     ) throws -> VZVirtualMachineConfiguration {
         let config = VZVirtualMachineConfiguration()
         config.cpuCount = clampedCPUCount(hardware.cpuCount)
@@ -25,13 +25,20 @@ public enum VMConfigurationBuilder {
         serial.attachment = try VZFileSerialPortAttachment(url: layout.serialLog, append: true)
         config.serialPorts = [serial]
 
-        if includeNATNetwork {
-            let net = VZVirtioNetworkDeviceConfiguration()
-            net.attachment = VZNATNetworkDeviceAttachment()
-            config.networkDevices = [net]
+        if let networkAttachment {
+            config.networkDevices = [makeVirtioNetworkDevice(attachment: networkAttachment)]
         }
 
         return config
+    }
+
+    public static func makeVirtioNetworkDevice(
+        attachment: VZNetworkDeviceAttachment
+    ) -> VZVirtioNetworkDeviceConfiguration {
+        let net = VZVirtioNetworkDeviceConfiguration()
+        net.attachment = attachment
+        net.macAddress = VZMACAddress(string: GuestNetwork.guestMACAddress)!
+        return net
     }
 
     public static func makeNVMeStorageDevices(layout: VMDiskLayout) throws -> [VZStorageDeviceConfiguration] {
