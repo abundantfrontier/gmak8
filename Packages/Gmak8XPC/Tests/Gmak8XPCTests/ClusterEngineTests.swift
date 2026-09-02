@@ -45,13 +45,13 @@ struct ClusterEngineTests {
         #expect(engine.currentStatus().state == .running)
     }
 
-    @Test func resetWithForceStopsImmediately() {
+    @Test func resetWithForceWaitsForRuntimeStop() {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler)
         #expect(engine.submit(.start) == .ok)
         scheduler.runNext()
         #expect(engine.submit(.reset(force: true)) == .ok)
-        #expect(engine.currentStatus().state == .stopped)
+        #expect(engine.currentStatus().state == .stopping)
         scheduler.runAll()
         #expect(engine.currentStatus().state == .stopped)
     }
@@ -61,7 +61,7 @@ struct ClusterEngineTests {
         let engine = ClusterEngine(scheduler: scheduler)
         #expect(engine.submit(.start) == .ok)
         #expect(engine.submit(.reset(force: true)) == .ok)
-        #expect(engine.currentStatus().state == .stopped)
+        #expect(engine.currentStatus().state == .stopping)
         scheduler.runAll()
         #expect(engine.currentStatus().state == .stopped)
     }
@@ -167,6 +167,45 @@ struct ClusterEngineTests {
         #expect(engine.currentStatus().state == .stopped)
     }
 
+    @Test func staleStartCompletionDoesNotStopTheNextVM() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = DeferredStartRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(runtime.pendingStartCount == 1)
+
+        #expect(engine.submit(.stop) == .ok)
+        scheduler.runNext()
+        #expect(runtime.stopCount == 1)
+        #expect(engine.currentStatus().state == .stopped)
+
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(runtime.pendingStartCount == 2)
+
+        runtime.finishOldestStart(.success(()))
+        #expect(runtime.stopCount == 1)
+        #expect(engine.currentStatus().state == .starting)
+
+        runtime.finishOldestStart(.success(()))
+        #expect(engine.currentStatus().state == .running)
+        #expect(runtime.stopCount == 1)
+    }
+
+    @Test func unexpectedGuestStopLeavesEngineStopped() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = StubVirtualMachineRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        runtime.fireUnexpectedStop(nil)
+        #expect(engine.currentStatus().state == .stopped)
+        #expect(engine.submit(.start) == .ok)
+    }
+
     private func statusStates(_ events: [EngineEvent]) -> [ClusterState] {
         events.compactMap { event in
             if case .status(let status) = event {
@@ -182,6 +221,7 @@ private final class StubVirtualMachineRuntime: VirtualMachineRuntime, @unchecked
     var preflightError: VirtualMachinePreflightError?
     var started = false
     var stopped = false
+    private var unexpectedStopHandler: (@Sendable (Error?) -> Void)?
 
     init(preflightError: VirtualMachinePreflightError? = nil) {
         self.preflightError = preflightError
@@ -199,6 +239,43 @@ private final class StubVirtualMachineRuntime: VirtualMachineRuntime, @unchecked
     func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
         stopped = true
         completion(.success(()))
+    }
+
+    func setUnexpectedStopHandler(_ handler: (@Sendable (Error?) -> Void)?) {
+        unexpectedStopHandler = handler
+    }
+
+    func fireUnexpectedStop(_ error: Error?) {
+        unexpectedStopHandler?(error)
+    }
+}
+
+private final class DeferredStartRuntime: VirtualMachineRuntime, @unchecked Sendable {
+    var stepName: String { "vm" }
+    var stopCount = 0
+    private var startCompletions: [@Sendable (Result<Void, any Error>) -> Void] = []
+
+    var pendingStartCount: Int { startCompletions.count }
+
+    func preflight() -> VirtualMachinePreflightError? {
+        nil
+    }
+
+    func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        startCompletions.append(completion)
+    }
+
+    func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        stopCount += 1
+        completion(.success(()))
+    }
+
+    func finishOldestStart(_ result: Result<Void, any Error>) {
+        guard !startCompletions.isEmpty else {
+            return
+        }
+        let completion = startCompletions.removeFirst()
+        completion(result)
     }
 }
 

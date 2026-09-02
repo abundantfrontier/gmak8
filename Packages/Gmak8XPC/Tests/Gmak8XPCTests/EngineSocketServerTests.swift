@@ -55,6 +55,8 @@ struct EngineSocketServerTests {
 
         try client.send(.reset(force: true))
         #expect(try client.readReply() == .ok)
+        #expect(try client.readState() == .stopping)
+        harness.scheduler.runNext()
         #expect(try client.readState() == .stopped)
     }
 

@@ -83,6 +83,9 @@ public final class ClusterEngine: @unchecked Sendable {
         self.scheduler = scheduler
         self.nestedVirt = nestedVirt
         self.runtime = runtime
+        self.runtime.setUnexpectedStopHandler { [weak self] error in
+            self?.handleUnexpectedStop(error)
+        }
     }
 
     public func currentStatus() -> EngineStatus {
@@ -90,6 +93,9 @@ public final class ClusterEngine: @unchecked Sendable {
     }
 
     public func submit(_ request: EngineRequest) -> EngineReply {
+        if case .start = request {
+            return submitStart()
+        }
         var work: (@Sendable () -> Void)?
         var events: [EngineEvent] = []
         let reply = withLock { handleLocked(request, work: &work, events: &events) }
@@ -115,23 +121,37 @@ public final class ClusterEngine: @unchecked Sendable {
         withLock { _ = subscribers.removeValue(forKey: id) }
     }
 
-    private func handleLocked(
-        _ request: EngineRequest,
-        work: inout (@Sendable () -> Void)?,
-        events: inout [EngineEvent]
-    ) -> EngineReply {
-        switch request {
-        case .start:
+    private func submitStart() -> EngineReply {
+        let conflict = withLock {
+            switch state {
+            case .starting, .running, .degraded, .paused, .stopping:
+                return true
+            case .stopped, .failed:
+                return false
+            }
+        }
+        if conflict {
+            return .error(.conflict)
+        }
+
+        if let failure = runtime.preflight() {
+            var events: [EngineEvent] = []
+            withLock {
+                lastError = failure.message
+                events.append(.status(currentStatusLocked()))
+                events.append(.log(source: .engine, line: failure.message))
+            }
+            broadcast(events)
+            return .error(failure.code)
+        }
+
+        var work: (@Sendable () -> Void)?
+        var events: [EngineEvent] = []
+        let reply: EngineReply = withLock {
             switch state {
             case .starting, .running, .degraded, .paused, .stopping:
                 return .error(.conflict)
             case .stopped, .failed:
-                if let failure = runtime.preflight() {
-                    lastError = failure.message
-                    events.append(.status(currentStatusLocked()))
-                    events.append(.log(source: .engine, line: failure.message))
-                    return .error(failure.code)
-                }
                 state = .starting
                 step = runtime.stepName
                 lastError = nil
@@ -144,42 +164,61 @@ public final class ClusterEngine: @unchecked Sendable {
                 }
                 return .ok
             }
+        }
+        if reply == .error(.conflict) {
+            runtime.stop { _ in }
+            return reply
+        }
+        broadcast(events)
+        if let work {
+            scheduler.schedule(work)
+        }
+        return reply
+    }
+
+    private func handleLocked(
+        _ request: EngineRequest,
+        work: inout (@Sendable () -> Void)?,
+        events: inout [EngineEvent]
+    ) -> EngineReply {
+        switch request {
+        case .start:
+            return .error(.invalidRequest)
         case .stop, .prepareUpdate:
             let logLine = request == .prepareUpdate ? "prepareUpdate" : "stop accepted"
-            switch state {
-            case .stopped:
-                events.append(.log(source: .engine, line: logLine))
-                return .ok
-            case .stopping:
-                events.append(.log(source: .engine, line: logLine))
-                return .ok
-            case .starting, .running, .degraded, .paused, .failed:
-                state = .stopping
-                step = runtime.stepName
-                generation += 1
-                let gen = generation
-                events.append(.status(currentStatusLocked()))
-                events.append(.log(source: .engine, line: logLine))
-                work = { [weak self] in
-                    self?.beginStop(generation: gen)
-                }
-                return .ok
-            }
+            return requestStopLocked(logLine: logLine, work: &work, events: &events)
         case .reset(let force):
             if !force {
                 return .error(.confirmationRequired)
             }
-            generation += 1
-            state = .stopped
-            step = nil
-            lastError = nil
-            events.append(.status(currentStatusLocked()))
-            events.append(.log(source: .engine, line: "reset"))
-            work = { [weak self] in
-                self?.runtime.stop { _ in }
-            }
-            return .ok
+            return requestStopLocked(logLine: "reset", work: &work, events: &events)
         case .status, .subscribe:
+            return .ok
+        }
+    }
+
+    private func requestStopLocked(
+        logLine: String,
+        work: inout (@Sendable () -> Void)?,
+        events: inout [EngineEvent]
+    ) -> EngineReply {
+        switch state {
+        case .stopped:
+            events.append(.log(source: .engine, line: logLine))
+            return .ok
+        case .stopping:
+            events.append(.log(source: .engine, line: logLine))
+            return .ok
+        case .starting, .running, .degraded, .paused, .failed:
+            state = .stopping
+            step = runtime.stepName
+            generation += 1
+            let gen = generation
+            events.append(.status(currentStatusLocked()))
+            events.append(.log(source: .engine, line: logLine))
+            work = { [weak self] in
+                self?.beginStop(generation: gen)
+            }
             return .ok
         }
     }
@@ -203,13 +242,8 @@ public final class ClusterEngine: @unchecked Sendable {
 
     private func completeStart(generation: UInt64, result: Result<Void, any Error>) {
         var events: [EngineEvent] = []
-        var stale = false
         withLock {
-            guard generation == self.generation else {
-                stale = true
-                return
-            }
-            guard state == .starting else {
+            guard generation == self.generation, state == .starting else {
                 return
             }
             switch result {
@@ -227,10 +261,6 @@ public final class ClusterEngine: @unchecked Sendable {
                 events.append(.log(source: .engine, line: error.localizedDescription))
             }
         }
-        if stale {
-            runtime.stop { _ in }
-            return
-        }
         broadcast(events)
     }
 
@@ -240,15 +270,45 @@ public final class ClusterEngine: @unchecked Sendable {
             guard generation == self.generation, state == .stopping else {
                 return
             }
-            state = .stopped
-            step = nil
-            if case .failure(let error) = result {
-                lastError = error.localizedDescription
-            } else {
+            switch result {
+            case .success:
+                state = .stopped
+                step = nil
                 lastError = nil
+            case .failure(let error):
+                state = .failed
+                lastError = error.localizedDescription
             }
             events.append(.status(currentStatusLocked()))
             events.append(.log(source: .engine, line: "stopped"))
+        }
+        broadcast(events)
+    }
+
+    private func handleUnexpectedStop(_ error: Error?) {
+        var events: [EngineEvent] = []
+        withLock {
+            switch state {
+            case .running, .starting, .degraded, .paused:
+                generation += 1
+                if let error {
+                    state = .failed
+                    lastError = error.localizedDescription
+                } else {
+                    state = .stopped
+                    step = nil
+                    lastError = nil
+                }
+                events.append(.status(currentStatusLocked()))
+                events.append(
+                    .log(
+                        source: .engine,
+                        line: error?.localizedDescription ?? "guest stopped"
+                    )
+                )
+            case .stopped, .stopping, .failed:
+                break
+            }
         }
         broadcast(events)
     }

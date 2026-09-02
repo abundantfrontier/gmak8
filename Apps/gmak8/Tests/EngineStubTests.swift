@@ -20,6 +20,8 @@ struct EngineStubTests {
         #expect(engine.currentStatus().state == .running)
         #expect(engine.submit(.start) == .error(.conflict))
         #expect(engine.submit(.reset(force: true)) == .ok)
+        #expect(engine.currentStatus().state == .stopping)
+        scheduler.runNext()
         #expect(engine.currentStatus().state == .stopped)
     }
 

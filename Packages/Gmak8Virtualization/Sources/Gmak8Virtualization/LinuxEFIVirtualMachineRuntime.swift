@@ -7,7 +7,16 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     public let isSupported: Bool
 
     private let flock = DiskFlock()
+    private let mutex = NSLock()
+    private let vmDelegate = VMDelegate()
+
     private var virtualMachine: VZVirtualMachine?
+    private var nextTicket: UInt64 = 0
+    private var rejectedTicket: UInt64 = 0
+    private var inFlightTicket: UInt64?
+    private var stopRequested = false
+    private var pendingStopCompletions: [@Sendable (Result<Void, any Error>) -> Void] = []
+    private var unexpectedStopHandler: (@Sendable (Error?) -> Void)?
 
     public init(
         layout: VMDiskLayout,
@@ -17,10 +26,17 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         self.layout = layout
         self.hardware = hardware
         self.isSupported = isSupported
+        vmDelegate.owner = self
     }
 
     public var holdsDiskLocks: Bool {
         flock.isHolding
+    }
+
+    public func setUnexpectedStopHandler(_ handler: (@Sendable (Error?) -> Void)?) {
+        mutex.lock()
+        unexpectedStopHandler = handler
+        mutex.unlock()
     }
 
     public func prepare() throws {
@@ -36,23 +52,64 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     }
 
     public func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-        VirtualMachineQueue.shared.async { [weak self] in
-            self?.startOnVMQueue(completion: completion)
+        do {
+            try prepare()
+        } catch {
+            completion(.failure(error))
+            return
+        }
+        let ticket = nextStartTicket()
+        VirtualMachineQueue.shared.async {
+            self.startOnVMQueue(ticket: ticket, completion: completion)
         }
     }
 
     public func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-        VirtualMachineQueue.shared.async { [weak self] in
-            self?.stopOnVMQueue(completion: completion)
+        rejectCurrentTicket()
+        VirtualMachineQueue.shared.async {
+            self.stopOnVMQueue(completion: completion)
         }
     }
 
-    private func startOnVMQueue(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+    private func nextStartTicket() -> UInt64 {
+        mutex.lock()
+        nextTicket += 1
+        let ticket = nextTicket
+        mutex.unlock()
+        return ticket
+    }
+
+    private func rejectCurrentTicket() {
+        mutex.lock()
+        rejectedTicket = nextTicket
+        mutex.unlock()
+    }
+
+    private func isRejected(_ ticket: UInt64) -> Bool {
+        mutex.lock()
+        defer { mutex.unlock() }
+        return ticket <= rejectedTicket
+    }
+
+    private func startOnVMQueue(
+        ticket: UInt64,
+        completion: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        if isRejected(ticket) {
+            cancelUnstarted(completion: completion)
+            return
+        }
+        if virtualMachine != nil {
+            completion(.failure(VirtualMachineError.startFailed("already running")))
+            return
+        }
         do {
             if !isSupported {
                 throw VirtualMachineError.unsupported
             }
-            try prepare()
+            if !flock.isHolding {
+                try flock.acquire(urls: layout.lockURLs)
+            }
             let config = try VMConfigurationBuilder.make(layout: layout, hardware: hardware)
             do {
                 try config.validate()
@@ -60,45 +117,160 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
                 throw VirtualMachineError.configurationFailed(error.localizedDescription)
             }
             let vm = VZVirtualMachine(configuration: config, queue: VirtualMachineQueue.shared)
+            vm.delegate = vmDelegate
             virtualMachine = vm
-            vm.start { [weak self] result in
-                switch result {
-                case .success:
-                    completion(.success(()))
-                case .failure(let error):
-                    self?.virtualMachine = nil
-                    self?.flock.release()
-                    completion(.failure(VirtualMachineError.startFailed(error.localizedDescription)))
-                }
+            inFlightTicket = ticket
+            stopRequested = false
+            vm.start { result in
+                self.handleStartCompletion(ticket: ticket, vm: vm, result: result, completion: completion)
             }
         } catch {
             virtualMachine = nil
+            inFlightTicket = nil
             flock.release()
+            finishPendingStops(.success(()))
             completion(.failure(error))
         }
     }
 
-    private func stopOnVMQueue(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-        guard let vm = virtualMachine else {
-            flock.release()
-            completion(.success(()))
+    private func handleStartCompletion(
+        ticket: UInt64,
+        vm: VZVirtualMachine,
+        result: Result<Void, any Error>,
+        completion: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        guard virtualMachine === vm, inFlightTicket == ticket else {
+            abandon(vm)
+            completion(.failure(VirtualMachineError.stoppedDuringStart))
             return
         }
-        let finish: (Error?) -> Void = { [weak self] error in
-            self?.virtualMachine = nil
-            self?.flock.release()
-            if let error {
-                completion(.failure(error))
+        inFlightTicket = nil
+        switch result {
+        case .success:
+            if stopRequested || isRejected(ticket) {
+                requestStop(vm: vm) { stopResult in
+                    completion(.failure(VirtualMachineError.stoppedDuringStart))
+                    self.finishPendingStops(stopResult)
+                }
             } else {
                 completion(.success(()))
             }
+        case .failure(let error):
+            retire(vm)
+            finishPendingStops(.success(()))
+            completion(.failure(VirtualMachineError.startFailed(error.localizedDescription)))
+        }
+    }
+
+    private func stopOnVMQueue(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        stopRequested = true
+        guard let vm = virtualMachine else {
+            flock.release()
+            stopRequested = false
+            completion(.success(()))
+            return
+        }
+        if inFlightTicket != nil, !vm.canStop {
+            pendingStopCompletions.append(completion)
+            return
+        }
+        requestStop(vm: vm, completion: completion)
+    }
+
+    private func requestStop(
+        vm: VZVirtualMachine,
+        completion: @escaping @Sendable (Result<Void, any Error>) -> Void
+    ) {
+        guard vm.canStop else {
+            pendingStopCompletions.append(completion)
+            return
+        }
+        vm.stop { error in
+            if let error {
+                completion(.failure(VirtualMachineError.stopFailed(error.localizedDescription)))
+                return
+            }
+            self.retire(vm)
+            completion(.success(()))
+        }
+    }
+
+    private func cancelUnstarted(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        virtualMachine = nil
+        inFlightTicket = nil
+        flock.release()
+        stopRequested = false
+        finishPendingStops(.success(()))
+        completion(.failure(VirtualMachineError.stoppedDuringStart))
+    }
+
+    private func retire(_ vm: VZVirtualMachine) {
+        guard virtualMachine === vm else {
+            return
+        }
+        virtualMachine = nil
+        inFlightTicket = nil
+        stopRequested = false
+        flock.release()
+    }
+
+    private func abandon(_ vm: VZVirtualMachine) {
+        guard virtualMachine !== vm else {
+            return
         }
         if vm.canStop {
-            vm.stop { error in
-                finish(error)
-            }
-        } else {
-            finish(nil)
+            vm.stop { _ in }
+        }
+    }
+
+    private func finishPendingStops(_ result: Result<Void, any Error>) {
+        let completions = pendingStopCompletions
+        pendingStopCompletions.removeAll()
+        for completion in completions {
+            completion(result)
+        }
+    }
+
+    private func handleGuestDidStop(_ vm: VZVirtualMachine) {
+        guard virtualMachine === vm else {
+            return
+        }
+        let requested = stopRequested || inFlightTicket != nil
+        retire(vm)
+        finishPendingStops(.success(()))
+        if !requested {
+            notifyUnexpectedStop(nil)
+        }
+    }
+
+    private func handleDidStopWithError(_ vm: VZVirtualMachine, error: Error) {
+        guard virtualMachine === vm else {
+            return
+        }
+        let requested = stopRequested
+        retire(vm)
+        finishPendingStops(.failure(error))
+        if !requested {
+            notifyUnexpectedStop(error)
+        }
+    }
+
+    private func notifyUnexpectedStop(_ error: Error?) {
+        mutex.lock()
+        let handler = unexpectedStopHandler
+        mutex.unlock()
+        handler?(error)
+    }
+
+    private final class VMDelegate: NSObject, VZVirtualMachineDelegate {
+        weak var owner: LinuxEFIVirtualMachineRuntime?
+
+        func guestDidStop(_ virtualMachine: VZVirtualMachine) {
+            owner?.handleGuestDidStop(virtualMachine)
+        }
+
+        func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: Error) {
+            owner?.handleDidStopWithError(virtualMachine, error: error)
         }
     }
 }

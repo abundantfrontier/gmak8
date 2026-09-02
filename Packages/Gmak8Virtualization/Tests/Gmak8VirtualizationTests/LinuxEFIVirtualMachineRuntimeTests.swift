@@ -49,6 +49,7 @@ struct LinuxEFIVirtualMachineRuntimeTests {
     }
 
     @Test func hiddenDefaultsReadsOSImagePath() throws {
+        #expect(VMDefaults.suiteName == "dev.gmak8.core")
         let suite = "dev.gmak8.vm.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)
         try #require(defaults != nil)
@@ -61,6 +62,17 @@ struct LinuxEFIVirtualMachineRuntimeTests {
         defaults?.set("  ", forKey: VMDefaults.osImageKey)
         #expect(VMDefaults.osImageURL(defaults: defaults!) == nil)
         defaults?.removePersistentDomain(forName: suite)
+    }
+
+    @Test func kubernetesDefaultsUseSixtyGibDataDisk() {
+        let small = VMHardware.kubernetesDefaults(processorCount: 8, physicalMemoryBytes: 8 * VMHardware.gibibyte)
+        #expect(small.dataDiskBytes == 60 * VMHardware.gibibyte)
+        #expect(small.osDiskBytes == 8 * VMHardware.gibibyte)
+        #expect(small.cpuCount == 4)
+        #expect(small.memoryBytes == 4 * VMHardware.gibibyte)
+        let large = VMHardware.kubernetesDefaults(processorCount: 10, physicalMemoryBytes: 16 * VMHardware.gibibyte)
+        #expect(large.memoryBytes == 6 * VMHardware.gibibyte)
+        #expect(large.dataDiskBytes == 60 * VMHardware.gibibyte)
     }
 
     @Test func missingOverrideOSImageDoesNotCreateASparseFile() throws {

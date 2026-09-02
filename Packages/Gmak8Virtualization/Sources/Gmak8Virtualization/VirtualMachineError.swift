@@ -7,6 +7,8 @@ public enum VirtualMachineError: Error, Equatable, Sendable {
     case posix(errno: Int32, path: String)
     case configurationFailed(String)
     case startFailed(String)
+    case stoppedDuringStart
+    case stopFailed(String)
 
     /// Recovery copy. `unsupported` must not be described as a disk or hypervisor lock.
     public var recoveryMessage: String {
@@ -24,6 +26,10 @@ public enum VirtualMachineError: Error, Equatable, Sendable {
             return "Virtual machine configuration failed: \(reason)"
         case .startFailed(let reason):
             return "Virtual machine failed to start: \(reason)"
+        case .stoppedDuringStart:
+            return "Virtual machine start was cancelled."
+        case .stopFailed(let reason):
+            return "Virtual machine failed to stop: \(reason)"
         }
     }
 }

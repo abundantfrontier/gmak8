@@ -20,18 +20,7 @@ do {
         layout.createOSImageIfMissing = false
     }
 
-    let hardware: VMHardware
-    if let settings = try? Settings.load(from: paths.settingsFile) {
-        hardware = VMHardware(
-            cpuCount: settings.cpu,
-            memoryBytes: UInt64(settings.memoryGiB) * VMHardware.gibibyte,
-            osDiskBytes: VMHardware.defaultOSDiskBytes,
-            dataDiskBytes: UInt64(settings.dataDiskGiB) * VMHardware.gibibyte
-        )
-    } else {
-        hardware = .bringUp
-    }
-
+    let hardware = loadHardware(paths: paths)
     let controller = LinuxEFIVirtualMachineRuntime(layout: layout, hardware: hardware)
     let engine = ClusterEngine(
         scheduler: DispatchEngineScheduler(),
@@ -48,4 +37,27 @@ do {
         "gmak8-core failed: \(error.localizedDescription, privacy: .public)"
     )
     exit(1)
+}
+
+private func loadHardware(paths: HostPaths) -> VMHardware {
+    let settingsPath = paths.settingsFile.path(percentEncoded: false)
+    if FileManager.default.fileExists(atPath: settingsPath) {
+        do {
+            let settings = try Settings.load(from: paths.settingsFile)
+            return VMHardware(
+                cpuCount: settings.cpu,
+                memoryBytes: UInt64(settings.memoryGiB) * VMHardware.gibibyte,
+                osDiskBytes: VMHardware.defaultOSDiskBytes,
+                dataDiskBytes: UInt64(settings.dataDiskGiB) * VMHardware.gibibyte
+            )
+        } catch {
+            Gmak8Log.core.error(
+                "settings.json unreadable: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+    return VMHardware.kubernetesDefaults(
+        processorCount: ProcessInfo.processInfo.processorCount,
+        physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory
+    )
 }

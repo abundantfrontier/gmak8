@@ -25,6 +25,10 @@ struct CoreVirtualMachineRuntime: VirtualMachineRuntime {
     func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
         controller.stop(completion: completion)
     }
+
+    func setUnexpectedStopHandler(_ handler: (@Sendable (Error?) -> Void)?) {
+        controller.setUnexpectedStopHandler(handler)
+    }
 }
 
 private func engineErrorCode(for error: VirtualMachineError) -> EngineErrorCode {
@@ -33,7 +37,7 @@ private func engineErrorCode(for error: VirtualMachineError) -> EngineErrorCode 
         return .virtualizationUnsupported
     case .diskImagesLocked:
         return .locked
-    case .osImageMissing, .posix, .configurationFailed, .startFailed:
+    case .osImageMissing, .posix, .configurationFailed, .startFailed, .stoppedDuringStart, .stopFailed:
         return .invalidRequest
     }
 }
