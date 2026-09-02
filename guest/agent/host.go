@@ -14,6 +14,7 @@ type Host interface {
 	KVM() bool
 	Kubeconfig() ([]byte, error)
 	K3s() K3sReport
+	StartK3s() error
 	Node() NodeReport
 	SetTime(t time.Time) error
 	Shutdown() error

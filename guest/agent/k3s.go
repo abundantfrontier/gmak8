@@ -1,22 +1,33 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 )
 
 const (
-	k3sBinaryPath     = "/usr/local/bin/k3s"
-	k3sKubeconfigPath = "/etc/rancher/k3s/k3s.yaml"
-	k3sDataDir        = "/mnt/data/rancher"
-	k3sServerDBDir    = "/mnt/data/rancher/server/db"
-	k3sVersionFile    = "/mnt/data/rancher/server/k3s-version"
+	k3sBinaryPath        = "/usr/local/bin/k3s"
+	k3sKubeconfigPath    = "/etc/rancher/k3s/k3s.yaml"
+	k3sDataDir           = "/mnt/data/rancher"
+	k3sServerDBDir       = "/mnt/data/rancher/server/db"
+	k3sVersionFile       = "/mnt/data/rancher/server/k3s-version"
+	k3sPinVersion        = "v1.33.3+k3s1"
+	shippedDataDirMinor  = "1.33"
+	k3sCommandTimeout    = 5 * time.Second
+	k3sStartQueueTimeout = 15 * time.Second
 )
 
+var k8sVersionPattern = regexp.MustCompile(`v1\.\d+\.\d+(?:\+k3s\d+)?`)
+
 // K3sReport is GET /k3s. DataDirMinor is empty when the data dir is new
-// or the on-disk Kubernetes minor cannot be read yet.
+// or the on-disk Kubernetes minor cannot be read.
 type K3sReport struct {
 	Active        bool   `json:"active"`
 	Version       string `json:"version,omitempty"`
@@ -39,10 +50,25 @@ func (h *realHost) K3s() K3sReport {
 		Version:       k3sBinaryVersion(h.k3sPath),
 		DataDirExists: dirHasEntries(h.serverDBDir),
 	}
-	if minor := readDataDirMinor(h.k3sVersionFile, h.k3sPath, report.Active); minor != "" {
+	if minor := readDataDirMinor(h.k3sVersionFile, h.serverDBDir, h.k3sPath, h.kubeconfigPath, report.Active); minor != "" {
 		report.DataDirMinor = minor
 	}
 	return report
+}
+
+func (h *realHost) StartK3s() error {
+	path, err := exec.LookPath("systemctl")
+	if err != nil {
+		return fmt.Errorf("systemctl: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), k3sStartQueueTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path, "start", "--no-block", "k3s")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("systemctl start k3s: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func (h *realHost) Node() NodeReport {
@@ -50,13 +76,26 @@ func (h *realHost) Node() NodeReport {
 	if path == "" {
 		path = k3sBinaryPath
 	}
-	cmd := exec.Command(path, "kubectl", "get", "nodes", "-o", "json")
-	cmd.Env = append(os.Environ(), "KUBECONFIG="+h.kubeconfigPath)
-	out, err := cmd.Output()
+	out, err := runK3sKubectl(path, h.kubeconfigPath, "get", "nodes", "-o", "json")
 	if err != nil {
 		return NodeReport{}
 	}
 	return parseNodeList(out)
+}
+
+func checkDataDirCompatible(h *realHost) error {
+	exists := dirHasEntries(h.serverDBDir)
+	minor := readDataDirMinor(h.k3sVersionFile, h.serverDBDir, h.k3sPath, h.kubeconfigPath, false)
+	if !exists {
+		return nil
+	}
+	if minor == "" {
+		return fmt.Errorf("on-disk k3s data exists but Kubernetes version could not be read; Reset the cluster or install a matching gmak8/guest pair")
+	}
+	if minor != shippedDataDirMinor {
+		return fmt.Errorf("on-disk k3s data is Kubernetes %s, but this appliance ships %s (accepts %s); Reset the cluster or install a matching gmak8/guest pair", minor, k3sPinVersion, shippedDataDirMinor)
+	}
+	return nil
 }
 
 func systemdActive(unit string) bool {
@@ -64,7 +103,9 @@ func systemdActive(unit string) bool {
 	if err != nil {
 		return false
 	}
-	cmd := exec.Command(path, "is-active", "--quiet", unit)
+	ctx, cancel := context.WithTimeout(context.Background(), k3sCommandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path, "is-active", "--quiet", unit)
 	return cmd.Run() == nil
 }
 
@@ -72,32 +113,106 @@ func k3sBinaryVersion(k3sPath string) string {
 	if k3sPath == "" {
 		k3sPath = k3sBinaryPath
 	}
-	out, err := exec.Command(k3sPath, "--version").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), k3sCommandTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, k3sPath, "--version").Output()
 	if err != nil {
 		return ""
 	}
 	return parseK3sVersionLine(string(out))
 }
 
-func readDataDirMinor(versionFile, k3sPath string, active bool) string {
+func readDataDirMinor(versionFile, dbDir, k3sPath, kubeconfig string, active bool) string {
 	if b, err := os.ReadFile(versionFile); err == nil {
 		if m := kubernetesMinor(string(b)); m != "" {
 			return m
 		}
 	}
+	if m := preferredScannedMinor(scanDBMinors(dbDir)); m != "" {
+		return m
+	}
 	if active {
-		if v := kubectlServerVersion(k3sPath); v != "" {
+		if v := kubectlServerVersion(k3sPath, kubeconfig); v != "" {
 			return kubernetesMinor(v)
 		}
 	}
 	return ""
 }
 
-func kubectlServerVersion(k3sPath string) string {
-	if k3sPath == "" {
-		k3sPath = k3sBinaryPath
+func preferredScannedMinor(minors []string) string {
+	if len(minors) == 0 {
+		return ""
 	}
-	out, err := exec.Command(k3sPath, "kubectl", "version", "-o", "json").Output()
+	for _, m := range minors {
+		if m != shippedDataDirMinor {
+			return m
+		}
+	}
+	return minors[0]
+}
+
+func scanDBMinors(dbDir string) []string {
+	entries, err := os.ReadDir(dbDir)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var minors []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		for _, m := range scanFileMinors(filepath.Join(dbDir, entry.Name())) {
+			if _, ok := seen[m]; ok {
+				continue
+			}
+			seen[m] = struct{}{}
+			minors = append(minors, m)
+		}
+	}
+	return minors
+}
+
+func scanFileMinors(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	buf := make([]byte, 1<<20)
+	leftover := make([]byte, 0, 64)
+	var minors []string
+	seen := map[string]struct{}{}
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			chunk := append(leftover, buf[:n]...)
+			for _, match := range k8sVersionPattern.FindAll(chunk, -1) {
+				m := kubernetesMinor(string(match))
+				if m == "" {
+					continue
+				}
+				if _, ok := seen[m]; ok {
+					continue
+				}
+				seen[m] = struct{}{}
+				minors = append(minors, m)
+			}
+			if len(chunk) > 32 {
+				leftover = append(leftover[:0], chunk[len(chunk)-32:]...)
+			} else {
+				leftover = append(leftover[:0], chunk...)
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return minors
+}
+
+func kubectlServerVersion(k3sPath, kubeconfig string) string {
+	out, err := runK3sKubectl(k3sPath, kubeconfig, "version", "-o", "json")
 	if err != nil {
 		return ""
 	}
@@ -110,6 +225,18 @@ func kubectlServerVersion(k3sPath string) string {
 		return ""
 	}
 	return payload.ServerVersion.GitVersion
+}
+
+func runK3sKubectl(k3sPath, kubeconfig string, args ...string) ([]byte, error) {
+	if k3sPath == "" {
+		k3sPath = k3sBinaryPath
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), k3sCommandTimeout)
+	defer cancel()
+	all := append([]string{"kubectl", "--request-timeout=5s"}, args...)
+	cmd := exec.CommandContext(ctx, k3sPath, all...)
+	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	return cmd.Output()
 }
 
 func parseK3sVersionLine(out string) string {

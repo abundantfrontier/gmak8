@@ -1,0 +1,11 @@
+[Unit]
+Description=Refuse k3s start on incompatible data-dir
+DefaultDependencies=no
+After=mnt-data.mount mnt-data-prep.service
+Requires=mnt-data.mount
+Before=k3s.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/gmak8-agent -check-data-dir

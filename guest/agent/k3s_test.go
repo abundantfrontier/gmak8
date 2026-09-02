@@ -75,10 +75,62 @@ func TestReadDataDirMinorFromVersionFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("v1.33.3+k3s1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := readDataDirMinor(path, "/nope", false); got != "1.33" {
+	if got := readDataDirMinor(path, filepath.Join(dir, "missing-db"), "/nope", "", false); got != "1.33" {
 		t.Fatalf("got %q", got)
 	}
-	if got := readDataDirMinor(filepath.Join(dir, "missing"), "/nope", false); got != "" {
+	if got := readDataDirMinor(filepath.Join(dir, "missing"), filepath.Join(dir, "missing-db"), "/nope", "", false); got != "" {
 		t.Fatalf("missing file got %q", got)
+	}
+}
+
+func TestScanDBMinorsFromKineBytes(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "state.db")
+	payload := append([]byte("kine-header"), []byte("node kubeletVersion:v1.32.5+k3s1 trailer")...)
+	if err := os.WriteFile(db, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := scanDBMinors(dir)
+	if len(got) != 1 || got[0] != "1.32" {
+		t.Fatalf("got %v", got)
+	}
+	if m := readDataDirMinor(filepath.Join(dir, "missing"), dir, "/nope", "", false); m != "1.32" {
+		t.Fatalf("readDataDirMinor %q", m)
+	}
+}
+
+func TestCheckDataDirCompatible(t *testing.T) {
+	dir := t.TempDir()
+	h := defaultHost()
+	h.serverDBDir = filepath.Join(dir, "missing")
+	h.k3sVersionFile = filepath.Join(dir, "missing-version")
+	if err := checkDataDirCompatible(h); err != nil {
+		t.Fatalf("empty dir: %v", err)
+	}
+
+	db := filepath.Join(dir, "db")
+	if err := os.Mkdir(db, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.serverDBDir = db
+	if err := os.WriteFile(filepath.Join(db, "state.db"), []byte("no versions here"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkDataDirCompatible(h); err == nil {
+		t.Fatal("expected refuse unknown existing db")
+	}
+
+	if err := os.WriteFile(filepath.Join(db, "state.db"), []byte("v1.32.9+k3s1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkDataDirCompatible(h); err == nil {
+		t.Fatal("expected refuse 1.32")
+	}
+
+	if err := os.WriteFile(filepath.Join(db, "state.db"), []byte("v1.33.3+k3s1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkDataDirCompatible(h); err != nil {
+		t.Fatalf("1.33: %v", err)
 	}
 }

@@ -44,11 +44,13 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {
         let work = Task {
             do {
-                let result = try await self.run(generation: generation, isCurrent: isCurrent, setStep: setStep)
+                let result = try await self.run(
+                    generation: generation, isCurrent: isCurrent, setStep: setStep, log: log)
                 if Task.isCancelled || !isCurrent(generation) {
                     return
                 }
@@ -76,7 +78,8 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
     private func run(
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
-        setStep: @escaping @Sendable (String) -> Void
+        setStep: @escaping @Sendable (String) -> Void,
+        log: @escaping @Sendable (String) -> Void
     ) async throws -> ClusterBringUpResult {
         try await wait(
             generation: generation, isCurrent: isCurrent, setStep: setStep, step: ClusterStartStep.guestAgent
@@ -97,9 +100,10 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         }
         let probeClient = try await makeClient()
         let k3sProbe = try await probeClient.k3s()
-        if !matrix.accepts(dataDirMinor: k3sProbe.dataDirMinor) {
-            let minor = k3sProbe.dataDirMinor ?? "unknown"
-            throw ClusterBringUpError(message: matrix.refusalMessage(dataDirMinor: minor))
+        if !matrix.accepts(dataDirMinor: k3sProbe.dataDirMinor, dataDirExists: k3sProbe.dataDirExists) {
+            throw ClusterBringUpError(
+                message: matrix.refusalMessage(dataDirMinor: k3sProbe.dataDirMinor ?? "")
+            )
         }
 
         setStep(ClusterStartStep.airgap)
@@ -111,6 +115,10 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             step: ClusterStartStep.kubernetes
         ) {
             let client = try await self.makeClient()
+            if try await client.k3s().active {
+                return true
+            }
+            try await client.startK3s()
             return try await client.k3s().active
         }
 
@@ -129,7 +137,16 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         let port = apiPort()
         let text = String(data: yamlBox.value, encoding: .utf8) ?? ""
         let material = try K3sKubeconfig.localhostMaterial(from: text, port: port)
-        _ = try kubeconfigStore.apply(material: material, setCurrentContext: setCurrentContext)
+        do {
+            _ = try kubeconfigStore.apply(material: material, setCurrentContext: setCurrentContext)
+        } catch let error as KubeconfigError {
+            switch error {
+            case .userConfigNotYAML(_, let snippet), .unspliceableUserConfig(_, let snippet):
+                log("user kubeconfig left untouched; \(snippet)")
+            case .lockFailed:
+                log("user kubeconfig lock failed; \(kubeconfigStore.exportSnippet)")
+            }
+        }
 
         try await wait(generation: generation, isCurrent: isCurrent, setStep: setStep, step: ClusterStartStep.api) {
             await self.checkAPI(port)

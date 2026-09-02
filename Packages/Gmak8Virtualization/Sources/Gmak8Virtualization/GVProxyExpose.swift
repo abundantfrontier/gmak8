@@ -46,7 +46,6 @@ public struct GVProxyExposeRequest: Equatable, Sendable, Codable {
 
     public static func isAlreadyBoundError(_ text: String) -> Bool {
         let lower = text.lowercased()
-        // Bind failures contain "already in use"; those must fall through to 16443.
         if lower.contains("address already in use") || lower.contains("bind:") {
             return false
         }

@@ -24,6 +24,7 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /kvm", s.handleKVM)
 	mux.HandleFunc("GET /kubeconfig", s.handleKubeconfig)
 	mux.HandleFunc("GET /k3s", s.handleK3s)
+	mux.HandleFunc("POST /k3s/start", s.handleK3sStart)
 	mux.HandleFunc("GET /node", s.handleNode)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
@@ -61,6 +62,14 @@ func (s *Server) handleKubeconfig(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleK3s(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.host.K3s())
+}
+
+func (s *Server) handleK3sStart(w http.ResponseWriter, _ *http.Request) {
+	if err := s.host.StartK3s(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, okResponse{OK: true})
 }
 
 func (s *Server) handleNode(w http.ResponseWriter, _ *http.Request) {

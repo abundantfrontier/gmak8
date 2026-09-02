@@ -8,7 +8,7 @@ systemctl enable gmak8-kvm.service
 systemctl enable gmak8-agent.service
 systemctl enable mnt-config.mount
 systemctl enable k3s-config-sync.service
-systemctl enable k3s.service
+systemctl disable k3s.service
 
 /usr/local/lib/gmak8/install-k3s.sh
 

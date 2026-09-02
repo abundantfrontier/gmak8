@@ -1,6 +1,5 @@
 import Foundation
 
-/// Shipped k3s data-dir compatibility. v1 does not in-place-upgrade 1.32 data to 1.33.
 public struct CompatibilityMatrix: Codable, Equatable, Sendable {
     public var k3s: [String: K3sEntry]
 
@@ -16,14 +15,15 @@ public struct CompatibilityMatrix: Codable, Equatable, Sendable {
         self.k3s = k3s
     }
 
-    public static let jsonUTF8 = Data(
-        """
-        {"k3s":{"v1.33.3+k3s1":{"dataDirMinorsAccepted":["1.33"]}}}
-        """.utf8
-    )
+    public static func loadFromModule() throws -> CompatibilityMatrix {
+        guard let url = Bundle.module.url(forResource: "compatibility-matrix", withExtension: "json") else {
+            throw CompatibilityMatrixError.missingResource
+        }
+        return try JSONDecoder().decode(CompatibilityMatrix.self, from: Data(contentsOf: url))
+    }
 
     public static let bundled: CompatibilityMatrix = {
-        if let decoded = try? JSONDecoder().decode(CompatibilityMatrix.self, from: jsonUTF8) {
+        if let decoded = try? loadFromModule() {
             return decoded
         }
         return CompatibilityMatrix(
@@ -33,13 +33,17 @@ public struct CompatibilityMatrix: Codable, Equatable, Sendable {
         )
     }()
 
-    /// Empty or missing data-dir minor is a new install and is accepted.
+    /// Existing data with an unreadable minor is refused. Empty data dir is accepted.
     public func accepts(
         shippedVersion: String = K3sPin.version,
-        dataDirMinor: String?
+        dataDirMinor: String?,
+        dataDirExists: Bool
     ) -> Bool {
-        guard let dataDirMinor, !dataDirMinor.isEmpty else {
+        if !dataDirExists {
             return true
+        }
+        guard let dataDirMinor, !dataDirMinor.isEmpty else {
+            return false
         }
         guard let entry = k3s[shippedVersion] else {
             return false
@@ -52,9 +56,14 @@ public struct CompatibilityMatrix: Codable, Equatable, Sendable {
         dataDirMinor: String
     ) -> String {
         let accepted = k3s[shippedVersion]?.dataDirMinorsAccepted.joined(separator: ", ") ?? "none"
+        let seen = dataDirMinor.isEmpty ? "unknown" : dataDirMinor
         return
-            "On-disk k3s data is Kubernetes \(dataDirMinor), but this gmak8 ships \(shippedVersion) (accepts \(accepted)). Reset the cluster or install a matching gmak8/guest pair."
+            "On-disk k3s data is Kubernetes \(seen), but this gmak8 ships \(shippedVersion) (accepts \(accepted)). Reset the cluster or install a matching gmak8/guest pair."
     }
+}
+
+public enum CompatibilityMatrixError: Error, Equatable, Sendable {
+    case missingResource
 }
 
 public enum K3sPin {

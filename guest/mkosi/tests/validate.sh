@@ -96,19 +96,30 @@ if grep -E '^[[:space:]]*disable[[:space:]]*:' "$k3s_cfg"; then
 fi
 
 k3s_unit="$extra/etc/systemd/system/k3s.service"
+compat_unit="$extra/etc/systemd/system/gmak8-k3s-compat.service"
 test -f "$k3s_unit" || fail "missing k3s.service"
+test -f "$compat_unit" || fail "missing gmak8-k3s-compat.service"
 grep -q 'Requires=mnt-data.mount' "$k3s_unit" || fail "k3s.service must Requires=mnt-data.mount"
+grep -q 'gmak8-k3s-compat.service' "$k3s_unit" || fail "k3s.service must require data-dir compat oneshot"
 grep -q 'After=.*mnt-data.mount' "$k3s_unit" || fail "k3s.service must After=mnt-data.mount"
 grep -q 'ExecStart=/usr/local/bin/k3s server' "$k3s_unit" || fail "k3s.service ExecStart must be the pinned static binary"
+grep -q 'Before=k3s.service' "$compat_unit" || fail "compat oneshot must be Before=k3s.service"
+grep -q -- '-check-data-dir' "$compat_unit" || fail "compat oneshot must run gmak8-agent -check-data-dir"
+grep -q 'check-data-dir' "$root/guest/agent/main.go" || fail "agent must support -check-data-dir"
 if grep -Eiq 'disable-helm-controller' "$k3s_unit"; then
   fail "k3s.service must not disable helm-controller"
 fi
 if grep -Eiq 'write-kubeconfig' "$k3s_unit"; then
   fail "k3s.service must not set a custom write-kubeconfig path"
 fi
-test -L "$extra/etc/systemd/system/multi-user.target.wants/k3s.service" || fail "multi-user.target.wants/k3s.service symlink missing"
-grep -q 'enable k3s.service' "$extra/etc/systemd/system-preset/90-gmak8.preset" || fail "preset must enable k3s.service"
-grep -q 'systemctl enable k3s.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must enable k3s.service"
+if test -e "$extra/etc/systemd/system/multi-user.target.wants/k3s.service"; then
+  fail "k3s.service must not be enabled at boot (host starts it after the probe)"
+fi
+grep -q 'disable k3s.service' "$extra/etc/systemd/system-preset/90-gmak8.preset" || fail "preset must disable k3s.service at boot"
+if grep -q 'systemctl enable k3s.service' "$root/guest/mkosi/mkosi.postinst.chroot"; then
+  fail "postinst must not enable k3s.service at boot"
+fi
+grep -q 'systemctl disable k3s.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must disable k3s.service"
 grep -q 'install-k3s.sh' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must install pinned k3s"
 
 k3s_pin="$root/guest/k3s/k3s.pin"
@@ -160,7 +171,9 @@ grep -q '/etc/rancher/k3s/k3s.yaml' "$readme" || fail "README must document admi
 grep -q 'helm-controller' "$readme" || fail "README must document helm-controller left enabled"
 grep -q '/kubeconfig' "$readme" || fail "README must document GET /kubeconfig"
 grep -q '/k3s' "$readme" || fail "README must document GET /k3s"
+grep -q '/k3s/start' "$readme" || fail "README must document POST /k3s/start"
 grep -q '/node' "$readme" || fail "README must document GET /node"
+grep -q 'check-data-dir' "$readme" || fail "README must document data-dir compat check"
 
 if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/guest.yml"; then
   fail "guest.yml must not run Virtualization.framework"

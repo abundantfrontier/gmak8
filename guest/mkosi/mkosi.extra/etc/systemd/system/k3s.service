@@ -1,9 +1,9 @@
 [Unit]
 Description=Lightweight Kubernetes
 Documentation=https://k3s.io
-Requires=mnt-data.mount
+Requires=mnt-data.mount gmak8-k3s-compat.service
 Wants=network-online.target mnt-data-prep.service mnt-config.mount k3s-config-sync.service
-After=network-online.target mnt-data.mount mnt-data-prep.service mnt-config.mount k3s-config-sync.service
+After=network-online.target mnt-data.mount mnt-data-prep.service mnt-config.mount k3s-config-sync.service gmak8-k3s-compat.service
 
 [Service]
 Type=notify
@@ -19,6 +19,7 @@ RestartSec=5s
 ExecStartPre=-/sbin/modprobe br_netfilter
 ExecStartPre=-/sbin/modprobe overlay
 ExecStart=/usr/local/bin/k3s server
+ExecStartPost=/bin/sh -c 'mkdir -p /mnt/data/rancher/server && /usr/local/bin/k3s --version > /mnt/data/rancher/server/k3s-version'
 
 [Install]
 WantedBy=multi-user.target

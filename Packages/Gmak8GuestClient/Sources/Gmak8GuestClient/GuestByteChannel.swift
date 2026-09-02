@@ -20,11 +20,21 @@ public final class FileDescriptorChannel: GuestByteChannel, @unchecked Sendable 
         } else {
             self.onClose = {}
         }
+        Self.applyIOTimeout(fileDescriptor)
     }
 
     public init(fileDescriptor: Int32, onClose: @escaping @Sendable () -> Void) {
         self.fd = fileDescriptor
         self.onClose = onClose
+        Self.applyIOTimeout(fileDescriptor)
+    }
+
+    private static let ioTimeoutSeconds: Int = 5
+
+    private static func applyIOTimeout(_ fd: Int32) {
+        var tv = timeval(tv_sec: ioTimeoutSeconds, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     }
 
     public func write(_ data: Data) throws {
@@ -38,6 +48,9 @@ public final class FileDescriptorChannel: GuestByteChannel, @unchecked Sendable 
                 if written < 0 {
                     if errno == EINTR {
                         continue
+                    }
+                    if errno == EAGAIN || errno == EWOULDBLOCK {
+                        throw GuestAgentError.io("write timeout")
                     }
                     throw GuestAgentError.io("write errno \(errno)")
                 }
@@ -56,6 +69,9 @@ public final class FileDescriptorChannel: GuestByteChannel, @unchecked Sendable 
             if count < 0 {
                 if errno == EINTR {
                     continue
+                }
+                if errno == EAGAIN || errno == EWOULDBLOCK {
+                    throw GuestAgentError.io("read timeout")
                 }
                 throw GuestAgentError.io("read errno \(errno)")
             }

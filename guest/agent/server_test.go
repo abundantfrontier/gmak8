@@ -24,6 +24,8 @@ type fakeHost struct {
 	node          NodeReport
 	times         []time.Time
 	shutdowns     int
+	k3sStarts     int
+	startK3sErr   error
 }
 
 func (f *fakeHost) Disks() DisksReport { return f.disks }
@@ -38,6 +40,15 @@ func (f *fakeHost) Kubeconfig() ([]byte, error) {
 	return f.kubeconfig, nil
 }
 func (f *fakeHost) K3s() K3sReport { return f.k3s }
+func (f *fakeHost) StartK3s() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.startK3sErr != nil {
+		return f.startK3sErr
+	}
+	f.k3sStarts++
+	return nil
+}
 func (f *fakeHost) Node() NodeReport {
 	return f.node
 }
@@ -273,6 +284,28 @@ func TestK3sAndNodeJSON(t *testing.T) {
 	}
 }
 
+func TestStartK3s(t *testing.T) {
+	host := &fakeHost{}
+	rec := httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/k3s/start", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+	}
+	host.mu.Lock()
+	starts := host.k3sStarts
+	host.mu.Unlock()
+	if starts != 1 {
+		t.Fatalf("starts %d", starts)
+	}
+
+	host.startK3sErr = errString("compat")
+	rec = httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/k3s/start", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("error status %d", rec.Code)
+	}
+}
+
 func TestWrongMethods(t *testing.T) {
 	h := NewHandler(&fakeHost{})
 	cases := []struct {
@@ -282,6 +315,7 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodGet, "/time"},
 		{http.MethodGet, "/shutdown"},
 		{http.MethodPost, "/k3s"},
+		{http.MethodGet, "/k3s/start"},
 		{http.MethodPost, "/node"},
 		{http.MethodPost, "/kubeconfig"},
 		{http.MethodGet, "/nope"},

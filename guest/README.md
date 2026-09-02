@@ -39,7 +39,11 @@ not a Debian k3s/containerd/docker package. mkosi postinst fetches
 `https://github.com/k3s-io/k3s/releases/download/v1.33.3%2Bk3s1/k3s-arm64`
 and checks the SHA256 in [`k3s/k3s.pin`](k3s/k3s.pin). `k3s.service`
 `Requires=`/`After=` `mnt-data.mount`. `mnt-data-prep.service` is already
-`Before=k3s.service`.
+`Before=k3s.service`. k3s is **not** enabled at boot. The host probes
+`GET /k3s` first, then `POST /k3s/start`. `gmak8-k3s-compat.service`
+(`gmak8-agent -check-data-dir`) runs `Before=k3s.service` and fails if
+`/mnt/data/rancher/server/db` has data whose Kubernetes minor is missing
+or not `1.33`.
 
 The config template shipped at `/etc/rancher/k3s/config.yaml` (source:
 [`k3s/config.yaml`](k3s/config.yaml)) is also written by the host onto
@@ -78,6 +82,7 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | `GET` | `/kvm` | `kvm` is true iff `/dev/kvm` exists as a character device. |
 | `GET` | `/kubeconfig` | Bytes of `/etc/rancher/k3s/k3s.yaml`, or 404 if missing. |
 | `GET` | `/k3s` | JSON: systemd active, installed version, on-disk data-dir minor if known. |
+| `POST` | `/k3s/start` | `systemctl start --no-block k3s` (after the host compatibility probe). |
 | `GET` | `/node` | JSON: Node.Ready from `kubectl get nodes` (false if k3s is not up). |
 | `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
 | `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |

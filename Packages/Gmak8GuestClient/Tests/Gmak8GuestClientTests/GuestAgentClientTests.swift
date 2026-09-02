@@ -102,6 +102,7 @@ struct GuestAgentClientTests {
         let k3s = try await client.k3s()
         #expect(k3s.active)
         #expect(k3s.dataDirMinor == "1.33")
+        try await client.startK3s()
         #expect(try await client.node().ready)
 
         state.kubeconfig = nil

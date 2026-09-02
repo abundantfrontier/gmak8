@@ -198,6 +198,9 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
                 {"active":\(state.k3sActive),"version":"v1.33.3+k3s1","data_dir_minor":\(minorJSON),"data_dir_exists":\(state.dataDirExists)}
                 """
             )
+        case ("POST", "/k3s/start"):
+            state.k3sActive = true
+            return .json(200, #"{"ok":true}"#)
         case ("GET", "/node"):
             return .json(200, state.nodeReady ? #"{"ready":true,"name":"gmak8"}"# : #"{"ready":false,"name":"gmak8"}"#)
         case ("PUT", "/time"):

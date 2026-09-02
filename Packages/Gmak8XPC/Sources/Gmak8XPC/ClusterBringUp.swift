@@ -19,13 +19,14 @@ public struct ClusterBringUpError: Error, Equatable, LocalizedError, Sendable {
 }
 
 public protocol ClusterBringUp: Sendable {
-    /// Fake VM path skips k3s polling so existing ClusterEngine tests stay one-tick.
+    /// When true, the engine marks `running` as soon as VM start succeeds.
     var isNoOp: Bool { get }
 
     func start(
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     )
     func cancel()
@@ -40,6 +41,7 @@ public struct NoOpClusterBringUp: ClusterBringUp {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {
         completion(.success(ClusterBringUpResult(apiEndpoint: nil)))

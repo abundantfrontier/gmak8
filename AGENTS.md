@@ -27,5 +27,5 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - `Packages/Gmak8GuestClient` — vsock HTTP client to the guest agent on port 1024
 - `docs/design.md` — product and implementation design
 - `guest/mkosi` — Debian 13 arm64 appliance (data-disk format unit, KVM)
-- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `/node`, `PUT /time`, `POST /shutdown`)
+- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `POST /k3s/start`, `/node`, `PUT /time`, `POST /shutdown`; `-check-data-dir` before k3s)
 - `guest/k3s` — k3s `v1.33.3+k3s1` pin, install script, config template (helm-controller on; admin kubeconfig `/etc/rancher/k3s/k3s.yaml`)

@@ -74,6 +74,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private var step: String?
     private var lastError: String?
     private var apiEndpoint: String?
+    private var failAfterStop: String?
     private var generation: UInt64 = 0
     private var subscribers: [UUID: @Sendable (EngineEvent) -> Void] = [:]
 
@@ -140,6 +141,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 step = runtime.stepName
                 lastError = nil
                 apiEndpoint = nil
+                failAfterStop = nil
                 generation += 1
                 claimedGeneration = generation
                 events.append(.status(currentStatusLocked()))
@@ -305,6 +307,9 @@ public final class ClusterEngine: @unchecked Sendable {
             setStep: { [weak self] name in
                 self?.updateStep(generation: generation, name: name)
             },
+            log: { [weak self] line in
+                self?.broadcast([.log(source: .engine, line: line)])
+            },
             completion: { [weak self] result in
                 self?.completeBringUp(generation: generation, result: result)
             }
@@ -325,7 +330,7 @@ public final class ClusterEngine: @unchecked Sendable {
 
     private func completeBringUp(generation: UInt64, result: Result<ClusterBringUpResult, any Error>) {
         var events: [EngineEvent] = []
-        var shouldStop = false
+        var stopGeneration: UInt64?
         withLock {
             guard generation == self.generation, state == .starting else {
                 return
@@ -338,16 +343,22 @@ public final class ClusterEngine: @unchecked Sendable {
                 events.append(.status(currentStatusLocked()))
                 events.append(.log(source: .engine, line: "cluster running"))
             case .failure(let error):
-                state = .failed
                 lastError = error.localizedDescription
+                failAfterStop = lastError
+                state = .stopping
+                step = runtime.stepName
+                self.generation += 1
+                stopGeneration = self.generation
+                bringUp.cancel()
                 events.append(.status(currentStatusLocked()))
                 events.append(.log(source: .engine, line: error.localizedDescription))
-                shouldStop = true
             }
         }
         broadcast(events)
-        if shouldStop {
-            runtime.stop { _ in }
+        if let stopGeneration {
+            scheduler.schedule { [weak self] in
+                self?.beginStop(generation: stopGeneration)
+            }
         }
     }
 
@@ -359,13 +370,26 @@ public final class ClusterEngine: @unchecked Sendable {
             }
             switch result {
             case .success:
-                state = .stopped
-                step = nil
-                lastError = nil
-                apiEndpoint = nil
+                if let message = failAfterStop {
+                    state = .failed
+                    lastError = message
+                    failAfterStop = nil
+                    step = nil
+                    apiEndpoint = nil
+                } else {
+                    state = .stopped
+                    step = nil
+                    lastError = nil
+                    apiEndpoint = nil
+                }
             case .failure(let error):
                 state = .failed
-                lastError = error.localizedDescription
+                if failAfterStop == nil {
+                    lastError = error.localizedDescription
+                } else {
+                    lastError = failAfterStop
+                    failAfterStop = nil
+                }
                 apiEndpoint = nil
             }
             events.append(.status(currentStatusLocked()))

@@ -40,6 +40,10 @@ public struct GuestAgentClient: Sendable {
         try await send(method: "GET", path: "/k3s", body: nil, as: GuestK3s.self)
     }
 
+    public func startK3s() async throws {
+        _ = try await send(method: "POST", path: "/k3s/start", body: nil, as: GuestOK.self)
+    }
+
     public func node() async throws -> GuestNode {
         try await send(method: "GET", path: "/node", body: nil, as: GuestNode.self)
     }

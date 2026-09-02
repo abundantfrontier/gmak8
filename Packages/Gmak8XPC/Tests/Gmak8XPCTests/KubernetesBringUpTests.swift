@@ -70,10 +70,14 @@ struct KubernetesBringUpTests {
     }
 
     @Test func compatibilityRefuse132() async throws {
-        let env = try BringUpHarness(yaml: k3sYAML, dataDirMinor: "1.32")
+        let env = try BringUpHarness(yaml: k3sYAML, dataDirMinor: "1.32", dataDirExists: true)
         defer { env.tearDown() }
 
         #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .stopping
+        }
         env.scheduler.runNext()
         try await waitUntil {
             env.engine.currentStatus().state == .failed
@@ -82,6 +86,69 @@ struct KubernetesBringUpTests {
         #expect(message.contains("1.32"))
         #expect(message.lowercased().contains("reset"))
         #expect(env.engine.currentStatus().apiEndpoint == nil)
+    }
+
+    @Test func compatibilityRefuseUnknownExistingDataDir() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, dataDirMinor: "", dataDirExists: true)
+        defer { env.tearDown() }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .stopping
+        }
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .failed
+        }
+        let message = env.engine.currentStatus().lastError ?? ""
+        #expect(message.contains("unknown"))
+        #expect(message.lowercased().contains("reset"))
+    }
+
+    @Test func unspliceableUserKubeconfigDoesNotFailBringUp() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, mergeUserConfig: true)
+        defer { env.tearDown() }
+        try FileManager.default.createDirectory(
+            at: env.store.userKubeconfigFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "this is not: [yaml\n".write(to: env.store.userKubeconfigFile, atomically: true, encoding: .utf8)
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        let privateYAML = try String(contentsOf: env.store.privateKubeconfigFile, encoding: .utf8)
+        #expect(privateYAML.contains("server: https://127.0.0.1:6443"))
+        #expect(try String(contentsOf: env.store.userKubeconfigFile, encoding: .utf8).contains("this is not"))
+        #expect(env.logs.contains { $0.contains("export KUBECONFIG=") })
+    }
+
+    @Test func bringUpFailureStopConflictsWithConcurrentStart() async throws {
+        let runtime = SlowStopRuntime()
+        let env = try BringUpHarness(
+            yaml: k3sYAML, dataDirMinor: "1.32", dataDirExists: true, runtime: runtime)
+        defer { env.tearDown() }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .stopping
+        }
+        #expect(env.engine.submit(.start) == .error(.conflict))
+        DispatchQueue.global(qos: .userInitiated).async {
+            env.scheduler.runNext()
+        }
+        runtime.waitUntilStopEntered()
+        #expect(env.engine.submit(.start) == .error(.conflict))
+        runtime.finishStop()
+        try await waitUntil {
+            env.engine.currentStatus().state == .failed
+        }
+        #expect(env.engine.currentStatus().lastError?.contains("1.32") == true)
+        #expect(env.engine.submit(.start) == .ok)
     }
 
     @Test func cancelDuringBringUpHonorsStop() async throws {
@@ -114,14 +181,18 @@ private struct BringUpHarness {
     var engine: ClusterEngine
     var server: BringUpHTTPServer
     var steps: [String] { tracker.steps }
+    var logs: [String] { tracker.logs }
 
     private let tracker: StepTracker
 
     init(
         yaml: String,
         apiPort: Int = 6443,
-        dataDirMinor: String = "1.33",
-        neverReady: Bool = false
+        dataDirMinor: String = "",
+        dataDirExists: Bool = false,
+        neverReady: Bool = false,
+        mergeUserConfig: Bool = false,
+        runtime: (any VirtualMachineRuntime)? = nil
     ) throws {
         root = FileManager.default.temporaryDirectory.appending(
             path: "gmak8-bringup-\(UUID().uuidString)",
@@ -135,11 +206,12 @@ private struct BringUpHarness {
                 logs: root.appending(path: "Logs/gmak8")
             ),
             userKubeconfigFile: root.appending(path: ".kube/config"),
-            environment: ["KUBECONFIG": "/tmp/gmak8-do-not-merge"]
+            environment: mergeUserConfig ? [:] : ["KUBECONFIG": "/tmp/gmak8-do-not-merge"]
         )
         let state = BringUpAgentState(
             yaml: Data(yaml.utf8),
             dataDirMinor: dataDirMinor,
+            dataDirExists: dataDirExists,
             neverReady: neverReady
         )
         server = try BringUpHTTPServer(state: state)
@@ -159,7 +231,8 @@ private struct BringUpHarness {
         )
         let wrapped = RecordingBringUp(inner: bringUp, tracker: recorded)
         scheduler = ManualEngineScheduler()
-        engine = ClusterEngine(scheduler: scheduler, bringUp: wrapped)
+        engine = ClusterEngine(
+            scheduler: scheduler, runtime: runtime ?? FakeVirtualMachineRuntime(), bringUp: wrapped)
     }
 
     func tearDown() {
@@ -171,14 +244,25 @@ private struct BringUpHarness {
 private final class StepTracker: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String] = []
+    private var logStorage: [String] = []
     var steps: [String] {
         lock.lock()
         defer { lock.unlock() }
         return storage
     }
+    var logs: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return logStorage
+    }
     func add(_ step: String) {
         lock.lock()
         storage.append(step)
+        lock.unlock()
+    }
+    func addLog(_ line: String) {
+        lock.lock()
+        logStorage.append(line)
         lock.unlock()
     }
 }
@@ -192,6 +276,7 @@ private struct RecordingBringUp: ClusterBringUp {
         generation: UInt64,
         isCurrent: @escaping @Sendable (UInt64) -> Bool,
         setStep: @escaping @Sendable (String) -> Void,
+        log: @escaping @Sendable (String) -> Void,
         completion: @escaping @Sendable (Result<ClusterBringUpResult, any Error>) -> Void
     ) {
         inner.start(
@@ -200,6 +285,10 @@ private struct RecordingBringUp: ClusterBringUp {
             setStep: { step in
                 tracker.add(step)
                 setStep(step)
+            },
+            log: { line in
+                tracker.addLog(line)
+                log(line)
             },
             completion: completion
         )
@@ -213,11 +302,14 @@ private struct RecordingBringUp: ClusterBringUp {
 private final class BringUpAgentState: @unchecked Sendable {
     var yaml: Data
     var dataDirMinor: String
+    var dataDirExists: Bool
     var neverReady: Bool
+    var started = false
 
-    init(yaml: Data, dataDirMinor: String, neverReady: Bool) {
+    init(yaml: Data, dataDirMinor: String, dataDirExists: Bool, neverReady: Bool) {
         self.yaml = yaml
         self.dataDirMinor = dataDirMinor
+        self.dataDirExists = dataDirExists
         self.neverReady = neverReady
     }
 }
@@ -329,16 +421,14 @@ private func response(for request: (String, String), state: BringUpAgentState) -
             "application/json"
         )
     case ("GET", "/k3s"):
-        if state.neverReady {
-            return (
-                200,
-                Data(#"{"active":false,"version":"v1.33.3+k3s1","data_dir_minor":"1.33","data_dir_exists":true}"#.utf8),
-                "application/json"
-            )
-        }
+        let active = state.started && !state.neverReady
+        let minorJSON = state.dataDirMinor.isEmpty ? "null" : "\"\(state.dataDirMinor)\""
         let json =
-            "{\"active\":true,\"version\":\"v1.33.3+k3s1\",\"data_dir_minor\":\"\(state.dataDirMinor)\",\"data_dir_exists\":true}"
+            "{\"active\":\(active),\"version\":\"v1.33.3+k3s1\",\"data_dir_minor\":\(minorJSON),\"data_dir_exists\":\(state.dataDirExists)}"
         return (200, Data(json.utf8), "application/json")
+    case ("POST", "/k3s/start"):
+        state.started = true
+        return (200, Data(#"{"ok":true}"#.utf8), "application/json")
     case ("GET", "/kubeconfig"):
         return (200, state.yaml, "application/yaml")
     case ("GET", "/node"):
@@ -374,6 +464,50 @@ private func readHTTPRequest(fd: Int32) -> (String, String)? {
         return nil
     }
     return (String(parts[0]), String(parts[1]))
+}
+
+private final class SlowStopRuntime: VirtualMachineRuntime, @unchecked Sendable {
+    var stepName: String { "vm" }
+    private let lock = NSCondition()
+    private var stopEntered = false
+    private var allowStop = false
+
+    func preflight() -> VirtualMachinePreflightError? {
+        nil
+    }
+
+    func start(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        completion(.success(()))
+    }
+
+    func stop(completion: @escaping @Sendable (Result<Void, any Error>) -> Void) {
+        lock.lock()
+        stopEntered = true
+        lock.broadcast()
+        while !allowStop {
+            lock.wait()
+        }
+        lock.unlock()
+        completion(.success(()))
+    }
+
+    func waitUntilStopEntered() {
+        lock.lock()
+        let deadline = Date().addingTimeInterval(5)
+        while !stopEntered {
+            if !lock.wait(until: deadline) {
+                break
+            }
+        }
+        lock.unlock()
+    }
+
+    func finishStop() {
+        lock.lock()
+        allowStop = true
+        lock.broadcast()
+        lock.unlock()
+    }
 }
 
 private func waitUntil(timeout: Duration = .seconds(5), _ predicate: @escaping () -> Bool) async throws {
