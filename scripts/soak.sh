@@ -159,11 +159,29 @@ resolve_gmak8_cli() {
   return 1
 }
 
+normalize_pids() {
+  echo "$*" | tr '\n' ' ' | tr -s '[:space:]' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+pids_still_running() {
+  local old live leftover="" pid
+  old=$(normalize_pids "$1")
+  live=$(normalize_pids "$2")
+  for pid in ${old}; do
+    if [[ " ${live} " == *" ${pid} "* ]]; then
+      leftover="${leftover} ${pid}"
+    fi
+  done
+  normalize_pids "${leftover}"
+}
+
 resolve_gmak8_core() {
   # LaunchAgent owns the process. Never resolve gmak8-core from PATH.
+  local raw=""
   if command -v pgrep >/dev/null 2>&1; then
-    pgrep -x "${CORE_PROCESS}" || true
+    raw=$(pgrep -x "${CORE_PROCESS}" 2>/dev/null || true)
   fi
+  normalize_pids "${raw}"
 }
 
 find_e2fsck() {
@@ -232,6 +250,8 @@ VIRTCTL_DEFERRED=${VIRTCTL_DEFERRED}
 EOF
 }
 
+# Self-test fake sockets only. Live start/stop/status use Contents/Helpers/gmak8
+# so PeerAuth sees the gmak8 Team ID (never PATH python/nc on engine.sock).
 engine_rpc() {
   local sock=$1
   local op=$2
@@ -307,8 +327,17 @@ finally:
 PY
 }
 
+require_cli() {
+  if [[ -z "${GMAK8_CLI_BIN:-}" || ! -x "${GMAK8_CLI_BIN}" ]]; then
+    die "gmak8 CLI is not resolved under ${HELPERS_DIR}"
+  fi
+}
+
 engine_state() {
-  engine_rpc "${ENGINE_SOCK}" status | python3 -c 'import json,sys; print(json.load(sys.stdin).get("state",""))'
+  require_cli
+  local out
+  out=$("${GMAK8_CLI_BIN}" status) || return $?
+  echo "${out}" | awk -F': ' '/^State: / { print $2; exit }' | tr '[:upper:]' '[:lower:]'
 }
 
 wait_for_state() {
@@ -336,13 +365,14 @@ wait_for_state() {
 }
 
 cluster_start() {
+  require_cli
   local rc=0
   local err
-  err=$(engine_rpc "${ENGINE_SOCK}" start 2>&1 >/dev/null) || rc=$?
+  err=$("${GMAK8_CLI_BIN}" start 2>&1) || rc=$?
   if [[ "${rc}" -eq 0 ]]; then
     return 0
   fi
-  if [[ "${rc}" -eq 4 && "${err}" == *conflict* ]]; then
+  if [[ "${err}" == *conflict* ]]; then
     local state
     state=$(engine_state)
     if [[ "${state}" == "running" || "${state}" == "starting" || "${state}" == "degraded" ]]; then
@@ -353,9 +383,10 @@ cluster_start() {
 }
 
 cluster_stop() {
+  require_cli
   local rc=0
   local err
-  err=$(engine_rpc "${ENGINE_SOCK}" stop 2>&1 >/dev/null) || rc=$?
+  err=$("${GMAK8_CLI_BIN}" stop 2>&1) || rc=$?
   if [[ "${rc}" -eq 0 ]]; then
     return 0
   fi
@@ -373,7 +404,11 @@ import time
 
 path = sys.argv[1]
 timeout = float(sys.argv[2])
-fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+try:
+    fd = os.open(path, os.O_RDWR)
+except OSError:
+    sys.stderr.write("lock file missing: %s\n" % path)
+    sys.exit(1)
 try:
     os.fchmod(fd, 0o600)
     deadline = time.time() + timeout
@@ -389,6 +424,28 @@ try:
 finally:
     os.close(fd)
     # Never unlink sidecar *.lock files.
+PY
+}
+
+flock_is_held() {
+  python3 - "$1" <<'PY'
+import fcntl
+import os
+import sys
+
+path = sys.argv[1]
+try:
+    fd = os.open(path, os.O_RDWR)
+except OSError:
+    sys.exit(2)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    sys.exit(1)
+except OSError:
+    sys.exit(0)
+finally:
+    os.close(fd)
 PY
 }
 
@@ -411,24 +468,14 @@ dirty_kill_core() {
   kill -9 ${pids} || true
   local start=$SECONDS
   while true; do
-    local live
+    local live leftover
     live=$(resolve_gmak8_core)
-    if [[ -z "${live}" ]]; then
-      break
-    fi
-    # launchd KeepAlive restarts a new pid; old pids must be gone.
-    local leftover=""
-    local pid
-    for pid in ${pids}; do
-      if [[ " ${live} " == *" ${pid} "* ]]; then
-        leftover="${leftover} ${pid}"
-      fi
-    done
+    leftover=$(pids_still_running "${pids}" "${live}")
     if [[ -z "${leftover}" ]]; then
       break
     fi
     if (( SECONDS - start >= 30 )); then
-      die "${CORE_PROCESS} still alive after SIGKILL:${leftover}"
+      die "${CORE_PROCESS} still alive after SIGKILL: ${leftover}"
     fi
     sleep 0.2
   done
@@ -482,13 +529,12 @@ run_deferred_1_0() {
 
 run_live() {
   refuse_github_hosted_live
-  command -v python3 >/dev/null 2>&1 || die "python3 is required for engine.sock NDJSON"
+  command -v python3 >/dev/null 2>&1 || die "python3 is required for sidecar flock wait"
   host_paths
-  local cli
-  if ! cli=$(resolve_gmak8_cli); then
+  if ! GMAK8_CLI_BIN=$(resolve_gmak8_cli); then
     die "gmak8 CLI missing under ${GMAK8_APP:-${APP_DEFAULT}}/${HELPERS_DIR} (do not use PATH)"
   fi
-  echo "soak: cli=${cli}"
+  echo "soak: cli=${GMAK8_CLI_BIN}"
   echo "soak: socket=${ENGINE_SOCK}"
   if [[ ! -e "${ENGINE_SOCK}" ]]; then
     die "gmak8-core is not running (engine.sock is missing)."
@@ -525,7 +571,7 @@ run_live() {
 
   echo "soak: wait for ${CORE_PROCESS} restart after KeepAlive"
   local wait_start=$SECONDS
-  while [[ ! -e "${ENGINE_SOCK}" ]] || ! engine_rpc "${ENGINE_SOCK}" status >/dev/null 2>&1; do
+  while [[ ! -e "${ENGINE_SOCK}" ]] || ! "${GMAK8_CLI_BIN}" status >/dev/null 2>&1; do
     if (( SECONDS - wait_start >= 60 )); then
       die "gmak8-core did not come back after dirty-kill"
     fi
@@ -751,7 +797,16 @@ fcntl.flock(fd, fcntl.LOCK_UN)
 os.close(fd)
 PY
   local holder=$!
-  sleep 0.2
+  local waited=0
+  while ! flock_is_held "${lock}"; do
+    waited=$((waited + 1))
+    if [[ "${waited}" -gt 100 ]]; then
+      kill "${holder}" 2>/dev/null || true
+      rm -rf "${tmp}"
+      die "holder never acquired LOCK_EX"
+    fi
+    sleep 0.05
+  done
   local rc=0
   set +e
   wait_flock_released "${lock}" 0.4
@@ -772,7 +827,41 @@ PY
     rm -rf "${tmp}"
     die "lock file must not be unlinked"
   fi
+  if wait_flock_released "${tmp}/missing.lock" 0.2 2>/dev/null; then
+    rm -rf "${tmp}"
+    die "missing lock file must fail without O_CREAT"
+  fi
+  if [[ -e "${tmp}/missing.lock" ]]; then
+    rm -rf "${tmp}"
+    die "wait_flock_released must not create missing lock files"
+  fi
   rm -rf "${tmp}"
+}
+
+test_pids_still_running_newlines() {
+  local old=$'111\n222'
+  local live=$'111\n333'
+  local gone=$'333\n444'
+  assert_eq "$(pids_still_running "${old}" "${live}")" "111" "newline pgrep leftover"
+  assert_eq "$(pids_still_running "${old}" "${gone}")" "" "newline pgrep all gone"
+  assert_eq "$(pids_still_running "111 222" "111 222 333")" "111 222" "space pids still live"
+  assert_eq "$(normalize_pids "${old}")" "111 222" "normalize pgrep newlines"
+}
+
+test_live_rpc_is_cli() {
+  grep -Fq '"${GMAK8_CLI_BIN}" start' "${SCRIPT_PATH}" || die "live start must use Helpers CLI"
+  grep -Fq '"${GMAK8_CLI_BIN}" stop' "${SCRIPT_PATH}" || die "live stop must use Helpers CLI"
+  grep -Fq '"${GMAK8_CLI_BIN}" status' "${SCRIPT_PATH}" || die "live status must use Helpers CLI"
+  grep -Fq 'cluster_start' "${SCRIPT_PATH}" || die "missing cluster_start"
+  if grep -A20 '^cluster_start()' "${SCRIPT_PATH}" | grep -q 'engine_rpc'; then
+    die "cluster_start must not call engine_rpc"
+  fi
+  if grep -A20 '^cluster_stop()' "${SCRIPT_PATH}" | grep -q 'engine_rpc'; then
+    die "cluster_stop must not call engine_rpc"
+  fi
+  if grep -A20 '^engine_state()' "${SCRIPT_PATH}" | grep -q 'engine_rpc'; then
+    die "engine_state must not call engine_rpc"
+  fi
 }
 
 test_fsck_flags() {
@@ -890,6 +979,8 @@ run_self_test() {
   test_cli_helpers_not_path
   test_socket_errors
   test_lock_not_unlinked
+  test_pids_still_running_newlines
+  test_live_rpc_is_cli
   test_fsck_flags
   test_plan_invariants
   test_workflow_yaml

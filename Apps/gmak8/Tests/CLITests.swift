@@ -177,6 +177,13 @@ struct CLITests {
         }
     }
 
+    @Test func startAndStopSubmitSameOpsAsStatusClient() throws {
+        let start = try NDJSONCodec.encodeLine(EngineRequest.start)
+        let stop = try NDJSONCodec.encodeLine(EngineRequest.stop)
+        #expect(String(data: start, encoding: .utf8) == "{\"op\":\"start\"}\n")
+        #expect(String(data: stop, encoding: .utf8) == "{\"op\":\"stop\"}\n")
+    }
+
     @Test func submitStartAndStopOverFakeSocket() throws {
         let socketURL = uniqueSocketURL()
         let scheduler = ManualEngineScheduler()

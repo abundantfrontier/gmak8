@@ -147,6 +147,16 @@ struct SoakPlanTests {
         #expect(!result.stdout.lowercased().contains("vzvirtualmachine"))
     }
 
+    @Test func liveRPCUsesBundledCLINotPython() throws {
+        let script = try String(contentsOf: soakScriptURL(), encoding: .utf8)
+        #expect(script.contains("\"${GMAK8_CLI_BIN}\" start"))
+        #expect(script.contains("\"${GMAK8_CLI_BIN}\" stop"))
+        #expect(script.contains("\"${GMAK8_CLI_BIN}\" status"))
+        #expect(script.contains("Contents/Helpers"))
+        #expect(script.contains("os.open(path, os.O_RDWR)"))
+        #expect(!script.contains("os.O_CREAT"))
+    }
+
     @Test func liveRefusesGitHubHostedMacOS() throws {
         let result = try runSoak(
             ["--live", "--cycles", "1"],
