@@ -45,6 +45,14 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         network?.apiHostPort ?? GuestNetwork.apiHostPort
     }
 
+    public var httpHostPort: Int {
+        network?.httpHostPort ?? GuestNetwork.httpHostPort
+    }
+
+    public var httpsHostPort: Int {
+        network?.httpsHostPort ?? GuestNetwork.httpsHostPort
+    }
+
     public func virtioSocketDevice() async throws -> VZVirtioSocketDevice {
         try await withCheckedThrowingContinuation { continuation in
             VirtualMachineQueue.shared.async {

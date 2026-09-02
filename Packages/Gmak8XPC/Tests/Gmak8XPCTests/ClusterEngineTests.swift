@@ -14,6 +14,7 @@ struct ClusterEngineTests {
         #expect(engine.currentStatus().step == "fakeVM")
         scheduler.runNext()
         #expect(engine.currentStatus().state == .running)
+        #expect(engine.currentStatus().publishedPorts.isEmpty)
 
         #expect(engine.submit(.stop) == .ok)
         #expect(engine.currentStatus().state == .stopping)

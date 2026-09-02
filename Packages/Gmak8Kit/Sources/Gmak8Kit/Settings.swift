@@ -12,6 +12,7 @@ public struct Settings: Codable, Equatable, Sendable {
     public var setCurrentContextOnStart: Bool
     public var keepClusterRunningOnQuit: Bool
     public var telemetry: Bool
+    public var publishNodePorts: Bool
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -22,7 +23,8 @@ public struct Settings: Codable, Equatable, Sendable {
         dataDiskGiB: Int,
         setCurrentContextOnStart: Bool = false,
         keepClusterRunningOnQuit: Bool = true,
-        telemetry: Bool = false
+        telemetry: Bool = false,
+        publishNodePorts: Bool = true
     ) {
         self.schemaVersion = schemaVersion
         self.profile = profile
@@ -33,6 +35,48 @@ public struct Settings: Codable, Equatable, Sendable {
         self.setCurrentContextOnStart = setCurrentContextOnStart
         self.keepClusterRunningOnQuit = keepClusterRunningOnQuit
         self.telemetry = telemetry
+        self.publishNodePorts = publishNodePorts
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case profile
+        case clusterName
+        case cpu
+        case memoryGiB
+        case dataDiskGiB
+        case setCurrentContextOnStart
+        case keepClusterRunningOnQuit
+        case telemetry
+        case publishNodePorts
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        profile = try container.decode(Profile.self, forKey: .profile)
+        clusterName = try container.decode(String.self, forKey: .clusterName)
+        cpu = try container.decode(Int.self, forKey: .cpu)
+        memoryGiB = try container.decode(Int.self, forKey: .memoryGiB)
+        dataDiskGiB = try container.decode(Int.self, forKey: .dataDiskGiB)
+        setCurrentContextOnStart = try container.decode(Bool.self, forKey: .setCurrentContextOnStart)
+        keepClusterRunningOnQuit = try container.decode(Bool.self, forKey: .keepClusterRunningOnQuit)
+        telemetry = try container.decode(Bool.self, forKey: .telemetry)
+        publishNodePorts = try container.decodeIfPresent(Bool.self, forKey: .publishNodePorts) ?? true
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(profile, forKey: .profile)
+        try container.encode(clusterName, forKey: .clusterName)
+        try container.encode(cpu, forKey: .cpu)
+        try container.encode(memoryGiB, forKey: .memoryGiB)
+        try container.encode(dataDiskGiB, forKey: .dataDiskGiB)
+        try container.encode(setCurrentContextOnStart, forKey: .setCurrentContextOnStart)
+        try container.encode(keepClusterRunningOnQuit, forKey: .keepClusterRunningOnQuit)
+        try container.encode(telemetry, forKey: .telemetry)
+        try container.encode(publishNodePorts, forKey: .publishNodePorts)
     }
 
     public static func makeDefault(profile: Profile = .kubernetes, host: HostSnapshot) throws -> Settings {

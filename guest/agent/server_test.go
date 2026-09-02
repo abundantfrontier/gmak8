@@ -23,6 +23,7 @@ type fakeHost struct {
 	kubeconfigErr error
 	k3s           K3sReport
 	node          NodeReport
+	services      ServiceListReport
 	times         []time.Time
 	shutdowns     int
 	k3sStarts     int
@@ -88,6 +89,12 @@ func (f *fakeHost) ImportAirgap(name string, r io.Reader, size int64) (AirgapRep
 		Bytes:   uint64(len(data)),
 	}
 	return f.airgap, nil
+}
+func (f *fakeHost) Services() ServiceListReport {
+	if f.services.Items == nil {
+		return ServiceListReport{Items: []Service{}}
+	}
+	return f.services
 }
 func (f *fakeHost) SetTime(t time.Time) error {
 	f.mu.Lock()
@@ -321,6 +328,43 @@ func TestK3sAndNodeJSON(t *testing.T) {
 	}
 }
 
+func TestServicesJSON(t *testing.T) {
+	host := &fakeHost{
+		services: ServiceListReport{Items: []Service{
+			{
+				Namespace: "default",
+				Name:      "nginx",
+				Type:      "NodePort",
+				Ports: []ServicePort{
+					{Name: "http", Port: 80, NodePort: 30080, Protocol: "TCP"},
+				},
+			},
+		}},
+	}
+	rec := httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/services", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+	}
+	var got ServiceListReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Items) != 1 || got.Items[0].Name != "nginx" || got.Items[0].Ports[0].NodePort != 30080 {
+		t.Fatalf("got %+v", got)
+	}
+
+	host.services = ServiceListReport{}
+	rec = httptest.NewRecorder()
+	NewHandler(host).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/services", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Items == nil || len(got.Items) != 0 {
+		t.Fatalf("empty list %+v", got)
+	}
+}
+
 func TestStartK3s(t *testing.T) {
 	host := &fakeHost{}
 	rec := httptest.NewRecorder()
@@ -354,6 +398,7 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodPost, "/k3s"},
 		{http.MethodGet, "/k3s/start"},
 		{http.MethodPost, "/node"},
+		{http.MethodPost, "/services"},
 		{http.MethodPost, "/kubeconfig"},
 		{http.MethodPost, "/airgap"},
 		{http.MethodGet, "/airgap/k3s"},

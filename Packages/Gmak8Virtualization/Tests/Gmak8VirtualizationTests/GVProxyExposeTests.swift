@@ -77,6 +77,40 @@ struct GVProxyExposeTests {
         #expect(port == GuestNetwork.apiHostPort)
     }
 
+    @Test func httpPortFallsBackTo18080OnBindFailure() throws {
+        var attempted: [Int] = []
+        let port = try HostPortExpose.choose(
+            hostPort: GuestNetwork.httpHostPort,
+            fallbackHostPort: GuestNetwork.httpFallbackHostPort,
+            guestPort: GuestNetwork.httpGuestPort
+        ) { request in
+            attempted.append(request.localPort ?? -1)
+            if request.localPort == GuestNetwork.httpHostPort {
+                throw VirtualMachineError.networkFailed("listen tcp 127.0.0.1:8080: bind: address already in use")
+            }
+        }
+        #expect(port == GuestNetwork.httpFallbackHostPort)
+        #expect(attempted == [GuestNetwork.httpHostPort, GuestNetwork.httpFallbackHostPort])
+        #expect(GuestNetwork.httpGuestPort == 80)
+    }
+
+    @Test func httpsPortFallsBackTo18443OnBindFailure() throws {
+        var attempted: [Int] = []
+        let port = try HostPortExpose.choose(
+            hostPort: GuestNetwork.httpsHostPort,
+            fallbackHostPort: GuestNetwork.httpsFallbackHostPort,
+            guestPort: GuestNetwork.httpsGuestPort
+        ) { request in
+            attempted.append(request.localPort ?? -1)
+            if request.localPort == GuestNetwork.httpsHostPort {
+                throw VirtualMachineError.networkFailed("listen tcp 127.0.0.1:8443: bind: address already in use")
+            }
+        }
+        #expect(port == GuestNetwork.httpsFallbackHostPort)
+        #expect(attempted == [GuestNetwork.httpsHostPort, GuestNetwork.httpsFallbackHostPort])
+        #expect(GuestNetwork.httpsGuestPort == 443)
+    }
+
     @Test func decodeRunsValidate() {
         let json = Data("{\"local\":\"0.0.0.0:6443\",\"remote\":\"192.168.127.2:6443\"}".utf8)
         #expect(throws: VirtualMachineError.self) {

@@ -12,6 +12,7 @@ struct SettingsTests {
         #expect(settings.setCurrentContextOnStart == false)
         #expect(settings.keepClusterRunningOnQuit == true)
         #expect(settings.telemetry == false)
+        #expect(settings.publishNodePorts == true)
     }
 
     @Test func roundTripPreservesFieldsAndMode0600() throws {
@@ -31,7 +32,8 @@ struct SettingsTests {
             dataDiskGiB: 60,
             setCurrentContextOnStart: true,
             keepClusterRunningOnQuit: false,
-            telemetry: true
+            telemetry: true,
+            publishNodePorts: false
         )
         try original.save(to: url)
         try original.save(to: url)
@@ -80,6 +82,34 @@ struct SettingsTests {
         #expect(settings.cpu == 4)
         #expect(settings.memoryGiB == 6)
         #expect(settings.dataDiskGiB == 60)
+        #expect(settings.publishNodePorts == true)
+    }
+
+    @Test func loadDefaultsPublishNodePortsWhenMissing() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-settings-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let url = directory.appending(path: "settings.json")
+        let json = """
+            {
+              "schemaVersion": 1,
+              "profile": "kubernetes",
+              "clusterName": "gmak8",
+              "cpu": 4,
+              "memoryGiB": 6,
+              "dataDiskGiB": 60,
+              "setCurrentContextOnStart": false,
+              "keepClusterRunningOnQuit": true,
+              "telemetry": false
+            }
+            """
+        try json.write(to: url, atomically: true, encoding: .utf8)
+        let loaded = try Settings.load(from: url)
+        #expect(loaded.publishNodePorts == true)
     }
 
     @Test func makeDefaultThrowsStructuredEurekaRefusal() {

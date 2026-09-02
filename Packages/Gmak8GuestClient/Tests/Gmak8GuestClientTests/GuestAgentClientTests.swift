@@ -54,6 +54,20 @@ struct GuestAgentClientTests {
         #expect(airgap.present)
         #expect(airgap.files.count == 1)
         #expect(airgap.bytes == 24)
+
+        let services = try JSONDecoder().decode(
+            GuestServiceList.self,
+            from: Data(
+                #"{"items":[{"namespace":"default","name":"nginx","type":"NodePort","ports":[{"name":"http","port":80,"nodePort":30080,"protocol":"TCP"}]}]}"#
+                    .utf8
+            )
+        )
+        #expect(services.items.count == 1)
+        #expect(services.items[0].name == "nginx")
+        #expect(services.items[0].ports[0].nodePort == 30080)
+        #expect(services.items[0].ports[0].protocolName == "TCP")
+        let emptyServices = try JSONDecoder().decode(GuestServiceList.self, from: Data(#"{}"#.utf8))
+        #expect(emptyServices.items.isEmpty)
     }
 
     @Test func healthJSONDoesNotCarryDiskKeys() throws {
@@ -111,6 +125,10 @@ struct GuestAgentClientTests {
         #expect(k3s.dataDirMinor == "1.33")
         try await client.startK3s()
         #expect(try await client.node().ready)
+        let listed = try await client.services()
+        #expect(listed.items.count == 1)
+        #expect(listed.items[0].name == "nginx")
+        #expect(listed.items[0].ports[0].nodePort == 30080)
 
         let airgap = try await client.airgap()
         #expect(airgap.present)

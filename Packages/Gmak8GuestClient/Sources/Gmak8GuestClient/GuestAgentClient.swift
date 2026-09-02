@@ -76,6 +76,10 @@ public struct GuestAgentClient: Sendable {
         try await send(method: "GET", path: "/node", body: nil, as: GuestNode.self)
     }
 
+    public func services() async throws -> GuestServiceList {
+        try await send(method: "GET", path: "/services", body: nil, as: GuestServiceList.self)
+    }
+
     public func setTime(_ time: GuestTime) async throws {
         _ = try await send(method: "PUT", path: "/time", body: try time.encodeBody(), as: GuestOK.self)
     }

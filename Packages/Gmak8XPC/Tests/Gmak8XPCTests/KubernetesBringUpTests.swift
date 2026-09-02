@@ -53,6 +53,7 @@ struct KubernetesBringUpTests {
         #expect(engine.currentStatus().state == .running)
         #expect(engine.currentStatus().step == "fakeVM")
         #expect(engine.currentStatus().apiEndpoint == nil)
+        #expect(engine.currentStatus().publishedPorts.isEmpty)
     }
 
     @Test func bootstrapReachesRunningAndWritesKubeconfig() async throws {

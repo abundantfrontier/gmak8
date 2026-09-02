@@ -82,6 +82,39 @@ struct NDJSONCodecTests {
         #expect(try NDJSONCodec.decodeEvent(line: line) == event)
     }
 
+    @Test func publishedPortRoundTripIncludesCollisionModel() throws {
+        let port = PublishedPort(
+            service: "nginx",
+            namespace: "default",
+            port: 80,
+            nodePort: 30080,
+            hostPort: 30080,
+            guestPort: 30080,
+            hostURL: "http://127.0.0.1:30080",
+            collision: .collision
+        )
+        let event = EngineEvent.status(
+            EngineStatus(state: .running, publishedPorts: [port])
+        )
+        let line = try utf8Line(event)
+        #expect(line.contains("\"service\":\"nginx\""))
+        #expect(line.contains("\"nodePort\":30080"))
+        #expect(line.contains("\"hostURL\""))
+        #expect(line.contains("127.0.0.1:30080"))
+        #expect(line.contains("\"collision\":\"collision\""))
+        #expect(!line.contains("0.0.0.0"))
+        #expect(try NDJSONCodec.decodeEvent(line: line) == event)
+
+        let legacy = try JSONDecoder().decode(
+            PublishedPort.self,
+            from: Data(#"{"service":"nginx","hostPort":30080,"guestPort":30080}"#.utf8)
+        )
+        #expect(legacy.hostPort == 30080)
+        #expect(legacy.guestPort == 30080)
+        #expect(legacy.collision == .published)
+        #expect(legacy.hostURL == "http://127.0.0.1:30080")
+    }
+
     @Test func logEventRoundTrip() throws {
         let event = EngineEvent.log(source: .engine, line: "start accepted")
         let line = try utf8Line(event)

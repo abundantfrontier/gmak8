@@ -54,15 +54,59 @@ do {
         }
         return (try? Settings.load(from: paths.settingsFile))?.setCurrentContextOnStart ?? false
     }()
+    let makeClient: @Sendable () async throws -> GuestAgentClient = {
+        let device = try await controller.virtioSocketDevice()
+        return VZGuestAgentConnector.makeClient(device: device, queue: VirtualMachineQueue.shared)
+    }
     let bringUp = KubernetesBringUp(
-        makeClient: {
-            let device = try await controller.virtioSocketDevice()
-            return VZGuestAgentConnector.makeClient(device: device, queue: VirtualMachineQueue.shared)
-        },
+        makeClient: makeClient,
         kubeconfigStore: KubeconfigStore.current(),
         setCurrentContext: setCurrentContext,
         airgapProvider: HostAirgapProvider(paths: paths),
         apiPort: { controller.apiHostPort }
+    )
+    let settingsURL = paths.settingsFile
+    let publisher = NodePortPublisher(
+        source: AgentServiceSource(makeClient: makeClient),
+        exposer: GVProxyHostPortExposer(socketURL: paths.gvproxySocket),
+        isEnabled: {
+            guard FileManager.default.fileExists(atPath: settingsURL.path(percentEncoded: false)) else {
+                return true
+            }
+            return (try? Settings.load(from: settingsURL))?.publishNodePorts ?? true
+        },
+        baseline: {
+            [
+                PublishedPort.loopback(
+                    service: "kubernetes",
+                    namespace: "default",
+                    port: GuestNetwork.apiGuestPort,
+                    nodePort: GuestNetwork.apiGuestPort,
+                    hostPort: controller.apiHostPort,
+                    guestPort: GuestNetwork.apiGuestPort,
+                    scheme: "https",
+                    preferredHostPort: GuestNetwork.apiHostPort
+                ),
+                PublishedPort.loopback(
+                    service: "http",
+                    port: GuestNetwork.httpGuestPort,
+                    nodePort: GuestNetwork.httpGuestPort,
+                    hostPort: controller.httpHostPort,
+                    guestPort: GuestNetwork.httpGuestPort,
+                    scheme: "http",
+                    preferredHostPort: GuestNetwork.httpHostPort
+                ),
+                PublishedPort.loopback(
+                    service: "https",
+                    port: GuestNetwork.httpsGuestPort,
+                    nodePort: GuestNetwork.httpsGuestPort,
+                    hostPort: controller.httpsHostPort,
+                    guestPort: GuestNetwork.httpsGuestPort,
+                    scheme: "https",
+                    preferredHostPort: GuestNetwork.httpsHostPort
+                ),
+            ]
+        }
     )
     let engine = ClusterEngine(
         scheduler: DispatchEngineScheduler(),
@@ -70,7 +114,8 @@ do {
             controller: controller,
             configDirectory: paths.configDirectory
         ),
-        bringUp: bringUp
+        bringUp: bringUp,
+        publisher: publisher
     )
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
     Gmak8Log.core.info("gmak8-core listening on engine.sock")

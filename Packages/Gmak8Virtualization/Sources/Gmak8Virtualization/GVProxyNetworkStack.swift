@@ -16,11 +16,25 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
     private var connection: VfkitConnection?
     private var initialExposeCompleted = false
     private var chosenAPIHostPort = GuestNetwork.apiHostPort
+    private var chosenHTTPHostPort = GuestNetwork.httpHostPort
+    private var chosenHTTPSHostPort = GuestNetwork.httpsHostPort
 
     public var apiHostPort: Int {
         mutex.lock()
         defer { mutex.unlock() }
         return chosenAPIHostPort
+    }
+
+    public var httpHostPort: Int {
+        mutex.lock()
+        defer { mutex.unlock() }
+        return chosenHTTPHostPort
+    }
+
+    public var httpsHostPort: Int {
+        mutex.lock()
+        defer { mutex.unlock() }
+        return chosenHTTPSHostPort
     }
 
     public init(
@@ -94,15 +108,21 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
     public func exposeDefaultPorts() throws -> Int {
         let client = UnixHTTPClient(socketURL: httpSocket)
         let apiPort = try APIPortExpose.choose { try client.expose($0) }
-        try client.expose(
-            try GVProxyExposeRequest(hostPort: GuestNetwork.httpHostPort, guestPort: GuestNetwork.httpGuestPort)
-        )
-        try client.expose(
-            try GVProxyExposeRequest(hostPort: GuestNetwork.httpsHostPort, guestPort: GuestNetwork.httpsGuestPort)
-        )
+        let httpPort = try HostPortExpose.choose(
+            hostPort: GuestNetwork.httpHostPort,
+            fallbackHostPort: GuestNetwork.httpFallbackHostPort,
+            guestPort: GuestNetwork.httpGuestPort
+        ) { try client.expose($0) }
+        let httpsPort = try HostPortExpose.choose(
+            hostPort: GuestNetwork.httpsHostPort,
+            fallbackHostPort: GuestNetwork.httpsFallbackHostPort,
+            guestPort: GuestNetwork.httpsGuestPort
+        ) { try client.expose($0) }
         mutex.lock()
         initialExposeCompleted = true
         chosenAPIHostPort = apiPort
+        chosenHTTPHostPort = httpPort
+        chosenHTTPSHostPort = httpsPort
         mutex.unlock()
         return apiPort
     }
@@ -114,6 +134,9 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
         process = nil
         connection = nil
         initialExposeCompleted = false
+        chosenAPIHostPort = GuestNetwork.apiHostPort
+        chosenHTTPHostPort = GuestNetwork.httpHostPort
+        chosenHTTPSHostPort = GuestNetwork.httpsHostPort
         mutex.unlock()
         child?.stop()
         connected?.removeLocalSocket()
@@ -124,14 +147,12 @@ public final class GVProxyNetworkStack: @unchecked Sendable {
         let client = UnixHTTPClient(socketURL: httpSocket)
         mutex.lock()
         let apiPort = chosenAPIHostPort
+        let httpPort = chosenHTTPHostPort
+        let httpsPort = chosenHTTPSHostPort
         mutex.unlock()
         try client.expose(try GVProxyExposeRequest(hostPort: apiPort, guestPort: GuestNetwork.apiGuestPort))
-        try client.expose(
-            try GVProxyExposeRequest(hostPort: GuestNetwork.httpHostPort, guestPort: GuestNetwork.httpGuestPort)
-        )
-        try client.expose(
-            try GVProxyExposeRequest(hostPort: GuestNetwork.httpsHostPort, guestPort: GuestNetwork.httpsGuestPort)
-        )
+        try client.expose(try GVProxyExposeRequest(hostPort: httpPort, guestPort: GuestNetwork.httpGuestPort))
+        try client.expose(try GVProxyExposeRequest(hostPort: httpsPort, guestPort: GuestNetwork.httpsGuestPort))
     }
 
     private func handleHelperRestart() {

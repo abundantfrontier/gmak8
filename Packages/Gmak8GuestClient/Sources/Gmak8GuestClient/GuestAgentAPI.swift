@@ -88,6 +88,63 @@ public struct GuestNode: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestServiceList: Codable, Equatable, Sendable {
+    public var items: [GuestService]
+
+    public init(items: [GuestService] = []) {
+        self.items = items
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([GuestService].self, forKey: .items) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(items, forKey: .items)
+    }
+}
+
+public struct GuestService: Codable, Equatable, Sendable {
+    public var namespace: String
+    public var name: String
+    public var type: String
+    public var ports: [GuestServicePort]
+
+    public init(namespace: String, name: String, type: String, ports: [GuestServicePort]) {
+        self.namespace = namespace
+        self.name = name
+        self.type = type
+        self.ports = ports
+    }
+}
+
+public struct GuestServicePort: Codable, Equatable, Sendable {
+    public var name: String?
+    public var port: Int
+    public var nodePort: Int?
+    public var protocolName: String?
+
+    public init(name: String? = nil, port: Int, nodePort: Int? = nil, protocolName: String? = nil) {
+        self.name = name
+        self.port = port
+        self.nodePort = nodePort
+        self.protocolName = protocolName
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case port
+        case nodePort
+        case protocolName = "protocol"
+    }
+}
+
 public struct GuestOK: Codable, Equatable, Sendable {
     public var ok: Bool
     public var error: String?

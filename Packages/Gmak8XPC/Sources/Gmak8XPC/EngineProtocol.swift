@@ -62,15 +62,100 @@ public struct VMMetrics: Equatable, Sendable, Codable {
     }
 }
 
+public enum PublishedPortCollision: String, Codable, Equatable, Sendable {
+    case published
+    case remapped
+    case collision
+    case forbidden
+    case capped
+}
+
 public struct PublishedPort: Equatable, Sendable, Codable {
     public var service: String
+    public var namespace: String?
+    public var port: Int
+    public var nodePort: Int
     public var hostPort: Int
     public var guestPort: Int
+    public var hostURL: String
+    public var collision: PublishedPortCollision
 
-    public init(service: String, hostPort: Int, guestPort: Int) {
+    public init(
+        service: String,
+        namespace: String? = nil,
+        port: Int = 0,
+        nodePort: Int = 0,
+        hostPort: Int,
+        guestPort: Int,
+        hostURL: String? = nil,
+        collision: PublishedPortCollision = .published
+    ) {
         self.service = service
+        self.namespace = namespace
+        self.port = port == 0 ? guestPort : port
+        self.nodePort = nodePort == 0 ? guestPort : nodePort
         self.hostPort = hostPort
         self.guestPort = guestPort
+        self.hostURL = hostURL ?? "http://127.0.0.1:\(hostPort)"
+        self.collision = collision
+    }
+
+    public static func loopback(
+        service: String,
+        namespace: String? = nil,
+        port: Int,
+        nodePort: Int,
+        hostPort: Int,
+        guestPort: Int,
+        scheme: String,
+        preferredHostPort: Int
+    ) -> PublishedPort {
+        PublishedPort(
+            service: service,
+            namespace: namespace,
+            port: port,
+            nodePort: nodePort,
+            hostPort: hostPort,
+            guestPort: guestPort,
+            hostURL: "\(scheme)://127.0.0.1:\(hostPort)",
+            collision: hostPort == preferredHostPort ? .published : .remapped
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case service
+        case namespace
+        case port
+        case nodePort
+        case hostPort
+        case guestPort
+        case hostURL
+        case collision
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        service = try container.decode(String.self, forKey: .service)
+        namespace = try container.decodeIfPresent(String.self, forKey: .namespace)
+        hostPort = try container.decode(Int.self, forKey: .hostPort)
+        guestPort = try container.decode(Int.self, forKey: .guestPort)
+        port = try container.decodeIfPresent(Int.self, forKey: .port) ?? guestPort
+        nodePort = try container.decodeIfPresent(Int.self, forKey: .nodePort) ?? guestPort
+        hostURL =
+            try container.decodeIfPresent(String.self, forKey: .hostURL) ?? "http://127.0.0.1:\(hostPort)"
+        collision = try container.decodeIfPresent(PublishedPortCollision.self, forKey: .collision) ?? .published
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(service, forKey: .service)
+        try container.encodeIfPresent(namespace, forKey: .namespace)
+        try container.encode(port, forKey: .port)
+        try container.encode(nodePort, forKey: .nodePort)
+        try container.encode(hostPort, forKey: .hostPort)
+        try container.encode(guestPort, forKey: .guestPort)
+        try container.encode(hostURL, forKey: .hostURL)
+        try container.encode(collision, forKey: .collision)
     }
 }
 

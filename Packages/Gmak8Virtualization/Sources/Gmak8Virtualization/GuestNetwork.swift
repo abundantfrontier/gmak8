@@ -17,7 +17,9 @@ public enum GuestNetwork {
     public static let apiFallbackHostPort = 16_443
     public static let apiGuestPort = 6443
     public static let httpHostPort = 8080
+    public static let httpFallbackHostPort = 18_080
     public static let httpGuestPort = 80
     public static let httpsHostPort = 8443
+    public static let httpsFallbackHostPort = 18_443
     public static let httpsGuestPort = 443
 }

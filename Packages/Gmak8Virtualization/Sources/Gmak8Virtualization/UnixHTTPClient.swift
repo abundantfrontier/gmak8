@@ -12,8 +12,14 @@ public struct UnixHTTPClient: Sendable {
     }
 
     public func expose(_ request: GVProxyExposeRequest) throws {
-        if currentlyExposed().contains(where: { $0.local == request.local }) {
+        let existing = currentlyExposed()
+        if existing.contains(where: { $0.local == request.local && $0.remote == request.remote }) {
             return
+        }
+        if existing.contains(where: { $0.local == request.local }) {
+            throw VirtualMachineError.networkFailed(
+                "expose \(request.local) failed: address already in use"
+            )
         }
         let body = try request.jsonUTF8()
         let response = try perform(method: "POST", path: "/services/forwarder/expose", body: body)
@@ -26,6 +32,23 @@ public struct UnixHTTPClient: Sendable {
         }
         throw VirtualMachineError.networkFailed(
             "expose \(request.local) failed (\(response.status)): \(text)"
+        )
+    }
+
+    public func unexpose(hostPort: Int) throws {
+        let local = "\(GuestNetwork.hostLoopback):\(hostPort)"
+        let body = try JSONEncoder().encode(["local": local])
+        let response = try perform(method: "POST", path: "/services/forwarder/unexpose", body: body)
+        if (200..<300).contains(response.status) {
+            return
+        }
+        let text = String(data: response.body, encoding: .utf8) ?? ""
+        let lower = text.lowercased()
+        if lower.contains("not found") || lower.contains("no such") {
+            return
+        }
+        throw VirtualMachineError.networkFailed(
+            "unexpose \(local) failed (\(response.status)): \(text)"
         )
     }
 

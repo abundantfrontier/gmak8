@@ -28,6 +28,7 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /node", s.handleNode)
 	mux.HandleFunc("GET /airgap", s.handleAirgap)
 	mux.HandleFunc("PUT /airgap/k3s", s.handleAirgapImport)
+	mux.HandleFunc("GET /services", s.handleServices)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
 	return mux
@@ -107,6 +108,10 @@ func (s *Server) handleAirgapImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleServices(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.host.Services())
 }
 
 func (s *Server) handleTime(w http.ResponseWriter, r *http.Request) {

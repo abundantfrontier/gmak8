@@ -69,6 +69,44 @@ struct UnixHTTPClientTests {
             try client.expose(try GVProxyExposeRequest(hostPort: 6443, guestPort: 6443))
         }
     }
+
+    @Test func sameLocalDifferentRemoteIsCollisionNotIdempotent() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let socket = root.appending(path: "g.sock")
+        try UnixgramPath.require(socket)
+        let server = try LoopbackHTTPServer(socketURL: socket) { request in
+            if request.contains("GET /services/forwarder/all") {
+                return
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[{\"local\":\"127.0.0.1:8080\",\"remote\":\"192.168.127.2:80\"}]"
+            }
+            return "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nOK"
+        }
+        defer { server.stop() }
+        let client = UnixHTTPClient(socketURL: socket, timeout: 2)
+        #expect(throws: VirtualMachineError.self) {
+            try client.expose(try GVProxyExposeRequest(hostPort: 8080, guestPort: 8080))
+        }
+    }
+
+    @Test func unexposePostsLocalLoopback() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let socket = root.appending(path: "g.sock")
+        try UnixgramPath.require(socket)
+        let recorded = RequestBox()
+        let server = try LoopbackHTTPServer(socketURL: socket) { request in
+            recorded.append(request)
+            return "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nOK"
+        }
+        defer { server.stop() }
+        let client = UnixHTTPClient(socketURL: socket, timeout: 2)
+        try client.unexpose(hostPort: 30080)
+        let joined = recorded.joined
+        #expect(joined.contains("POST /services/forwarder/unexpose"))
+        #expect(joined.contains("127.0.0.1:30080"))
+        #expect(!joined.contains("0.0.0.0"))
+    }
 }
 
 private final class RequestBox: @unchecked Sendable {

@@ -69,6 +69,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private let nestedVirt: Bool
     private let runtime: any VirtualMachineRuntime
     private let bringUp: any ClusterBringUp
+    private let publisher: any PortPublisher
 
     private var state: ClusterState = .stopped
     private var step: String?
@@ -83,12 +84,14 @@ public final class ClusterEngine: @unchecked Sendable {
         scheduler: any EngineScheduler,
         nestedVirt: Bool = false,
         runtime: any VirtualMachineRuntime = FakeVirtualMachineRuntime(),
-        bringUp: any ClusterBringUp = NoOpClusterBringUp()
+        bringUp: any ClusterBringUp = NoOpClusterBringUp(),
+        publisher: any PortPublisher = NoOpPortPublisher()
     ) {
         self.scheduler = scheduler
         self.nestedVirt = nestedVirt
         self.runtime = runtime
         self.bringUp = bringUp
+        self.publisher = publisher
         self.runtime.setUnexpectedStopHandler { [weak self] error in
             self?.handleUnexpectedStop(error)
         }
@@ -257,6 +260,7 @@ public final class ClusterEngine: @unchecked Sendable {
     }
 
     private func beginStop(generation: UInt64) {
+        publisher.cancel()
         runtime.stop { [weak self] result in
             self?.completeStop(generation: generation, result: result)
         }
@@ -265,6 +269,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private func completeStart(generation: UInt64, result: Result<Void, any Error>) {
         var events: [EngineEvent] = []
         var startBringUp = false
+        var startPublisher = false
         withLock {
             guard generation == self.generation, state == .starting else {
                 return
@@ -278,6 +283,7 @@ public final class ClusterEngine: @unchecked Sendable {
                     events.append(.status(currentStatusLocked()))
                     let line = runtime.stepName == "fakeVM" ? "fake VM running" : "VM running"
                     events.append(.log(source: .engine, line: line))
+                    startPublisher = true
                 } else {
                     lastError = nil
                     events.append(.status(currentStatusLocked()))
@@ -294,6 +300,9 @@ public final class ClusterEngine: @unchecked Sendable {
         broadcast(events)
         if startBringUp {
             beginBringUp(generation: generation)
+        }
+        if startPublisher {
+            beginPublisher()
         }
     }
 
@@ -348,6 +357,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private func completeBringUp(generation: UInt64, result: Result<ClusterBringUpResult, any Error>) {
         var events: [EngineEvent] = []
         var stopGeneration: UInt64?
+        var startPublisher = false
         withLock {
             guard generation == self.generation, state == .starting else {
                 return
@@ -360,6 +370,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 imageJob = nil
                 events.append(.status(currentStatusLocked()))
                 events.append(.log(source: .engine, line: "cluster running"))
+                startPublisher = true
             case .failure(let error):
                 lastError = error.localizedDescription
                 failAfterStop = lastError
@@ -374,6 +385,9 @@ public final class ClusterEngine: @unchecked Sendable {
             }
         }
         broadcast(events)
+        if startPublisher {
+            beginPublisher()
+        }
         if let stopGeneration {
             scheduler.schedule { [weak self] in
                 self?.beginStop(generation: stopGeneration)
@@ -422,6 +436,7 @@ public final class ClusterEngine: @unchecked Sendable {
 
     private func handleDegraded(_ message: String) {
         var events: [EngineEvent] = []
+        var reexpose = false
         withLock {
             switch state {
             case .running, .degraded:
@@ -429,6 +444,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 lastError = message
                 events.append(.status(currentStatusLocked()))
                 events.append(.log(source: .engine, line: message))
+                reexpose = true
             case .starting:
                 lastError = message
                 events.append(.status(currentStatusLocked()))
@@ -438,9 +454,13 @@ public final class ClusterEngine: @unchecked Sendable {
             }
         }
         broadcast(events)
+        if reexpose {
+            publisher.reexpose()
+        }
     }
 
     private func handleUnexpectedStop(_ error: Error?) {
+        publisher.cancel()
         var events: [EngineEvent] = []
         withLock {
             switch state {
@@ -480,9 +500,33 @@ public final class ClusterEngine: @unchecked Sendable {
             vm: VMMetrics(),
             nestedVirt: nestedVirt,
             lastError: lastError,
-            publishedPorts: [],
+            publishedPorts: publisher.snapshot(),
             imageJob: imageJob
         )
+    }
+
+    private func beginPublisher() {
+        publisher.start(
+            onChange: { [weak self] in
+                self?.publishPortsChanged()
+            },
+            log: { [weak self] line in
+                self?.broadcast([.log(source: .engine, line: line)])
+            }
+        )
+    }
+
+    private func publishPortsChanged() {
+        var events: [EngineEvent] = []
+        withLock {
+            switch state {
+            case .running, .degraded, .stopping:
+                events.append(.status(currentStatusLocked()))
+            case .stopped, .starting, .paused, .failed:
+                break
+            }
+        }
+        broadcast(events)
     }
 
     private func broadcast(_ events: [EngineEvent]) {
