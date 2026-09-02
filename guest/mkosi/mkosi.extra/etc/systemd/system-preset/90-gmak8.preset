@@ -6,3 +6,4 @@ disable sshd.socket
 enable mnt-data.mount
 enable mnt-data-prep.service
 enable gmak8-kvm.service
+enable gmak8-agent.service

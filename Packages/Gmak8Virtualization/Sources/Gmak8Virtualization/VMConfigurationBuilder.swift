@@ -29,6 +29,9 @@ public enum VMConfigurationBuilder {
             config.networkDevices = [makeVirtioNetworkDevice(attachment: networkAttachment)]
         }
 
+        // virtio-vsock: guest agent 1024, buildkitd 1025 later. gvproxy is vfkit unixgram, not vsock.
+        config.socketDevices = [VZVirtioSocketDeviceConfiguration()]
+
         return config
     }
 

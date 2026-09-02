@@ -56,6 +56,8 @@ struct VMConfigurationBuilderTests {
         #expect(config.serialPorts[0] is VZVirtioConsoleDeviceSerialPortConfiguration)
         #expect(config.serialPorts[0].attachment is VZFileSerialPortAttachment)
         #expect(config.networkDevices.isEmpty)
+        #expect(config.socketDevices.count == 1)
+        #expect(config.socketDevices[0] is VZVirtioSocketDeviceConfiguration)
         #expect(config.cpuCount == 2)
         #expect(config.memorySize == 256 * 1024 * 1024)
     }

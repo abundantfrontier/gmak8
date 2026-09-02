@@ -9,6 +9,8 @@ format_unit="$extra/etc/systemd/system/gmak8-data-format.service"
 mount_unit="$extra/etc/systemd/system/mnt-data.mount"
 prep_unit="$extra/etc/systemd/system/mnt-data-prep.service"
 kvm_unit="$extra/etc/systemd/system/gmak8-kvm.service"
+agent_unit="$extra/etc/systemd/system/gmak8-agent.service"
+agent_src="$root/guest/agent"
 k3s_cfg="$root/guest/k3s/config.yaml"
 readme="$root/guest/README.md"
 mkosi_conf="$root/guest/mkosi/mkosi.conf"
@@ -51,10 +53,32 @@ grep -q '/mnt/data/local-path' "$prep_unit" || fail "prep must mkdir local-path"
 grep -q 'modprobe-kvm.sh' "$kvm_unit" || fail "kvm unit must call modprobe-kvm.sh"
 grep -q '^kvm$' "$extra/etc/modules-load.d/gmak8-kvm.conf" || fail "modules-load.d must list kvm"
 
+test -f "$agent_unit" || fail "missing gmak8-agent.service"
+grep -q 'After=mnt-data.mount' "$agent_unit" || fail "agent After=mnt-data.mount"
+grep -q 'ExecStart=/usr/local/bin/gmak8-agent' "$agent_unit" || fail "agent ExecStart"
+grep -q 'vsock:1024' "$agent_unit" || fail "agent must listen on vsock:1024"
+if grep -Eiq 'mkfs|format-data-disk' "$agent_unit"; then
+  fail "agent unit must not format the data disk"
+fi
+if grep -E '^Requires=mnt-data.mount' "$agent_unit"; then
+  fail "agent must not Requires=mnt-data.mount (format is a separate oneshot)"
+fi
+test -L "$extra/etc/systemd/system/multi-user.target.wants/gmak8-agent.service" || fail "multi-user.target.wants/gmak8-agent.service symlink missing"
+grep -q 'enable gmak8-agent.service' "$extra/etc/systemd/system-preset/90-gmak8.preset" || fail "preset must enable gmak8-agent.service"
+grep -q 'systemctl enable gmak8-agent.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must enable gmak8-agent.service"
+test -f "$agent_src/go.mod" || fail "missing guest/agent/go.mod"
+test -f "$agent_src/Makefile" || fail "missing guest/agent/Makefile"
+if grep -R -E --include='*.go' 'mkfs\.ext4|format-data-disk' "$agent_src"; then
+  fail "agent source must not format the data disk"
+fi
+grep -q 'AgentVsockPort.*=.*1024' "$agent_src/ports.go" || fail "agent vsock port must be 1024"
+grep -q 'BuildkitVsockPort.*=.*1025' "$agent_src/ports.go" || fail "buildkit vsock port must be reserved 1025"
+
 wants_mount="$extra/etc/systemd/system/local-fs.target.wants/mnt-data.mount"
 test -L "$wants_mount" || fail "local-fs.target.wants/mnt-data.mount symlink missing"
 test -L "$extra/etc/systemd/system/multi-user.target.wants/mnt-data-prep.service" || fail "multi-user.target.wants/mnt-data-prep.service symlink missing"
 test -L "$extra/etc/systemd/system/multi-user.target.wants/gmak8-kvm.service" || fail "multi-user.target.wants/gmak8-kvm.service symlink missing"
+test -L "$extra/etc/systemd/system/multi-user.target.wants/gmak8-agent.service" || fail "multi-user.target.wants/gmak8-agent.service symlink missing"
 
 grep -qx 'data-dir: /mnt/data/rancher' "$k3s_cfg" || fail "k3s config data-dir"
 grep -qx 'default-local-storage-path: /mnt/data/local-path' "$k3s_cfg" || fail "k3s config default-local-storage-path"
@@ -81,6 +105,8 @@ grep -q 'efi-nvram.bin' "$readme" || fail "README must document efi-nvram.bin re
 grep -q 'data.img' "$readme" || fail "README must document keeping data.img"
 grep -q 'GMAK8_DATA' "$readme" || fail "README must document GMAK8_DATA"
 grep -q 'whole-disk label is' "$readme" || fail "README must document non-GMAK8_DATA labels are reformatted"
+grep -q 'vsock port 1024' "$readme" || fail "README must document vsock 1024 agent"
+grep -q 'gmak8-agent.service' "$readme" || fail "README must document gmak8-agent.service"
 
 if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/guest.yml"; then
   fail "guest.yml must not run Virtualization.framework"

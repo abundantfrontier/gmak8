@@ -5,6 +5,7 @@ set -eu
 systemctl enable mnt-data.mount
 systemctl enable mnt-data-prep.service
 systemctl enable gmak8-kvm.service
+systemctl enable gmak8-agent.service
 
 unit_present() {
   unit=$1

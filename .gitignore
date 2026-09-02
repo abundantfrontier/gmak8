@@ -45,6 +45,10 @@ ThirdParty/gvproxy/src/
 .vscode/
 .env
 
+# Guest agent build product (linux/arm64). Installed into mkosi.extra at image build.
+guest/agent/gmak8-agent
+guest/mkosi/mkosi.extra/usr/local/bin/gmak8-agent
+
 # mkosi build artifacts — never vendor guest disk images
 guest/mkosi/mkosi.output/
 guest/mkosi/mkosi.cache/

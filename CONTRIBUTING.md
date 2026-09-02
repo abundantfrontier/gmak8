@@ -20,6 +20,7 @@ Requirements: macOS 14+, Apple Silicon, Xcode with Swift 6.
 swift test --package-path Packages/Gmak8Kit
 swift test --package-path Packages/Gmak8XPC
 swift test --package-path Packages/Gmak8Virtualization
+swift test --package-path Packages/Gmak8GuestClient
 
 xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
   -scheme gmak8 \

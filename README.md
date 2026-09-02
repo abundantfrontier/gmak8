@@ -15,6 +15,8 @@ This repository is early. The app currently opens a window; it does **not** star
 ```bash
 swift test --package-path Packages/Gmak8Kit
 swift test --package-path Packages/Gmak8XPC
+swift test --package-path Packages/Gmak8Virtualization
+swift test --package-path Packages/Gmak8GuestClient
 
 xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
   -scheme gmak8 \
@@ -25,7 +27,7 @@ xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
 
 The **gmak8** CLI (`status`, `version`) is the `gmak8-cli` scheme; `version` does not need `gmak8-core`. Open `Apps/gmak8/gmak8.xcodeproj` in Xcode and run the **gmak8** scheme.
 
-CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, Gmak8Kit tests, xcodebuild test).
+CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, package tests, xcodebuild test).
 
 ## License
 

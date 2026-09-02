@@ -30,6 +30,9 @@ Boot order:
 2. `mnt-data.mount` mounts `/dev/disk/by-label/GMAK8_DATA` at `/mnt/data`.
 3. `mnt-data-prep.service` (`After=mnt-data.mount`, `Before=k3s.service`)
    creates `/mnt/data/{rancher,buildkit,tmp,log,local-path}`.
+4. `gmak8-agent.service` (`After=mnt-data.mount`, no format responsibility)
+   listens on **vsock port 1024**. gvproxy is vfkit unixgram, not vsock.
+   Port **1025** is reserved for buildkitd (not in this image yet).
 
 k3s is **not** installed in this image yet. The config template shipped at
 `/etc/rancher/k3s/config.yaml` (source: [`k3s/config.yaml`](k3s/config.yaml)) is:
@@ -42,6 +45,25 @@ default-local-storage-path: /mnt/data/local-path
 Do **not** set `disable-helm-controller` (Traefik and metrics-server are
 HelmChart addons). Do **not** set a custom `write-kubeconfig` path. The admin
 file remains `/etc/rancher/k3s/k3s.yaml`.
+
+## Guest agent (vsock 1024)
+
+Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
+
+| Method | Path | Contract |
+| --- | --- | --- |
+| `GET` | `/health` | Agent process is up. Does **not** report data-disk mount. |
+| `GET` | `/disks` | `gmak8_data` / `kite_data` are `mounted` when `/mnt/data` is `GMAK8_DATA`. |
+| `GET` | `/kvm` | `kvm` is true iff `/dev/kvm` exists as a character device. |
+| `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
+| `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |
+
+Host client: `Packages/Gmak8GuestClient`. Tests fake this HTTP API over loopback TCP.
+
+```bash
+make -C guest/agent test
+make -C guest/agent install DESTDIR="$PWD/guest/mkosi/mkosi.extra"
+```
 
 ## KVM
 
@@ -89,4 +111,5 @@ Host-side checks (no image build):
 ```bash
 bash guest/mkosi/tests/validate.sh
 bash guest/mkosi/tests/format-data-disk-test.sh
+make -C guest/agent test
 ```

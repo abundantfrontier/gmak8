@@ -1,0 +1,17 @@
+[Unit]
+Description=gmak8 guest agent (HTTP over vsock 1024)
+# After the data mount so GET /disks can report gmak8_data=mounted on a
+# successful first boot. Do not Requires= that mount and do not touch the
+# data disk: labeling is gmak8-data-format.service. Requires=mnt-data.mount
+# would deadlock if this unit were responsible for first-boot labeling.
+After=mnt-data.mount
+Wants=mnt-data.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gmak8-agent -listen vsock:1024
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target
