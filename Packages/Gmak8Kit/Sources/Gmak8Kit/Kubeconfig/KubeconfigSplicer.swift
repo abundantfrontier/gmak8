@@ -33,22 +33,26 @@ public enum KubeconfigSplicer {
         if existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return standaloneDocument(material: material, setCurrentContext: setCurrentContext)
         }
+        // Yams reports JSON / flow-root mappings as style `.any`, not `.flow`.
+        if looksLikeFlowRoot(existing) {
+            throw KubeconfigSpliceError.unspliceable
+        }
 
         let root: Node
         do {
             guard let node = try Yams.compose(yaml: existing) else {
-                return standaloneDocument(material: material, setCurrentContext: setCurrentContext)
+                // Comment-only (and other empty documents): YAML, but not a kubeconfig mapping.
+                throw KubeconfigSpliceError.unspliceable
             }
             root = node
+        } catch let error as KubeconfigSpliceError {
+            throw error
         } catch {
             throw KubeconfigSpliceError.notYAML
         }
 
         guard let mapping = root.mapping else {
             throw KubeconfigSpliceError.notYAML
-        }
-        if mapping.style == .flow {
-            throw KubeconfigSpliceError.unspliceable
         }
 
         let source = YAMLSource(text: existing)
@@ -127,25 +131,25 @@ private struct YAMLSource {
     init(text: String) {
         self.text = text
         var lines: [Line] = []
-        var i = text.startIndex
-        while i < text.endIndex {
-            let start = i
-            var contentEnd = i
-            while i < text.endIndex && text[i] != "\n" && text[i] != "\r" {
-                i = text.index(after: i)
-                contentEnd = i
+        let scalars = text.unicodeScalars
+        var i = scalars.startIndex
+        while i < scalars.endIndex {
+            let start = stringIndex(i, in: text)
+            while i < scalars.endIndex && scalars[i] != "\n" && scalars[i] != "\r" {
+                i = scalars.index(after: i)
             }
-            if i < text.endIndex {
-                if text[i] == "\r" {
-                    i = text.index(after: i)
-                    if i < text.endIndex, text[i] == "\n" {
-                        i = text.index(after: i)
+            let contentEnd = stringIndex(i, in: text)
+            if i < scalars.endIndex {
+                if scalars[i] == "\r" {
+                    i = scalars.index(after: i)
+                    if i < scalars.endIndex, scalars[i] == "\n" {
+                        i = scalars.index(after: i)
                     }
                 } else {
-                    i = text.index(after: i)
+                    i = scalars.index(after: i)
                 }
             }
-            lines.append(Line(start: start, contentEnd: contentEnd, end: i))
+            lines.append(Line(start: start, contentEnd: contentEnd, end: stringIndex(i, in: text)))
         }
         self.lines = lines
     }
@@ -166,9 +170,6 @@ private func locateLists(in mapping: Node.Mapping) throws -> [ListKey: LocatedLi
             continue
         }
         if let sequence = valueNode.sequence {
-            if sequence.style == .flow && !sequence.isEmpty {
-                throw KubeconfigSpliceError.unspliceable
-            }
             result[key] = LocatedList(key: key, keyNode: keyNode, valueNode: valueNode, sequence: sequence)
         } else if valueNode.mapping != nil {
             throw KubeconfigSpliceError.unspliceable
@@ -194,8 +195,9 @@ private func spliceList(
     let keyLine = try source.lineIndex(of: keyMark)
     let stopLine = try exclusiveStopLine(after: located.keyNode, mapping: mapping, source: source)
 
-    if let sequence = located.sequence, sequence.style == .flow, sequence.isEmpty {
-        return [try replaceEmptyFlowSequence(located.valueNode, key: key, material: material, source: source)]
+    // Yams 5.4 parses `[]` as style `.any` with count 0, not `.flow`.
+    if let sequence = located.sequence, sequence.isEmpty {
+        return [try replaceEmptySequence(located.valueNode, key: key, material: material, source: source)]
     }
 
     guard let sequence = located.sequence, !sequence.isEmpty else {
@@ -211,6 +213,10 @@ private func spliceList(
             text += "\n"
         }
         return [Replacement(range: insertion..<insertion, text: text)]
+    }
+
+    if keyLineHasFlowSequence(source.lines[keyLine].content(in: source.text)) {
+        throw KubeconfigSpliceError.unspliceable
     }
 
     var dashLines: [Int] = []
@@ -235,10 +241,12 @@ private func spliceList(
             source: source
         )
         let dashIndent = try dashIndent(at: dashLines[first], source: source)
+        let extras = key == .contexts ? extraContextScalars(sequence[first]) : []
         let rendered = renderItem(
             key,
             material: material,
             dashIndent: dashIndent,
+            extraContext: extras,
             matching: range,
             source: source
         )
@@ -273,7 +281,7 @@ private func spliceList(
     return replacements
 }
 
-private func replaceEmptyFlowSequence(
+private func replaceEmptySequence(
     _ valueNode: Node,
     key: ListKey,
     material: KubeconfigMaterial,
@@ -288,12 +296,17 @@ private func replaceEmptyFlowSequence(
     guard let open = content.firstIndex(of: "["), let close = content[open...].firstIndex(of: "]") else {
         throw KubeconfigSpliceError.unspliceable
     }
-    let rangeStart = open
+    var rangeStart = open
+    if open > content.startIndex {
+        let before = content.index(before: open)
+        if content[before] == " " || content[before] == "\t" {
+            rangeStart = before
+        }
+    }
     let rangeEnd = content.index(after: close)
     var text = "\n" + renderItem(key, material: material, dashIndent: 0)
-    if rangeEnd != line.contentEnd || line.end != line.contentEnd {
-        text += "\n"
-    } else if line.end == source.text.endIndex {
+    // Only synthesize a newline when `[]` is the last bytes of the file (no line ending).
+    if rangeEnd == line.contentEnd, line.end == line.contentEnd {
         text += "\n"
     }
     return Replacement(range: rangeStart..<rangeEnd, text: text)
@@ -415,10 +428,11 @@ private func renderItem(
     _ key: ListKey,
     material: KubeconfigMaterial,
     dashIndent: Int,
+    extraContext: [(String, String)] = [],
     matching range: Range<String.Index>,
     source: YAMLSource
 ) -> String {
-    var text = renderItem(key, material: material, dashIndent: dashIndent)
+    var text = renderItem(key, material: material, dashIndent: dashIndent, extraContext: extraContext)
     let hadNewline =
         range.upperBound > range.lowerBound && source.text[source.text.index(before: range.upperBound)].isNewline
     if hadNewline {
@@ -434,7 +448,12 @@ private func renderItem(
     return text
 }
 
-private func renderItem(_ key: ListKey, material: KubeconfigMaterial, dashIndent: Int) -> String {
+private func renderItem(
+    _ key: ListKey,
+    material: KubeconfigMaterial,
+    dashIndent: Int,
+    extraContext: [(String, String)] = []
+) -> String {
     let dash = String(repeating: " ", count: dashIndent) + "- "
     let pad = String(repeating: " ", count: dashIndent + 2)
     let nest = String(repeating: " ", count: dashIndent + 4)
@@ -454,12 +473,16 @@ private func renderItem(_ key: ListKey, material: KubeconfigMaterial, dashIndent
             \(nest)client-key-data: \(material.clientKeyData)
             """
     case .contexts:
-        return """
-            \(dash)context:
-            \(nest)cluster: \(KubeconfigSplicer.stanzaName)
-            \(nest)user: \(KubeconfigSplicer.stanzaName)
-            \(pad)name: \(KubeconfigSplicer.stanzaName)
-            """
+        var lines = [
+            "\(dash)context:",
+            "\(nest)cluster: \(KubeconfigSplicer.stanzaName)",
+            "\(nest)user: \(KubeconfigSplicer.stanzaName)",
+        ]
+        for (extraKey, extraValue) in extraContext {
+            lines.append("\(nest)\(extraKey): \(renderYAMLScalar(extraValue))")
+        }
+        lines.append("\(pad)name: \(KubeconfigSplicer.stanzaName)")
+        return lines.joined(separator: "\n")
     }
 }
 
@@ -482,6 +505,86 @@ private func listItemDashIndent(_ line: Substring) -> Int? {
         return nil
     }
     return indent
+}
+
+private func extraContextScalars(_ item: Node) -> [(String, String)] {
+    guard let mapping = item.mapping?["context"]?.mapping else {
+        return []
+    }
+    var extras: [(String, String)] = []
+    for (keyNode, valueNode) in mapping {
+        guard let key = keyNode.string, key != "cluster", key != "user" else {
+            continue
+        }
+        guard let value = valueNode.string else {
+            continue
+        }
+        extras.append((key, value))
+    }
+    return extras
+}
+
+private func renderYAMLScalar(_ value: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./"))
+    if !value.isEmpty, value.unicodeScalars.allSatisfy({ allowed.contains($0) }) {
+        return value
+    }
+    let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    return "\"\(escaped)\""
+}
+
+private func looksLikeFlowRoot(_ text: String) -> Bool {
+    var i = text.startIndex
+    while i < text.endIndex {
+        let character = text[i]
+        if character == " " || character == "\t" || character.isNewline {
+            i = text.index(after: i)
+            continue
+        }
+        if character == "#" {
+            while i < text.endIndex, !text[i].isNewline {
+                i = text.index(after: i)
+            }
+            continue
+        }
+        if character == "%" {
+            while i < text.endIndex, !text[i].isNewline {
+                i = text.index(after: i)
+            }
+            continue
+        }
+        if text[i...].hasPrefix("---") {
+            let after = text.index(i, offsetBy: 3, limitedBy: text.endIndex) ?? text.endIndex
+            if after == text.endIndex {
+                return false
+            }
+            let rest = text[after]
+            if rest.isNewline || rest == " " || rest == "\t" {
+                i = after
+                continue
+            }
+        }
+        return character == "{" || character == "["
+    }
+    return false
+}
+
+private func keyLineHasFlowSequence(_ line: Substring) -> Bool {
+    guard let colon = line.firstIndex(of: ":") else {
+        return false
+    }
+    var i = line.index(after: colon)
+    while i < line.endIndex, line[i] == " " || line[i] == "\t" {
+        i = line.index(after: i)
+    }
+    guard i < line.endIndex else {
+        return false
+    }
+    return line[i] == "["
+}
+
+private func stringIndex(_ scalarIndex: String.UnicodeScalarView.Index, in text: String) -> String.Index {
+    String.Index(scalarIndex, within: text) ?? text.endIndex
 }
 
 private func leadingWhitespaceCount(_ line: Substring) -> Int {

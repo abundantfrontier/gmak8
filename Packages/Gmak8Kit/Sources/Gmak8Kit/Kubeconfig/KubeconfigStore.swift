@@ -127,12 +127,13 @@ public struct KubeconfigStore: Equatable, Sendable {
         defer { lock.release() }
 
         let path = userKubeconfigFile.path(percentEncoded: false)
-        if !fileManager.fileExists(atPath: path) {
+        let publishURL = try publishURL(for: userKubeconfigFile, fileManager: fileManager)
+        if !fileManager.fileExists(atPath: path) && !isSymbolicLink(userKubeconfigFile) {
             let yaml = KubeconfigSplicer.standaloneDocument(
                 material: material,
                 setCurrentContext: setCurrentContext
             )
-            try writeFsyncRename(Data(yaml.utf8), to: userKubeconfigFile, fileManager: fileManager)
+            try writeFsyncRename(Data(yaml.utf8), to: publishURL, fileManager: fileManager)
             return
         }
 
@@ -159,7 +160,7 @@ public struct KubeconfigStore: Equatable, Sendable {
         }
 
         try backupUserConfig(fileManager: fileManager)
-        try writeFsyncRename(Data(spliced.utf8), to: userKubeconfigFile, fileManager: fileManager)
+        try writeFsyncRename(Data(spliced.utf8), to: publishURL, fileManager: fileManager)
     }
 
     private func backupUserConfig(fileManager: FileManager) throws {
@@ -167,21 +168,19 @@ public struct KubeconfigStore: Equatable, Sendable {
         if fileManager.fileExists(atPath: backup.path(percentEncoded: false)) {
             try fileManager.removeItem(at: backup)
         }
-        try fileManager.copyItem(at: userKubeconfigFile, to: backup)
+        // Follow the user path so a symlink backup is a content snapshot, not another link.
+        let data = try Data(contentsOf: userKubeconfigFile)
+        try writeRestrictedFile(data, to: backup, fsync: false)
     }
 }
 
-/// chmod 0600 on a sibling temp, then replace, so the published path is never world-readable.
+/// Create dest with mode 0600, then replace, so neither the temp nor the published path is world-readable.
 private func writeOwnerReadWriteAtomically(_ data: Data, to url: URL, fileManager: FileManager) throws {
     let temp = url.deletingLastPathComponent().appending(
         path: ".\(url.lastPathComponent).tmp-\(UUID().uuidString)"
     )
     do {
-        try data.write(to: temp, options: .withoutOverwriting)
-        try fileManager.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: temp.path(percentEncoded: false)
-        )
+        try writeRestrictedFile(data, to: temp, fsync: false)
         _ = try fileManager.replaceItemAt(
             url,
             withItemAt: temp,
@@ -202,17 +201,11 @@ private func writeFsyncRename(_ data: Data, to url: URL, fileManager: FileManage
     let tempPath = temp.path(percentEncoded: false)
     let destPath = url.path(percentEncoded: false)
     do {
-        try data.write(to: temp, options: .withoutOverwriting)
-        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tempPath)
-        try fsyncPath(tempPath)
+        try writeRestrictedFile(data, to: temp, fsync: true)
         if rename(tempPath, destPath) != 0 {
             let code = errno
             try? fileManager.removeItem(at: temp)
-            throw NSError(
-                domain: NSPOSIXErrorDomain,
-                code: Int(code),
-                userInfo: [NSFilePathErrorKey: destPath]
-            )
+            throw posixError(code, path: destPath)
         }
     } catch {
         try? fileManager.removeItem(at: temp)
@@ -220,15 +213,62 @@ private func writeFsyncRename(_ data: Data, to url: URL, fileManager: FileManage
     }
 }
 
-private func fsyncPath(_ path: String) throws {
-    let fd = open(path, O_RDWR)
+/// `open(O_CREAT|O_EXCL, 0600)` so the file is never world-readable, including before chmod.
+private func writeRestrictedFile(_ data: Data, to url: URL, fsync shouldFsync: Bool) throws {
+    let path = url.path(percentEncoded: false)
+    let fd = open(path, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0o600)
     guard fd >= 0 else {
-        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: path])
+        throw posixError(errno, path: path)
     }
     defer { close(fd) }
-    if fsync(fd) != 0 {
-        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: path])
+    if fchmod(fd, 0o600) != 0 {
+        throw posixError(errno, path: path)
     }
+    var remaining = data
+    while !remaining.isEmpty {
+        let written = remaining.withUnsafeBytes { buffer -> Int in
+            guard let base = buffer.baseAddress else {
+                return 0
+            }
+            return write(fd, base, buffer.count)
+        }
+        if written <= 0 {
+            if written < 0, errno == EINTR {
+                continue
+            }
+            throw posixError(written < 0 ? errno : EIO, path: path)
+        }
+        remaining = remaining.dropFirst(written)
+    }
+    if shouldFsync, fsync(fd) != 0 {
+        throw posixError(errno, path: path)
+    }
+}
+
+private func posixError(_ code: Int32, path: String) -> NSError {
+    NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: [NSFilePathErrorKey: path])
+}
+
+private func isSymbolicLink(_ url: URL) -> Bool {
+    var info = stat()
+    let path = url.path(percentEncoded: false)
+    guard lstat(path, &info) == 0 else {
+        return false
+    }
+    return (info.st_mode & S_IFMT) == S_IFLNK
+}
+
+/// Follow a symlink so rename/replace updates the target and leaves the link in place.
+private func publishURL(for url: URL, fileManager: FileManager) throws -> URL {
+    let path = url.path(percentEncoded: false)
+    guard isSymbolicLink(url) else {
+        return url
+    }
+    let destination = try fileManager.destinationOfSymbolicLink(atPath: path)
+    if destination.hasPrefix("/") {
+        return URL(fileURLWithPath: destination).standardizedFileURL
+    }
+    return url.deletingLastPathComponent().appending(path: destination).standardizedFileURL
 }
 
 private final class ExclusiveFileLock {

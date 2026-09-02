@@ -116,6 +116,97 @@ struct KubeconfigStoreTests {
         #expect(backup.contains("server: https://127.0.0.1:6443"))
     }
 
+    @Test func jsonUserConfigIsLeftUntouched() throws {
+        let harness = try Harness()
+        defer { harness.tearDown() }
+
+        let json = "{\"apiVersion\":\"v1\",\"clusters\":[],\"users\":[],\"contexts\":[]}\n"
+        try FileManager.default.createDirectory(
+            at: harness.store.userKubeconfigFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try json.write(to: harness.store.userKubeconfigFile, atomically: true, encoding: .utf8)
+
+        let path = harness.store.userKubeconfigFile.path(percentEncoded: false)
+        let snippet = harness.store.exportSnippet
+        #expect(throws: KubeconfigError.unspliceableUserConfig(path: path, exportSnippet: snippet)) {
+            try harness.store.apply(material: material)
+        }
+        #expect(try String(contentsOf: harness.store.userKubeconfigFile, encoding: .utf8) == json)
+        #expect(FileManager.default.fileExists(atPath: harness.store.privateKubeconfigFile.path(percentEncoded: false)))
+    }
+
+    @Test func commentOnlyUserConfigIsLeftUntouched() throws {
+        let harness = try Harness()
+        defer { harness.tearDown() }
+
+        let comments = "# keep me\n"
+        try FileManager.default.createDirectory(
+            at: harness.store.userKubeconfigFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try comments.write(to: harness.store.userKubeconfigFile, atomically: true, encoding: .utf8)
+
+        let path = harness.store.userKubeconfigFile.path(percentEncoded: false)
+        let snippet = harness.store.exportSnippet
+        #expect(throws: KubeconfigError.unspliceableUserConfig(path: path, exportSnippet: snippet)) {
+            try harness.store.apply(material: material)
+        }
+        #expect(try String(contentsOf: harness.store.userKubeconfigFile, encoding: .utf8) == comments)
+    }
+
+    @Test func emptyListStubMergesIntoValidYAML() throws {
+        let harness = try Harness()
+        defer { harness.tearDown() }
+
+        let stub = try golden("empty-lists.before.yaml")
+        try FileManager.default.createDirectory(
+            at: harness.store.userKubeconfigFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try stub.write(to: harness.store.userKubeconfigFile, atomically: true, encoding: .utf8)
+
+        _ = try harness.store.apply(material: material)
+        let userYAML = try String(contentsOf: harness.store.userKubeconfigFile, encoding: .utf8)
+        #expect(userYAML == (try golden("empty-lists.after.yaml")))
+        _ = try harness.store.apply(material: material)
+        let again = try String(contentsOf: harness.store.userKubeconfigFile, encoding: .utf8)
+        #expect(again.contains("name: gmak8"))
+        #expect(!again.contains("clusters: []"))
+    }
+
+    @Test func symlinkUserConfigWritesThroughToTarget() throws {
+        let harness = try Harness()
+        defer { harness.tearDown() }
+
+        let kubeDir = harness.store.userKubeconfigFile.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: kubeDir, withIntermediateDirectories: true)
+        let target = harness.root.appending(path: "real-config")
+        let existing = try golden("comments.before.yaml")
+        try existing.write(to: target, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(
+            atPath: harness.store.userKubeconfigFile.path(percentEncoded: false),
+            withDestinationPath: target.path(percentEncoded: false)
+        )
+
+        _ = try harness.store.apply(material: material)
+
+        let linkDestination = try FileManager.default.destinationOfSymbolicLink(
+            atPath: harness.store.userKubeconfigFile.path(percentEncoded: false)
+        )
+        #expect(linkDestination == target.path(percentEncoded: false))
+        #expect(
+            try harness.store.userKubeconfigFile.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true)
+
+        let targetYAML = try String(contentsOf: target, encoding: .utf8)
+        #expect(targetYAML == (try golden("comments.after.yaml")))
+        let backup = try String(contentsOf: harness.store.userKubeconfigBackupFile, encoding: .utf8)
+        #expect(backup == existing)
+        #expect(
+            try harness.store.userKubeconfigBackupFile.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink
+                != true)
+    }
+
     @Test func spliceIntoExistingUserConfigPreservesForeignStanzas() throws {
         let harness = try Harness()
         defer { harness.tearDown() }

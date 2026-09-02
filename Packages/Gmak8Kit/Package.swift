@@ -26,8 +26,8 @@ let package = Package(
         .testTarget(
             name: "Gmak8KitTests",
             dependencies: ["Gmak8Kit"],
-            resources: [
-                .copy("Kubeconfig/Goldens")
+            exclude: [
+                "Kubeconfig/Goldens"
             ]
         ),
     ],

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: CA_DATA
+    server: https://127.0.0.1:6443
+  name: gmak8
+users:
+- name: gmak8
+  user:
+    client-certificate-data: CERT_DATA
+    client-key-data: KEY_DATA
+contexts:
+- context:
+    cluster: gmak8
+    user: gmak8
+    namespace: kube-system
+  name: gmak8
+current-context: other
