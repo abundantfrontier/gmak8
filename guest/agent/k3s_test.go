@@ -99,6 +99,52 @@ func TestScanDBMinorsFromKineBytes(t *testing.T) {
 	}
 }
 
+func TestScanIgnoresCoreDNSAndShm(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "state.db")
+	payload := []byte("k3s v1.33.3+k3s1 chart coredns v1.12.1 metrics-server v0.7.2")
+	if err := os.WriteFile(db, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shm := filepath.Join(dir, "state.db-shm")
+	if err := os.WriteFile(shm, []byte("binary v1.32.5+k3s1 noise"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := scanDBMinors(dir)
+	if len(got) != 1 || got[0] != "1.33" {
+		t.Fatalf("got %v", got)
+	}
+	h := defaultHost()
+	h.serverDBDir = dir
+	h.k3sVersionFile = filepath.Join(dir, "missing-version")
+	if err := checkDataDirCompatible(h); err != nil {
+		t.Fatalf("1.33 plus chart versions: %v", err)
+	}
+}
+
+func TestScanWALAndMixedK3sMinorsRefuse(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "state.db"), []byte("v1.33.3+k3s1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "state.db-wal"), []byte("v1.32.5+k3s1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := scanDBMinors(dir)
+	if len(got) != 2 {
+		t.Fatalf("got %v", got)
+	}
+	if preferredScannedMinor(got) == "1.33" {
+		t.Fatalf("mixed minors should prefer the foreign one: %v", got)
+	}
+	h := defaultHost()
+	h.serverDBDir = dir
+	h.k3sVersionFile = filepath.Join(dir, "missing-version")
+	if err := checkDataDirCompatible(h); err == nil {
+		t.Fatal("expected refuse mixed 1.33 and 1.32")
+	}
+}
+
 func TestCheckDataDirCompatible(t *testing.T) {
 	dir := t.TempDir()
 	h := defaultHost()

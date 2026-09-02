@@ -24,7 +24,7 @@ const (
 	k3sStartQueueTimeout = 15 * time.Second
 )
 
-var k8sVersionPattern = regexp.MustCompile(`v1\.\d+\.\d+(?:\+k3s\d+)?`)
+var k8sVersionPattern = regexp.MustCompile(`v1\.\d+\.\d+\+k3s\d+`)
 
 // K3sReport is GET /k3s. DataDirMinor is empty when the data dir is new
 // or the on-disk Kubernetes minor cannot be read.
@@ -159,7 +159,7 @@ func scanDBMinors(dbDir string) []string {
 	seen := map[string]struct{}{}
 	var minors []string
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !isKineScanFile(entry.Name()) {
 			continue
 		}
 		for _, m := range scanFileMinors(filepath.Join(dbDir, entry.Name())) {
@@ -171,6 +171,10 @@ func scanDBMinors(dbDir string) []string {
 		}
 	}
 	return minors
+}
+
+func isKineScanFile(name string) bool {
+	return name == "state.db" || name == "state.db-wal"
 }
 
 func scanFileMinors(path string) []string {

@@ -19,7 +19,7 @@ RestartSec=5s
 ExecStartPre=-/sbin/modprobe br_netfilter
 ExecStartPre=-/sbin/modprobe overlay
 ExecStart=/usr/local/bin/k3s server
-ExecStartPost=/bin/sh -c 'mkdir -p /mnt/data/rancher/server && /usr/local/bin/k3s --version > /mnt/data/rancher/server/k3s-version'
+ExecStartPost=-/bin/sh -c 'mkdir -p /mnt/data/rancher/server && /usr/local/bin/k3s --version > /mnt/data/rancher/server/k3s-version'
 
 [Install]
 WantedBy=multi-user.target

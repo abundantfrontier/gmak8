@@ -103,6 +103,7 @@ grep -q 'Requires=mnt-data.mount' "$k3s_unit" || fail "k3s.service must Requires
 grep -q 'gmak8-k3s-compat.service' "$k3s_unit" || fail "k3s.service must require data-dir compat oneshot"
 grep -q 'After=.*mnt-data.mount' "$k3s_unit" || fail "k3s.service must After=mnt-data.mount"
 grep -q 'ExecStart=/usr/local/bin/k3s server' "$k3s_unit" || fail "k3s.service ExecStart must be the pinned static binary"
+grep -q "ExecStartPost=-/bin/sh" "$k3s_unit" || fail "k3s-version ExecStartPost must be prefixed with - so a write failure cannot restart k3s"
 grep -q 'Before=k3s.service' "$compat_unit" || fail "compat oneshot must be Before=k3s.service"
 grep -q -- '-check-data-dir' "$compat_unit" || fail "compat oneshot must run gmak8-agent -check-data-dir"
 grep -q 'check-data-dir' "$root/guest/agent/main.go" || fail "agent must support -check-data-dir"
