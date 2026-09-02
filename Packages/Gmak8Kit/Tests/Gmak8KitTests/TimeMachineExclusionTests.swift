@@ -26,6 +26,21 @@ struct TimeMachineExclusionTests {
         #expect(spy.calls.first?.arguments == ["addexclusion", directory.path(percentEncoded: false)])
     }
 
+    @Test func nonZeroTmutilStillCreatesDirectory() throws {
+        let spy = RecordingRunner()
+        spy.status = 1
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-tm-\(UUID().uuidString)/vm",
+            directoryHint: .isDirectory
+        )
+        defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent()) }
+
+        try TimeMachineExclusion.excludeVMDirectory(at: directory, runner: spy)
+
+        #expect(FileManager.default.fileExists(atPath: directory.path(percentEncoded: false)))
+        #expect(spy.calls.count == 1)
+    }
+
     @Test func missingTmutilStillCreatesDirectory() throws {
         let directory = FileManager.default.temporaryDirectory.appending(
             path: "gmak8-tm-\(UUID().uuidString)/vm",
@@ -46,10 +61,11 @@ private final class RecordingRunner: CommandRunning, @unchecked Sendable {
     }
 
     var calls: [Call] = []
+    var status: Int32 = 0
 
     func run(executable: String, arguments: [String]) throws -> Int32 {
         calls.append(Call(executable: executable, arguments: arguments))
-        return 0
+        return status
     }
 }
 

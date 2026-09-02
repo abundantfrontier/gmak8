@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 public protocol CommandRunning {
     @discardableResult
@@ -31,13 +32,16 @@ public enum TimeMachineExclusion {
         runner: any CommandRunning = ProcessCommandRunner()
     ) throws {
         try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        let path = url.path(percentEncoded: false)
         do {
-            _ = try runner.run(
-                executable: tmutilPath,
-                arguments: ["addexclusion", url.path(percentEncoded: false)]
-            )
+            let status = try runner.run(executable: tmutilPath, arguments: ["addexclusion", path])
+            if status != 0 {
+                Gmak8Log.core.error("tmutil addexclusion exited \(status) path=\(path, privacy: .public)")
+            }
         } catch {
-            // Time Machine is optional in CI and on hosts without tmutil.
+            Gmak8Log.core.error(
+                "tmutil addexclusion failed path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 }

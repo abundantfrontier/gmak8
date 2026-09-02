@@ -34,6 +34,7 @@ struct SettingsTests {
             telemetry: true
         )
         try original.save(to: url)
+        try original.save(to: url)
 
         let loaded = try Settings.load(from: url)
         #expect(loaded == original)

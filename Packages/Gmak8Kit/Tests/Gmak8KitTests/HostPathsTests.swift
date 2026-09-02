@@ -51,6 +51,21 @@ struct HostPathsTests {
         )
     }
 
+    @Test func unixgramPathFitsSunPathBoundary() {
+        let fits = URL(fileURLWithPath: "/" + String(repeating: "x", count: 102))
+        let tooLong = URL(fileURLWithPath: "/" + String(repeating: "x", count: 103))
+        #expect(fits.withUnsafeFileSystemRepresentation { $0.map(strlen) } == 103)
+        #expect(tooLong.withUnsafeFileSystemRepresentation { $0.map(strlen) } == 104)
+        #expect(HostPaths.unixgramPathFits(fits))
+        #expect(!HostPaths.unixgramPathFits(tooLong))
+
+        let overLong = URL(
+            fileURLWithPath:
+                "/Users/\(String(repeating: "u", count: 80))/Library/Application Support/dev.gmak8.app/n.sock"
+        )
+        #expect(!HostPaths.unixgramPathFits(overLong))
+    }
+
     @Test func layoutUnderExplicitHome() {
         let paths = HostPaths(
             applicationSupport: URL(fileURLWithPath: "/Users/tester/Library/Application Support/dev.gmak8.app"),

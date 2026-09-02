@@ -79,7 +79,12 @@ public struct HostPaths: Equatable, Sendable {
     }
 
     public static func unixgramPathFits(_ url: URL) -> Bool {
-        url.path(percentEncoded: false).utf8.count + 1 <= unixgramSunPathByteCount
+        url.withUnsafeFileSystemRepresentation { pointer in
+            guard let pointer else {
+                return false
+            }
+            return strlen(pointer) + 1 <= unixgramSunPathByteCount
+        }
     }
 }
 

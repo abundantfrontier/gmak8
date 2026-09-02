@@ -63,11 +63,30 @@ public struct Settings: Codable, Equatable, Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(self)
         try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try data.write(to: url, options: [.atomic])
+        try writeOwnerReadWriteAtomically(data, to: url, fileManager: fileManager)
+    }
+}
+
+/// chmod 0600 on a sibling temp, then replace, so the published path is never world-readable.
+private func writeOwnerReadWriteAtomically(_ data: Data, to url: URL, fileManager: FileManager) throws {
+    let temp = url.deletingLastPathComponent().appending(
+        path: ".\(url.lastPathComponent).tmp-\(UUID().uuidString)"
+    )
+    do {
+        try data.write(to: temp, options: .withoutOverwriting)
         try fileManager.setAttributes(
             [.posixPermissions: 0o600],
-            ofItemAtPath: url.path(percentEncoded: false)
+            ofItemAtPath: temp.path(percentEncoded: false)
         )
+        _ = try fileManager.replaceItemAt(
+            url,
+            withItemAt: temp,
+            backupItemName: nil,
+            options: .usingNewMetadataOnly
+        )
+    } catch {
+        try? fileManager.removeItem(at: temp)
+        throw error
     }
 }
 
