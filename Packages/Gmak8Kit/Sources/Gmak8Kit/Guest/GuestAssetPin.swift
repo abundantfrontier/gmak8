@@ -36,7 +36,7 @@ public struct SignedAssetPin: Equatable, Sendable {
         let host = (url.host ?? "").lowercased()
         let path = url.path.lowercased()
         let github = host == "github.com" || host.hasSuffix(".github.com")
-        return github && path.contains("/gmak8/") && !path.contains("/k3s-io/")
+        return github && path.contains("/abundantfrontier/gmak8/") && !path.contains("/k3s-io/")
     }
 }
 
@@ -77,7 +77,7 @@ public struct GuestAssetPin: Equatable, Sendable {
                 version: Gmak8Kit.version,
                 fileName: archiveFileName,
                 url: URL(
-                    string: "https://github.com/gmak8/gmak8/releases/download/v0.0.1/\(archiveFileName)"
+                    string: "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(archiveFileName)"
                 )!,
                 sha256: "",
                 maxBytes: maxCompressedBytes

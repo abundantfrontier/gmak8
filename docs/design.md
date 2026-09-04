@@ -8,7 +8,7 @@
 | **Status** | Draft (rev 5) — Builderdash SSH bridge |
 | **Code name / repo** | `gmak8` |
 | **User-facing name** | **gmak8** |
-| **License** | Apache License 2.0 |
+| **License** | MIT |
 | **Platform** | **App:** macOS 14 (Sonoma)+ , Apple Silicon only. **KubeVirt / Eureka profile:** macOS 15+ **and** M3+ (nested virt). |
 | **Audience** | Senior engineers implementing from a clean-slate repo |
 | **Team assumption** | **1–2 engineers.** Public **0.9** = PRs **1–18** (engine + onboarding + recovery + Sparkle-with-VM-stop + cask `gmak8`). **1.0** = PRs **19–28 and 30** (GUI + KubeVirt/Eureka + Builderdash SSH bridge). Rosetta is PR **29**, out of 0.9. |
@@ -16,7 +16,7 @@
 ---
 ## **Overview**
 Local Kubernetes on a Mac is still a kit, not a product. Developers assemble a hypervisor, a Linux VM, a distro, a kubeconfig, port forwards, and a GUI from disconnected tools. Docker Desktop solved “one install, a Linux VM, a GUI, a menu bar” — then wrapped it in a Docker-first engine and a paid SKU. Rancher Desktop is free but Electron + Lima. OrbStack is the best native Mac VM in the category, and it is neither open nor free for commercial use.
-**gmak8** is a native SwiftUI/AppKit macOS app that owns a single local Kubernetes cluster end-to-end: Virtualization.framework VM, a signed Linux appliance, k3s + containerd, localhost API access for unmodified kubectl, a menu-bar extra, and a NavigationSplitView client. There is no Docker Engine, no Compose, no Hub, no Pro SKU. Individuals, students, and companies use the same binary under Apache-2.0.
+**gmak8** is a native SwiftUI/AppKit macOS app that owns a single local Kubernetes cluster end-to-end: Virtualization.framework VM, a signed Linux appliance, k3s + containerd, localhost API access for unmodified kubectl, a menu-bar extra, and a NavigationSplitView client. There is no Docker Engine, no Compose, no Hub, no Pro SKU. Individuals, students, and companies use the same binary under MIT.
 A first-class proving workload is **project Eureka’s Kubernetes / KubeVirt path** (/Users/kb/Documents/GitHub/eureka): AFW adapters k8s-1.33.3 / kubevirt-1.6.1, python/eureka/{k8s,kubevirt,kube_config}.py, and the kops-on-GCE stack Eureka uses in production. gmak8 does **not** run kops, GCE, AWS, or Cilium. It gives an Eureka developer a local cluster that speaks the same Kubernetes + KubeVirt APIs, with virtctl on PATH (Eureka’s SSH ProxyCommand), a storage class Eureka can set on the **data disk**, and (on M3+ / macOS 15+) nested virt so one scaled-down aarch64 KubeVirt VM can actually start. NodePort publish to 127.0.0.1 exists for generic kubectl/curl; it is **not** how Eureka SSHes to VMs. Eureka is not copied into this repo; it is a profile and an addon pack on a general free appliance.
 The git repo at /Users/kb/Documents/GitHub/gmak8 is empty. Everything below is greenfield.
 ---
@@ -82,7 +82,7 @@ Pain points this product exists to remove:
 
 - **Optional CLI on PATH (****gmak8****) talking to a user-level daemon — no root for the default path.**
 
-- **Free for everyone under Apache-2.0.**
+- **Free for everyone under MIT.**
 
 ### **Non-goals (v1)**
 - **Docker Engine, Docker CLI, Compose, Buildx-as-Docker, Docker Hub accounts, ****/var/run/docker.sock****.**
@@ -137,9 +137,9 @@ The user-facing name is **gmak8**: Grandma Kate + Kubernetes. It is a nod to the
 | App bundle | `gmak8.app` |
 | CLI | **`gmak8`** (primary). No `kite` symlink. |
 | virtctl | Upstream name **`virtctl`** on PATH (`~/.local/bin/virtctl`) |
-| Appcast / downloads | GitHub Releases of the `gmak8` repo (URL is a **build-time constant**). Guest/airgap assets are **separate Release files**, each **< 2 GiB** |
-| License | Apache-2.0 on all first-party code |
-| Contributor terms | **DCO**, not a CLA |
+| Appcast / downloads | GitHub Releases of `abundantfrontier/gmak8` (URL is a **build-time constant**). Guest/airgap assets are **separate Release files**, each **< 2 GiB** |
+| License | MIT on all first-party code |
+| Contributor terms | No CLA (MIT, same as other Abundant Frontier Institute projects) |
 | Trademark | Name is `gmak8`. Do not ship logo assets we cannot relicense. |
 
 ---
@@ -148,14 +148,14 @@ Positioning: **free, native, Kubernetes-only local appliance for macOS**, with a
 
 | Product | License / cost | Native Mac GUI | Owns local cluster | Kubernetes-first | Docker-free | Nested virt / KubeVirt |
 | --- | --- | --- | --- | --- | --- | --- |
-| **gmak8 (this)** | Apache-2.0, free for companies | SwiftUI | Yes (VZ + appliance + k3s) | Yes | Yes | Yes on M3+/macOS 15; honest no on M1/M2 |
+| **gmak8 (this)** | MIT, free for companies | SwiftUI | Yes (VZ + appliance + k3s) | Yes | Yes | Yes on M3+/macOS 15; honest no on M1/M2 |
 | Docker Desktop | Proprietary; paid for many orgs | Hybrid | Yes | No | No | Not the product |
 | OrbStack | Proprietary; commercial license for business | Yes | Yes | No | No | Not positioned as KubeVirt |
 | Rancher Desktop | Apache-2.0 | Electron | Yes (Lima + k3s) | Mostly | Optional containerd | Possible via Lima nested virt, not a KubeVirt GUI |
 | Colima / minikube / kind / k3d | Apache-2.0 / MIT | None | Yes | Varies | kind/k3d need an engine | minikube #22805 is the same nested-virt ask |
 | OpenLens / Lens | Mixed | Electron | No | Client only | N/A | Can browse KubeVirt CRDs if a cluster exists |
 
-**What this uniquely buys:** no Docker license, no Compose surface, a cluster *appliance* plus a small native client, Apache-2.0, and a local Eureka k8s path without GCE.
+**What this uniquely buys:** no Docker license, no Compose surface, a cluster *appliance* plus a small native client, MIT, and a local Eureka k8s path without GCE.
 **What we will not claim:** faster than OrbStack until measured; identical to kops+Cilium+GCE CSI; amd64 nested VMs.
 ---
 ## **Information architecture & UX**
@@ -1101,7 +1101,7 @@ None.
 ## **Key Decisions**
 1. **User-facing name is ****gmak8**** (Grandma Kate + Kubernetes). Repo, CLI, menu bar, About, kube context ****gmak8****, cask ****gmak8****, bundle ****dev.gmak8.app****, LaunchAgent ****dev.gmak8.core****. No Kite/Skiff. No ****kite**** CLI symlink. virtctl stays ****virtctl****.**
 
-2. **Apache-2.0 + DCO; no paid SKU.**
+2. **MIT; no paid SKU. No CLA. Same as other Abundant Frontier Institute projects.**
 
 3. **App macOS 14+ Apple Silicon. KubeVirt/Eureka nested virt requires macOS 15+ M3+. Do not bump the whole app to 15.**
 

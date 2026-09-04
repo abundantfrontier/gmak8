@@ -1,16 +1,8 @@
 # Contributing to gmak8
 
-## Developer Certificate of Origin
+## License
 
-This project uses the [Developer Certificate of Origin](https://developercertificate.org/) (DCO), not a CLA.
-
-Every commit must include:
-
-```
-Signed-off-by: Your Name <you@example.com>
-```
-
-`git commit -s` adds this from your `user.name` and `user.email`.
+gmak8 is MIT, like other Abundant Frontier Institute projects. There is no CLA.
 
 ## Build and test
 

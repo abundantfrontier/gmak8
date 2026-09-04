@@ -1,6 +1,6 @@
 # Pin for the guest OS disk seed. Do not vendor the blob in git.
 GUEST_VERSION=0.0.1
 GUEST_NAME=gmak8-guest-0.0.1-arm64.raw.zst
-GUEST_URL=https://github.com/gmak8/gmak8/releases/download/v0.0.1/gmak8-guest-0.0.1-arm64.raw.zst
+GUEST_URL=https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/gmak8-guest-0.0.1-arm64.raw.zst
 GUEST_SHA256=0000000000000000000000000000000000000000000000000000000000000000
 GUEST_MAX_BYTES=524288000

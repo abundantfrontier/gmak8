@@ -6,7 +6,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - Bundle ID: `dev.gmak8.app`
 - LaunchAgent: `dev.gmak8.core` (`gmak8-core`)
 - Display name / product: **gmak8**
-- License: Apache-2.0; contributions use DCO (not a CLA)
+- License: MIT (Abundant Frontier Institute); no CLA
 
 ## Do not
 

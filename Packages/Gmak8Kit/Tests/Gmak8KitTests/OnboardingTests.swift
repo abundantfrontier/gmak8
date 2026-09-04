@@ -258,7 +258,7 @@ struct OnboardingTests {
         #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
         let published = SignedAssetPin(
             fileName: AirgapPin.archiveFileName,
-            url: URL(string: "https://github.com/gmak8/gmak8/releases/download/v0.0.1/\(AirgapPin.archiveFileName)")!,
+            url: URL(string: "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(AirgapPin.archiveFileName)")!,
             sha256: AirgapPin.bundled.sha256,
             maxBytes: AirgapPin.maxCompressedBytes
         )

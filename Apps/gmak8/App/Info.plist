@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>SUFeedURL</key>
-	<string>https://github.com/gmak8/gmak8/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/abundantfrontier/gmak8/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>upvgFk63M1HEra9w5l3GAlBYFSm8NCcXpAPQhDPOTLk=</string>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
+	<false/>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 </dict>

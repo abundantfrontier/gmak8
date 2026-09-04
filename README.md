@@ -1,37 +1,57 @@
 # gmak8
 
-**gmak8** is a native SwiftUI macOS appliance for one local Kubernetes cluster. It is not Docker, not Electron, and not a remote-cluster IDE. The same Apache-2.0 binary is for individuals, students, and companies.
+**gmak8** is a native SwiftUI macOS appliance for one local Kubernetes cluster. Individuals, students, and companies use the same MIT binary.
 
-This repository is early. The app currently opens a window; it does **not** start a cluster yet.
+0.9 is the engine, menu extra, first-run, recovery, and Sparkle path. Workload GUI is 1.0.
 
 ## Requirements
 
-- macOS 14 (Sonoma) or later
-- Apple Silicon
+- macOS 14 (Sonoma) or later, Apple Silicon
 - Xcode with Swift 6
+- Go (to build `gvproxy` into `Contents/Helpers`)
+- The app **must** live in `/Applications/gmak8.app` or the LaunchAgent will refuse to register
 
-## Build
+## Run locally (functionality testing)
+
+Double-click `scripts/dev-install.command` in Finder (rebuilds Debug, installs `/Applications/gmak8.app`, opens it). From a terminal:
 
 ```bash
-swift test --package-path Packages/Gmak8Kit
-swift test --package-path Packages/Gmak8XPC
-swift test --package-path Packages/Gmak8Virtualization
-swift test --package-path Packages/Gmak8GuestClient
-
-xcodebuild -project Apps/gmak8/gmak8.xcodeproj \
-  -scheme gmak8 \
-  -destination 'platform=macOS' \
-  -quiet \
-  build
+bash scripts/dev-install.sh
 ```
 
-The **gmak8** CLI (`status`, `version`) is the `gmak8-cli` scheme; `version` does not need `gmak8-core`. Open `Apps/gmak8/gmak8.xcodeproj` in Xcode and run the **gmak8** scheme.
+If the running copy is outside `/Applications`, first-run **Permissions** has **Install to /Applications**. Walk first-run (Welcome → Create and start). Current-context stays **off** unless you check it. Guest download is disabled until a real SHA-256 pin exists; you can continue without a guest image.
 
-CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, package tests, xcodebuild test).
+What you can test **without** `os.img`:
+
+- First-run pages, `/Applications` gate, nested-virt badge, profile radios, CLI copy to `~/.local/bin`
+- Menu extra, close last window vs Quit, Settings, Recovery / Diagnostics zip
+- Start failing with a missing OS disk (honest, not a hang)
+
+What you **cannot** test until a guest disk exists (built with mkosi on Linux arm64, not vendored here):
+
+- VM boot, k3s Ready, kubeconfig splice, NodePort curl
+
+Override a local disk for bring-up (not a substitute for Cosign-verified cache):
+
+```bash
+defaults write dev.gmak8.core osImage /path/to/guest.raw
+```
+
+See [guest/README.md](guest/README.md).
+
+## Build / test only
+
+```bash
+bash scripts/ci.sh
+```
+
+Open `Apps/gmak8/gmak8.xcodeproj` and run the **gmak8** scheme if you are iterating in Xcode — still copy the result to `/Applications` before expecting `gmak8-core` to register.
+
+The CLI (`status`, `version`, `start`, `stop`) is `gmak8.app/Contents/Helpers/gmak8`, never PATH.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+MIT License. See [LICENSE](LICENSE). Third-party notices (gvproxy) are in [NOTICE](NOTICE).
 
 ## Design
 

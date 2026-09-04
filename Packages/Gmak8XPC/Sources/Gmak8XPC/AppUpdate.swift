@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 public enum SparklePin {
-    public static let feedURL = "https://github.com/gmak8/gmak8/releases/latest/download/appcast.xml"
+    public static let feedURL = "https://github.com/abundantfrontier/gmak8/releases/latest/download/appcast.xml"
     /// Ed25519 public key only. The matching private key is a GitHub Actions secret.
     public static let publicEDKey = "upvgFk63M1HEra9w5l3GAlBYFSm8NCcXpAPQhDPOTLk="
 }

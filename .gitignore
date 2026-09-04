@@ -1,3 +1,7 @@
+# LLVM/Clang coverage leftovers
+*.profraw
+default.profraw
+
 # macOS
 .DS_Store
 .AppleDouble

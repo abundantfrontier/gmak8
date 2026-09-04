@@ -2,10 +2,10 @@ cask "gmak8" do
   version "0.0.1"
   sha256 :no_check
 
-  url "https://github.com/gmak8/gmak8/releases/download/v#{version}/gmak8-#{version}.dmg"
+  url "https://github.com/abundantfrontier/gmak8/releases/download/v#{version}/gmak8-#{version}.dmg"
   name "gmak8"
   desc "Local Kubernetes cluster for Apple Silicon"
-  homepage "https://github.com/gmak8/gmak8"
+  homepage "https://github.com/abundantfrontier/gmak8"
 
   depends_on macos: ">= :sonoma"
   depends_on arch: :arm64
