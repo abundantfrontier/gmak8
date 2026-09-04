@@ -201,21 +201,8 @@ grep -q 'check-data-dir' "$readme" || fail "README must document data-dir compat
 
 bash "$root/guest/airgap/assert-metadata.sh" || fail "airgap metadata"
 
-if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/airgap.yml"; then
-  fail "airgap.yml must not run Virtualization.framework"
-fi
-if grep -E '^[[:space:]]+continue-on-error: true' "$root/.github/workflows/airgap.yml"; then
-  fail "airgap.yml must not continue-on-error"
-fi
-if grep -Eq 'k3s-airgap-images-arm64.tar.zst' "$root/.github/workflows/airgap.yml" && grep -Eq 'curl .*k3s-airgap-images' "$root/.github/workflows/airgap.yml"; then
-  fail "airgap.yml must not download the real airgap tarball on the default path"
-fi
-
-if grep -Eiq 'xcodebuild|VZVirtualMachine|com.apple.security.virtualization' "$root/.github/workflows/guest.yml"; then
-  fail "guest.yml must not run Virtualization.framework"
-fi
-if grep -E '^[[:space:]]+continue-on-error: true' "$root/.github/workflows/guest.yml"; then
-  fail "guest.yml mkosi job must not continue-on-error"
+if ls "$root/.github/workflows"/*.yml >/dev/null 2>&1; then
+  fail "GitHub Actions workflows must not be committed"
 fi
 
 echo "validate: ok"

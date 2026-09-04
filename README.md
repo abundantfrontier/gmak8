@@ -10,6 +10,7 @@
 - Xcode with Swift 6
 - Go (to build `gvproxy` into `Contents/Helpers`)
 - The app **must** live in `/Applications/gmak8.app` or the LaunchAgent will refuse to register
+- Run `bash scripts/ci.sh` locally (or on a Mac/Linux builder you control) **before** pushing to GitHub. There is no GitHub Actions CI.
 
 ## Run locally (functionality testing)
 
@@ -40,6 +41,8 @@ defaults write dev.gmak8.core osImage /path/to/guest.raw
 See [guest/README.md](guest/README.md).
 
 ## Build / test only
+
+Run this before every push:
 
 ```bash
 bash scripts/ci.sh

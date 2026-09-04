@@ -21,7 +21,6 @@ public enum SoakPlanError: Error, Equatable, Sendable {
 public enum SoakPlan {
     public static let runnerLabel = "gmak8-vm"
     public static let runnerLabels = ["self-hosted", runnerLabel]
-    public static let workflowFile = ".github/workflows/soak.yml"
     public static let scriptFile = "scripts/soak.sh"
     public static let defaultCycles = 50
     public static let gate09 = "0.9"

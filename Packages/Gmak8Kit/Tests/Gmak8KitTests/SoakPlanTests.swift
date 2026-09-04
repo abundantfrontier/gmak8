@@ -89,19 +89,14 @@ struct SoakPlanTests {
         #expect(SoakPlan.githubHostedMacImages.contains("macos-15"))
     }
 
-    @Test func workflowIsManualSelfHostedAndNotGitHubMac() throws {
-        let yaml = try String(contentsOf: soakWorkflowURL(), encoding: .utf8)
-        #expect(yaml.contains("workflow_dispatch"))
-        #expect(yaml.contains("gmak8-vm"))
-        #expect(yaml.contains("self-hosted"))
-        #expect(yaml.contains("scripts/soak.sh --live"))
-        #expect(yaml.contains("scripts/soak.sh --plan"))
-        #expect(!yaml.contains("macos-15"))
-        #expect(!yaml.contains("macos-latest"))
-        #expect(!yaml.contains("pull_request"))
-        for image in SoakPlan.githubHostedMacImages {
-            #expect(!yaml.contains(image))
-        }
+    @Test func noGitHubActionsWorkflows() throws {
+        let workflows = repoRoot().appending(path: ".github/workflows")
+        let ymls =
+            (try? FileManager.default.contentsOfDirectory(
+                at: workflows,
+                includingPropertiesForKeys: nil
+            )) ?? []
+        #expect(!ymls.contains { $0.pathExtension == "yml" || $0.pathExtension == "yaml" })
     }
 
     @Test func ciDoesNotInvokeLiveSoak() throws {
@@ -174,10 +169,6 @@ private func repoRoot() -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-}
-
-private func soakWorkflowURL() -> URL {
-    repoRoot().appending(path: SoakPlan.workflowFile)
 }
 
 private func soakScriptURL() -> URL {

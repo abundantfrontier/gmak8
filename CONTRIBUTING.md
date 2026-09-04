@@ -36,6 +36,12 @@ Format Swift with the repo config:
 swift format --in-place --recursive --configuration .swift-format Apps Packages
 ```
 
-CI on GitHub-hosted `macos-15` (arm64) runs `scripts/ci.sh` (format lint, package tests, xcodebuild test). It does not boot a Linux VM.
+Run tests **before** pushing to GitHub, on this Mac or on a builder you control (not GitHub Actions):
 
-Do not add Docker, Compose, or a Docker socket shim. Do not copy the Eureka source tree into this repository.
+```bash
+bash scripts/ci.sh
+```
+
+That is format lint, soak `--self-test`, package tests, and `xcodebuild test`. It does not boot a Linux VM. Guest mkosi checks are `bash guest/mkosi/tests/validate.sh` on Linux arm64 when you change the appliance.
+
+Do not add GitHub Actions workflows. Do not add Docker, Compose, or a Docker socket shim. Do not copy the Eureka source tree into this repository.

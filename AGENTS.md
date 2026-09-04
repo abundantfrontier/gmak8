@@ -11,6 +11,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 ## Do not
 
 - Do not add Docker Engine, Docker CLI, Compose, Buildx-as-Docker, Docker Hub accounts, or `/var/run/docker.sock`
+- Do not add GitHub Actions workflows. Run `bash scripts/ci.sh` locally (or on a builder you control) before pushing.
 - Do not copy Eureka into this repository (it is an external profile / proving workload)
 - Do not enable App Sandbox on the app or `gmak8-core`
 - Do not set `com.apple.security.virtualization` on the UI target. Set it true on `gmak8-core` only.

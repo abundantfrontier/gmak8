@@ -973,21 +973,9 @@ test_plan_invariants() {
 }
 
 test_workflow_yaml() {
-  local yml="${REPO_ROOT}/.github/workflows/soak.yml"
-  test -f "${yml}" || die "missing ${yml}"
-  grep -q "workflow_dispatch" "${yml}" || die "soak.yml must be workflow_dispatch"
-  grep -q "gmak8-vm" "${yml}" || die "soak.yml must use gmak8-vm"
-  grep -q "self-hosted" "${yml}" || die "soak.yml must be self-hosted"
-  grep -q "scripts/soak.sh --live" "${yml}" || die "soak.yml must invoke soak.sh --live"
-  grep -q "scripts/soak.sh --plan" "${yml}" || die "soak.yml must print the plan"
-  if grep -q "macos-15" "${yml}"; then
-    die "soak.yml must not use github-hosted macos-15"
-  fi
-  if grep -q "macos-latest" "${yml}"; then
-    die "soak.yml must not use macos-latest"
-  fi
-  if grep -q "pull_request" "${yml}"; then
-    die "soak.yml must stay manual until hardware exists"
+  local workflows="${REPO_ROOT}/.github/workflows"
+  if [[ -d "${workflows}" ]] && ls "${workflows}"/*.yml >/dev/null 2>&1; then
+    die "GitHub Actions workflows must not be committed (found ${workflows})"
   fi
   local ci="${REPO_ROOT}/scripts/ci.sh"
   grep -q "scripts/soak.sh --self-test" "${ci}" || die "ci.sh must run soak --self-test"
