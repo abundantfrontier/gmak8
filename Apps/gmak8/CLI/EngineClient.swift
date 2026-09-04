@@ -5,7 +5,7 @@ import Gmak8XPC
 enum CLIError: Error, Equatable {
     case engineNotRunning
     case communicationFailed
-    case engineError(EngineErrorCode)
+    case engineError(EngineErrorCode, message: String? = nil)
     case invalidReply
 }
 
@@ -16,7 +16,10 @@ extension CLIError: LocalizedError {
             return "gmak8-core is not running (engine.sock is missing)."
         case .communicationFailed:
             return "could not talk to gmak8-core."
-        case .engineError(let code):
+        case .engineError(let code, let message):
+            if let message, !message.isEmpty {
+                return message
+            }
             return "gmak8-core returned error: \(code.rawValue)."
         case .invalidReply:
             return "gmak8-core returned an invalid reply."
@@ -84,8 +87,8 @@ enum EngineClient {
         switch try readReply(fd: fd) {
         case .ok:
             return
-        case .error(let code):
-            throw CLIError.engineError(code)
+        case .error(let code, let message):
+            throw CLIError.engineError(code, message: message)
         }
     }
 
@@ -108,8 +111,8 @@ enum EngineClient {
             switch try readReply(fd: fd, buffer: &buffer) {
             case .ok:
                 break
-            case .error(let code):
-                throw CLIError.engineError(code)
+            case .error(let code, let message):
+                throw CLIError.engineError(code, message: message)
             }
         } catch let error as CLIError {
             Darwin.close(fd)
@@ -218,8 +221,8 @@ final class EngineSubscription: @unchecked Sendable {
                 continue
             }
             if let reply = try? NDJSONCodec.decodeReply(line: trimmed) {
-                if case .error(let code) = reply {
-                    closeLocked(error: .engineError(code))
+                if case .error(let code, let message) = reply {
+                    closeLocked(error: .engineError(code, message: message))
                     return
                 }
                 continue
@@ -351,8 +354,8 @@ private func rethrowFailedWrite(fd: Int32) throws -> Never {
         switch try readReply(fd: fd) {
         case .ok:
             throw CLIError.communicationFailed
-        case .error(let code):
-            throw CLIError.engineError(code)
+        case .error(let code, let message):
+            throw CLIError.engineError(code, message: message)
         }
     } catch let error as CLIError {
         throw mapPostConnect(error)
@@ -393,8 +396,8 @@ private func readImages(fd: Int32) throws -> NodeImageList {
             switch reply {
             case .ok:
                 continue
-            case .error(let code):
-                throw CLIError.engineError(code)
+            case .error(let code, let message):
+                throw CLIError.engineError(code, message: message)
             }
         }
         if let event = try? NDJSONCodec.decodeEvent(line: line), case .images(let list) = event {
@@ -412,8 +415,8 @@ private func readStatus(fd: Int32) throws -> EngineStatus {
             switch reply {
             case .ok:
                 continue
-            case .error(let code):
-                throw CLIError.engineError(code)
+            case .error(let code, let message):
+                throw CLIError.engineError(code, message: message)
             }
         }
         if let event = try? NDJSONCodec.decodeEvent(line: line), case .status(let status) = event {

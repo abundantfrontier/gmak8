@@ -15,6 +15,8 @@ public enum ImagesCopy {
     public static let digest = "Digest"
     public static let size = "Size"
     public static let pruneConfirm = "Prune unused node images? System images that are still in use stay."
+    public static let guestMissingImages =
+        "Guest image has no /images. Rebuild the Debian appliance so the agent can list containerd images."
 }
 
 public enum SystemImageMatcher {

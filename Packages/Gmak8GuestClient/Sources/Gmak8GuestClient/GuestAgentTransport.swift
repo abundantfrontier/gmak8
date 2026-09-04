@@ -32,9 +32,14 @@ public struct StreamGuestTransport: GuestAgentTransport {
     public func send(method: String, path: String, body: Data?) async throws -> GuestHTTPResponse {
         let channel = try await open()
         defer { channel.close() }
-        if path == "/kubevirt/install", let adjustable = channel as? any GuestIOTimeoutAdjusting {
-            // kubectl apply of the operator YAML can exceed the default 5s vsock timeout.
-            adjustable.setIOTimeout(seconds: 180)
+        if let adjustable = channel as? any GuestIOTimeoutAdjusting {
+            if path == "/kubevirt/install" {
+                adjustable.setIOTimeout(seconds: 180)
+            } else if path == "/images/prune" {
+                adjustable.setIOTimeout(seconds: 180)
+            } else if path == "/images" {
+                adjustable.setIOTimeout(seconds: 30)
+            }
         }
         try channel.write(encodeHTTPRequest(method: method, path: path, body: body))
         return try readHTTPResponse(from: channel)

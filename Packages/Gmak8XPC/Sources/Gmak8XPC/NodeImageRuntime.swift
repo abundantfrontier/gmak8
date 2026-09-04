@@ -15,6 +15,27 @@ public enum ImagePreflight {
     }
 }
 
+public enum NodeImageErrors {
+    public static let guestMissingImages =
+        "Guest image has no /images. Rebuild the Debian appliance so the agent can list containerd images."
+    public static let clusterNotRunning = "cluster is not running"
+
+    public static func message(from error: Error) -> String {
+        if let guest = error as? GuestAgentError {
+            if case .httpStatus(let code, let detail) = guest {
+                if code == 404 {
+                    return guestMissingImages
+                }
+                if let detail, !detail.isEmpty {
+                    return detail
+                }
+            }
+            return guest.localizedDescription
+        }
+        return error.localizedDescription
+    }
+}
+
 public protocol NodeImageRuntime: Sendable {
     func disks() async throws -> GuestDisks
     func list() async throws -> [GuestImage]

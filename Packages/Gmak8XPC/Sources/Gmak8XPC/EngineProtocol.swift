@@ -19,6 +19,7 @@ public enum EngineErrorCode: String, Error, Codable, Equatable, Sendable {
     case unauthorized
     case unknownOp = "unknown_op"
     case invalidRequest = "invalid_request"
+    case unavailable
 }
 
 public enum EngineRequest: Equatable, Sendable {
@@ -35,7 +36,7 @@ public enum EngineRequest: Equatable, Sendable {
 
 public enum EngineReply: Equatable, Sendable {
     case ok
-    case error(EngineErrorCode)
+    case error(EngineErrorCode, message: String? = nil)
 }
 
 public enum LogSource: String, Codable, Equatable, Sendable {
@@ -329,12 +330,14 @@ extension EngineReply: Codable {
     enum CodingKeys: String, CodingKey {
         case ok
         case error
+        case message
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let code = try container.decodeIfPresent(EngineErrorCode.self, forKey: .error) {
-            self = .error(code)
+            let message = try container.decodeIfPresent(String.self, forKey: .message)
+            self = .error(code, message: message)
             return
         }
         if try container.decodeIfPresent(Bool.self, forKey: .ok) == true {
@@ -349,8 +352,9 @@ extension EngineReply: Codable {
         switch self {
         case .ok:
             try container.encode(true, forKey: .ok)
-        case .error(let code):
+        case .error(let code, let message):
             try container.encode(code, forKey: .error)
+            try container.encodeIfPresent(message, forKey: .message)
         }
     }
 }

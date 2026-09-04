@@ -368,7 +368,7 @@ private final class Connection: @unchecked Sendable {
                 }
             } catch {
                 queue.async { [weak self] in
-                    self?.writeReply(.error(.conflict))
+                    self?.writeReply(Self.imageOpReply(error))
                 }
             }
         }
@@ -384,10 +384,20 @@ private final class Connection: @unchecked Sendable {
                 }
             } catch {
                 queue.async { [weak self] in
-                    self?.writeReply(.error(.conflict))
+                    self?.writeReply(Self.imageOpReply(error))
                 }
             }
         }
+    }
+
+    private static func imageOpReply(_ error: any Error) -> EngineReply {
+        if let code = error as? EngineErrorCode {
+            return .error(code)
+        }
+        if let bringUp = error as? ClusterBringUpError {
+            return .error(.unavailable, message: bringUp.message)
+        }
+        return .error(.unavailable, message: NodeImageErrors.message(from: error))
     }
 
     private func writeReply(_ reply: EngineReply) {

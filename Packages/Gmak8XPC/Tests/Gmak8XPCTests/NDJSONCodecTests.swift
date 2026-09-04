@@ -34,6 +34,15 @@ struct NDJSONCodecTests {
             try utf8Line(EngineReply.error(.virtualizationUnsupported))
                 == "{\"error\":\"virtualization_unsupported\"}\n"
         )
+        #expect(
+            try utf8Line(EngineReply.error(.unavailable, message: NodeImageErrors.guestMissingImages))
+                .contains("\"error\":\"unavailable\"")
+        )
+        #expect(
+            try NDJSONCodec.decodeReply(
+                line: "{\"error\":\"unavailable\",\"message\":\"Guest image has no /images.\"}"
+            ) == .error(.unavailable, message: "Guest image has no /images.")
+        )
     }
 
     @Test func decodesOpsIncludingResetWithoutForce() throws {

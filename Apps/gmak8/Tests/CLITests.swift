@@ -287,6 +287,34 @@ struct CLITests {
         }
     }
 
+    @Test func imageListSurfacesGuestMissingImages() async throws {
+        let socketURL = uniqueSocketURL()
+        let scheduler = ManualEngineScheduler()
+        let images = FakeNodeImageRuntime()
+        images.listError = ClusterBringUpError(message: NodeImageErrors.guestMissingImages)
+        let engine = ClusterEngine(scheduler: scheduler, images: images)
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: engine,
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+        )
+        try server.start()
+        defer { server.stop() }
+
+        try EngineClient.submit(.start, socketURL: socketURL)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+
+        do {
+            _ = try EngineClient.listImages(socketURL: socketURL, timeout: timeval(tv_sec: 2, tv_usec: 0))
+            Issue.record("expected guest /images error")
+        } catch let error as CLIError {
+            #expect(error.localizedDescription == NodeImageErrors.guestMissingImages)
+            #expect(error != .engineError(.conflict))
+        }
+    }
+
     @Test func imageListLoadPruneOverFakeSocket() async throws {
         let socketURL = uniqueSocketURL()
         let scheduler = ManualEngineScheduler()

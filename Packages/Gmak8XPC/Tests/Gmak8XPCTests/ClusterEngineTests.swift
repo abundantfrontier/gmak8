@@ -416,6 +416,24 @@ struct ClusterEngineTests {
         #expect(runtime.importedURLs.isEmpty)
     }
 
+    @Test func listImagesMapsMissingGuestEndpoint() async throws {
+        let scheduler = ManualEngineScheduler()
+        let runtime = FakeNodeImageRuntime()
+        runtime.listError = ClusterBringUpError(message: NodeImageErrors.guestMissingImages)
+        let engine = ClusterEngine(scheduler: scheduler, images: runtime)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        do {
+            _ = try await engine.listImages()
+            Issue.record("expected list failure")
+        } catch let error as ClusterBringUpError {
+            #expect(error.message == NodeImageErrors.guestMissingImages)
+        }
+        #expect(
+            NodeImageErrors.message(from: GuestAgentError.httpStatus(404, nil))
+                == NodeImageErrors.guestMissingImages)
+    }
+
     @Test func secondLoadImageConflictsWhileJobRuns() throws {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler, images: FakeNodeImageRuntime())

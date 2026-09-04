@@ -265,20 +265,32 @@ public final class ClusterEngine: @unchecked Sendable {
 
     public func listImages() async throws -> NodeImageList {
         try requireImagesReady()
-        let items = try await images.list()
-        return NodeImageList(items: NodeImageMapping.nodeImages(items))
+        do {
+            let items = try await images.list()
+            return NodeImageList(items: NodeImageMapping.nodeImages(items))
+        } catch let code as EngineErrorCode {
+            throw code
+        } catch {
+            throw ClusterBringUpError(message: NodeImageErrors.message(from: error))
+        }
     }
 
     public func pruneImages() async throws -> NodeImageList {
         try requireImagesReady()
-        _ = try await images.prune()
-        let items = try await images.list()
-        let list = NodeImageList(items: NodeImageMapping.nodeImages(items))
-        broadcast([
-            .log(source: .engine, line: "pruned images"),
-            .images(list),
-        ])
-        return list
+        do {
+            _ = try await images.prune()
+            let items = try await images.list()
+            let list = NodeImageList(items: NodeImageMapping.nodeImages(items))
+            broadcast([
+                .log(source: .engine, line: "pruned images"),
+                .images(list),
+            ])
+            return list
+        } catch let code as EngineErrorCode {
+            throw code
+        } catch {
+            throw ClusterBringUpError(message: NodeImageErrors.message(from: error))
+        }
     }
 
     private func requireImagesReady() throws {
@@ -291,7 +303,7 @@ public final class ClusterEngine: @unchecked Sendable {
             }
         }
         if !ready {
-            throw ClusterBringUpError(message: "cluster is not running")
+            throw EngineErrorCode.conflict
         }
     }
 
