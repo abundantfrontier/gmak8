@@ -1,4 +1,5 @@
 import Gmak8Kit
+import Gmak8Kubernetes
 import Gmak8XPC
 import Testing
 
@@ -230,6 +231,22 @@ struct Gmak8AppTests {
         #expect(AirgapPin.bundled.signed.remoteDownloadEnabled)
         #expect(AirgapPin.bundled.signed.chooseFileEnabled)
         #expect(!OnboardingCopy.guestDigestUnpublished.contains(OnboardingCopy.chooseFile))
+    }
+
+    @Test func clusterOverviewSidebarAndCardsMatchDesign() {
+        #expect(
+            ClusterSidebarItem.allCases.map(\.title) == [
+                ClusterOverviewCopy.cluster,
+                ClusterOverviewCopy.workloads,
+                ClusterOverviewCopy.kubeVirt,
+                ClusterOverviewCopy.images,
+                ClusterOverviewCopy.diagnostics,
+            ])
+        #expect(!ClusterSidebarItem.visible(for: .kubernetes).contains(.kubeVirt))
+        #expect(ClusterSidebarItem.visible(for: .eureka).contains(.kubeVirt))
+        #expect(ClusterOverviewCopy.sqlite == "SQLite")
+        #expect(ClusterOverviewCopy.readyz == "/readyz")
+        #expect(ClusterOverview.sampleRunning().addons.map(\.name) == ClusterAddonMatcher.kubernetesAddons)
     }
 
     @Test func recoveryCopiesMatchLockedDiskAndTranslocation() {

@@ -57,6 +57,11 @@
 		A8000000000000000000000E /* SetupSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8000000000000000000000D /* SetupSplitView.swift */; };
 		A90000000000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* Sparkle */; };
 		A90000000000000000000005 /* SparkleUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000004 /* SparkleUpdateController.swift */; };
+		A11000000000000000000003 /* Gmak8Kubernetes in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000002 /* Gmak8Kubernetes */; };
+		A11000000000000000000005 /* ClusterOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000004 /* ClusterOverviewView.swift */; };
+		A11000000000000000000007 /* ClusterOverviewSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000006 /* ClusterOverviewSession.swift */; };
+		A11000000000000000000009 /* MainSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11000000000000000000008 /* MainSplitView.swift */; };
+		A1100000000000000000000B /* Gmak8Kubernetes in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000A /* Gmak8Kubernetes */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -155,6 +160,9 @@
 		A8000000000000000000000D /* SetupSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupSplitView.swift; sourceTree = "<group>"; };
 		A90000000000000000000004 /* SparkleUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateController.swift; sourceTree = "<group>"; };
 		A90000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A11000000000000000000004 /* ClusterOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClusterOverviewView.swift; sourceTree = "<group>"; };
+		A11000000000000000000006 /* ClusterOverviewSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClusterOverviewSession.swift; sourceTree = "<group>"; };
+		A11000000000000000000008 /* MainSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,6 +172,7 @@
 			files = (
 				A10000000000000000000012 /* Gmak8Kit in Frameworks */,
 				A20000000000000000000003 /* Gmak8XPC in Frameworks */,
+				A11000000000000000000003 /* Gmak8Kubernetes in Frameworks */,
 				A90000000000000000000003 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -174,6 +183,7 @@
 			files = (
 				A10000000000000000000024 /* Gmak8Kit in Frameworks */,
 				A2000000000000000000001C /* Gmak8XPC in Frameworks */,
+				A1100000000000000000000B /* Gmak8Kubernetes in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -230,6 +240,9 @@
 				A80000000000000000000009 /* ClusterAssetsView.swift */,
 				A8000000000000000000000B /* SetupSession.swift */,
 				A8000000000000000000000D /* SetupSplitView.swift */,
+				A11000000000000000000008 /* MainSplitView.swift */,
+				A11000000000000000000006 /* ClusterOverviewSession.swift */,
+				A11000000000000000000004 /* ClusterOverviewView.swift */,
 				A80000000000000000000001 /* OnboardingView.swift */,
 				A80000000000000000000005 /* RecoveryView.swift */,
 				A90000000000000000000004 /* SparkleUpdateController.swift */,
@@ -315,6 +328,7 @@
 			packageProductDependencies = (
 				A10000000000000000000011 /* Gmak8Kit */,
 				A20000000000000000000002 /* Gmak8XPC */,
+				A11000000000000000000002 /* Gmak8Kubernetes */,
 				A90000000000000000000002 /* Sparkle */,
 			);
 			productName = gmak8;
@@ -338,6 +352,7 @@
 			packageProductDependencies = (
 				A10000000000000000000025 /* Gmak8Kit */,
 				A2000000000000000000001B /* Gmak8XPC */,
+				A1100000000000000000000A /* Gmak8Kubernetes */,
 			);
 			productName = gmak8Tests;
 			productReference = A1000000000000000000001C /* gmak8Tests.xctest */;
@@ -424,6 +439,7 @@
 				A20000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8XPC" */,
 				A40000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Virtualization" */,
 				A60000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8GuestClient" */,
+				A11000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Kubernetes" */,
 				A30000000000000000000001 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 				A90000000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
@@ -504,6 +520,9 @@
 				A8000000000000000000000A /* ClusterAssetsView.swift in Sources */,
 				A8000000000000000000000C /* SetupSession.swift in Sources */,
 				A8000000000000000000000E /* SetupSplitView.swift in Sources */,
+				A11000000000000000000009 /* MainSplitView.swift in Sources */,
+				A11000000000000000000007 /* ClusterOverviewSession.swift in Sources */,
+				A11000000000000000000005 /* ClusterOverviewView.swift in Sources */,
 				A80000000000000000000002 /* OnboardingView.swift in Sources */,
 				A90000000000000000000005 /* SparkleUpdateController.swift in Sources */,
 			);
@@ -996,6 +1015,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../Packages/Gmak8GuestClient;
 		};
+		A11000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Kubernetes" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Packages/Gmak8Kubernetes;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1077,6 +1100,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A90000000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		A11000000000000000000002 /* Gmak8Kubernetes */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A11000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Kubernetes" */;
+			productName = Gmak8Kubernetes;
+		};
+		A1100000000000000000000A /* Gmak8Kubernetes */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A11000000000000000000001 /* XCLocalSwiftPackageReference "Gmak8Kubernetes" */;
+			productName = Gmak8Kubernetes;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

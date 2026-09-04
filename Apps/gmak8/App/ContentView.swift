@@ -1,15 +1,31 @@
 import SwiftUI
 
 struct RootView: View {
+    @EnvironmentObject private var session: ClusterSession
     @EnvironmentObject private var settingsStore: SettingsStore
     @EnvironmentObject private var appDelegate: Gmak8AppDelegate
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        SetupSplitView()
-            .onAppear {
-                appDelegate.bindOpenWindow(openWindow)
+        Group {
+            if showsClusterOverview {
+                MainSplitView()
+            } else {
+                SetupSplitView()
             }
+        }
+        .onAppear {
+            appDelegate.bindOpenWindow(openWindow)
+        }
+    }
+
+    private var showsClusterOverview: Bool {
+        switch session.status.state {
+        case .running, .degraded:
+            return true
+        case .stopped, .starting, .paused, .stopping, .failed:
+            return false
+        }
     }
 }
 
