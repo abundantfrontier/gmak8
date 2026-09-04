@@ -25,7 +25,7 @@ struct MainSplitView: View {
             case .cluster:
                 ClusterOverviewView(overview: overview)
             case .workloads:
-                emptyPane(ClusterOverviewCopy.workloads, ClusterOverviewCopy.workloadsEmpty)
+                WorkloadsView()
             case .kubeVirt:
                 emptyPane(ClusterOverviewCopy.kubeVirt, ClusterOverviewCopy.kubeVirtEmpty)
             case .images:

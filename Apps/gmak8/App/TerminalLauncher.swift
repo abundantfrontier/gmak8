@@ -39,6 +39,81 @@ enum TerminalLauncher {
         runAppleScript(appleScriptSource(workingDirectory: workingDirectory.path(percentEncoded: false)))
     }
 
+    static func execCommand(kubeconfigPath: String, namespace: String, pod: String, container: String?)
+        -> String
+    {
+        var command =
+            "export KUBECONFIG=\(shellQuoted(kubeconfigPath)) && kubectl exec -it -n \(shellQuoted(namespace)) \(shellQuoted(pod))"
+        if let container, !container.isEmpty {
+            command += " -c \(shellQuoted(container))"
+        }
+        command += " -- /bin/sh"
+        return command
+    }
+
+    static func portForwardCommand(
+        kubeconfigPath: String,
+        namespace: String,
+        pod: String,
+        local: Int,
+        remote: Int
+    ) -> String {
+        "export KUBECONFIG=\(shellQuoted(kubeconfigPath)) && kubectl port-forward --address 127.0.0.1 -n \(shellQuoted(namespace)) \(shellQuoted("pod/\(pod)")) \(local):\(remote)"
+    }
+
+    @MainActor
+    static func openExec(
+        namespace: String,
+        pod: String,
+        container: String?,
+        kubeconfig: URL = HostPaths.current().kubeconfigFile
+    ) {
+        runAppleScript(
+            appleScriptSource(
+                command: execCommand(
+                    kubeconfigPath: kubeconfig.path(percentEncoded: false),
+                    namespace: namespace,
+                    pod: pod,
+                    container: container
+                )
+            )
+        )
+    }
+
+    @MainActor
+    static func openPortForward(
+        namespace: String,
+        pod: String,
+        local: Int,
+        remote: Int,
+        kubeconfig: URL = HostPaths.current().kubeconfigFile
+    ) {
+        runAppleScript(
+            appleScriptSource(
+                command: portForwardCommand(
+                    kubeconfigPath: kubeconfig.path(percentEncoded: false),
+                    namespace: namespace,
+                    pod: pod,
+                    local: local,
+                    remote: remote
+                )
+            )
+        )
+    }
+
+    static func appleScriptSource(command: String) -> String {
+        let quoted = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(
+            of: "\"",
+            with: "\\\""
+        )
+        return """
+            tell application "Terminal"
+                activate
+                do script "\(quoted)"
+            end tell
+            """
+    }
+
     @MainActor
     private static func runAppleScript(_ source: String) {
         if let script = NSAppleScript(source: source) {

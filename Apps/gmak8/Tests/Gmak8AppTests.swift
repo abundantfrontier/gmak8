@@ -133,6 +133,25 @@ struct Gmak8AppTests {
         #expect(mkosi.contains("mkosi"))
         #expect(TerminalLauncher.shellQuoted("a'b") == "'a'\\''b'")
         #expect(TerminalLauncher.terminalBundleIdentifier == "com.apple.Terminal")
+        let exec = TerminalLauncher.execCommand(
+            kubeconfigPath: path,
+            namespace: "kube-system",
+            pod: "coredns",
+            container: "coredns"
+        )
+        #expect(exec.contains("kubectl exec -it"))
+        #expect(exec.contains("-- /bin/sh"))
+        #expect(exec.contains("-c 'coredns'"))
+        let forward = TerminalLauncher.portForwardCommand(
+            kubeconfigPath: path,
+            namespace: "default",
+            pod: "app",
+            local: 18080,
+            remote: 8080
+        )
+        #expect(forward.contains("--address 127.0.0.1"))
+        #expect(forward.contains("18080:8080"))
+        #expect(!forward.contains("0.0.0.0"))
     }
 
     @Test func lostEngineConnectionResetsStatusToStopped() {
@@ -247,6 +266,9 @@ struct Gmak8AppTests {
         #expect(ClusterOverviewCopy.sqlite == "SQLite")
         #expect(ClusterOverviewCopy.readyz == "/readyz")
         #expect(ClusterOverview.sampleRunning().addons.map(\.name) == ClusterAddonMatcher.kubernetesAddons)
+        #expect(WorkloadsCopy.empty.contains("Apply a manifest"))
+        #expect(!WorkloadsCopy.empty.lowercased().contains("nginx"))
+        #expect(WorkloadKind.allCases.first == .pod)
     }
 
     @Test func recoveryCopiesMatchLockedDiskAndTranslocation() {
