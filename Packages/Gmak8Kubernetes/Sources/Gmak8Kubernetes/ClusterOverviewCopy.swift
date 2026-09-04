@@ -24,10 +24,11 @@ public enum ClusterSidebarItem: String, CaseIterable, Identifiable, Sendable, Ha
         }
     }
 
-    public static func visible(for profile: Profile) -> [ClusterSidebarItem] {
-        allCases.filter { item in
+    public static func visible(for profile: Profile, kubeVirtEnabled: Bool? = nil) -> [ClusterSidebarItem] {
+        let showKubeVirt = kubeVirtEnabled ?? (profile != .kubernetes)
+        return allCases.filter { item in
             if item == .kubeVirt {
-                return profile != .kubernetes
+                return showKubeVirt
             }
             return true
         }
@@ -60,8 +61,7 @@ public enum ClusterOverviewCopy {
     public static let meters = "Resources"
     public static let context = "context"
     public static let workloadsEmpty = "Apply a manifest, or gmak8 build an image and deploy."
-    public static let kubeVirtEmpty =
-        "KubeVirt is an Eureka profile addon. It is hidden on the Kubernetes profile."
+    public static let kubeVirtEmpty = KubeVirtCopy.nestedVirtUnsupported
     public static let imagesEmpty = ImagesCopy.empty
     public static let refresh = "Refresh"
 }

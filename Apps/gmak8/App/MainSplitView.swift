@@ -27,7 +27,7 @@ struct MainSplitView: View {
             case .workloads:
                 WorkloadsView()
             case .kubeVirt:
-                emptyPane(ClusterOverviewCopy.kubeVirt, ClusterOverviewCopy.kubeVirtEmpty)
+                KubeVirtView()
             case .images:
                 ImagesView()
             case .diagnostics:
@@ -64,7 +64,10 @@ struct MainSplitView: View {
     }
 
     private var visibleItems: [ClusterSidebarItem] {
-        ClusterSidebarItem.visible(for: settingsStore.settings.profile)
+        ClusterSidebarItem.visible(
+            for: settingsStore.settings.profile,
+            kubeVirtEnabled: settingsStore.settings.kubeVirtEnabled
+        )
     }
 
     private func keyEquivalent(_ item: ClusterSidebarItem) -> KeyEquivalent {
@@ -77,16 +80,4 @@ struct MainSplitView: View {
         }
     }
 
-    private func emptyPane(_ title: String, _ body: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.title2)
-                .fontWeight(.semibold)
-            Text(body)
-                .foregroundStyle(.secondary)
-        }
-        .padding(28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .navigationTitle(title)
-    }
 }
