@@ -203,7 +203,19 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             return try await client.node().ready
         }
 
-        return ClusterBringUpResult(apiEndpoint: "https://127.0.0.1:\(port)")
+        let kvmPresent = await probeKvm(log: log)
+        return ClusterBringUpResult(apiEndpoint: "https://127.0.0.1:\(port)", kvmPresent: kvmPresent)
+    }
+
+    private func probeKvm(log: @escaping @Sendable (String) -> Void) async -> Bool {
+        do {
+            let present = try await makeClient().kvm().kvm
+            log(present ? "guest /dev/kvm present" : "guest /dev/kvm absent")
+            return present
+        } catch {
+            log("kvm: \(error.localizedDescription)")
+            return false
+        }
     }
 
     private func wait(

@@ -228,6 +228,7 @@ public struct EngineStatus: Equatable, Sendable {
     public var apiEndpoint: String?
     public var vm: VMMetrics?
     public var nestedVirt: Bool
+    public var kvmPresent: Bool?
     public var lastError: String?
     public var publishedPorts: [PublishedPort]
     public var imageJob: ImageJobStatus?
@@ -238,6 +239,7 @@ public struct EngineStatus: Equatable, Sendable {
         apiEndpoint: String? = nil,
         vm: VMMetrics? = VMMetrics(),
         nestedVirt: Bool = false,
+        kvmPresent: Bool? = nil,
         lastError: String? = nil,
         publishedPorts: [PublishedPort] = [],
         imageJob: ImageJobStatus? = nil
@@ -247,6 +249,7 @@ public struct EngineStatus: Equatable, Sendable {
         self.apiEndpoint = apiEndpoint
         self.vm = vm
         self.nestedVirt = nestedVirt
+        self.kvmPresent = kvmPresent
         self.lastError = lastError
         self.publishedPorts = publishedPorts
         self.imageJob = imageJob
@@ -359,6 +362,7 @@ extension EngineStatus: Codable {
         case apiEndpoint
         case vm
         case nestedVirt
+        case kvmPresent
         case lastError
         case publishedPorts
         case imageJob
@@ -371,6 +375,7 @@ extension EngineStatus: Codable {
         apiEndpoint = try container.decodeIfPresent(String.self, forKey: .apiEndpoint)
         vm = try container.decodeIfPresent(VMMetrics.self, forKey: .vm)
         nestedVirt = try container.decodeIfPresent(Bool.self, forKey: .nestedVirt) ?? false
+        kvmPresent = try container.decodeIfPresent(Bool.self, forKey: .kvmPresent)
         lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         publishedPorts = try container.decodeIfPresent([PublishedPort].self, forKey: .publishedPorts) ?? []
         imageJob = try container.decodeIfPresent(ImageJobStatus.self, forKey: .imageJob)
@@ -383,6 +388,7 @@ extension EngineStatus: Codable {
         try container.encodeNilIfAbsent(apiEndpoint, forKey: .apiEndpoint)
         try container.encodeNilIfAbsent(vm, forKey: .vm)
         try container.encode(nestedVirt, forKey: .nestedVirt)
+        try container.encodeNilIfAbsent(kvmPresent, forKey: .kvmPresent)
         try container.encodeNilIfAbsent(lastError, forKey: .lastError)
         try container.encode(publishedPorts, forKey: .publishedPorts)
         try container.encodeNilIfAbsent(imageJob, forKey: .imageJob)
@@ -399,6 +405,7 @@ extension EngineEvent: Codable {
         case apiEndpoint
         case vm
         case nestedVirt
+        case kvmPresent
         case lastError
         case publishedPorts
         case imageJob

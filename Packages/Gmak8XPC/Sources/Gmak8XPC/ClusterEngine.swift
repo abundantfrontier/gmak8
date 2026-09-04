@@ -71,6 +71,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private let lock = NSLock()
     private let scheduler: any EngineScheduler
     private let nestedVirt: Bool
+    private var guestKvm: Bool?
     private let runtime: any VirtualMachineRuntime
     private let bringUp: any ClusterBringUp
     private let publisher: any PortPublisher
@@ -579,6 +580,7 @@ public final class ClusterEngine: @unchecked Sendable {
             case .success(let outcome):
                 state = .running
                 apiEndpoint = outcome.apiEndpoint
+                guestKvm = outcome.kvmPresent
                 lastError = nil
                 imageJob = nil
                 events.append(.status(currentStatusLocked()))
@@ -616,6 +618,7 @@ public final class ClusterEngine: @unchecked Sendable {
             guard generation == self.generation, state == .stopping else {
                 return
             }
+            guestKvm = nil
             switch result {
             case .success:
                 if wipeDisksAfterStop {
@@ -764,6 +767,7 @@ public final class ClusterEngine: @unchecked Sendable {
             apiEndpoint: apiEndpoint,
             vm: VMMetrics(),
             nestedVirt: nestedVirt,
+            kvmPresent: guestKvm,
             lastError: lastError,
             publishedPorts: publisher.snapshot(),
             imageJob: imageJob

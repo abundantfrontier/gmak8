@@ -2,9 +2,11 @@ import Foundation
 
 public struct ClusterBringUpResult: Equatable, Sendable {
     public var apiEndpoint: String?
+    public var kvmPresent: Bool?
 
-    public init(apiEndpoint: String? = nil) {
+    public init(apiEndpoint: String? = nil, kvmPresent: Bool? = nil) {
         self.apiEndpoint = apiEndpoint
+        self.kvmPresent = kvmPresent
     }
 }
 

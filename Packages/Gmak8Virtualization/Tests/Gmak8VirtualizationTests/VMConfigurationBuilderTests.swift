@@ -52,6 +52,12 @@ struct VMConfigurationBuilderTests {
             efi?.variableStore?.url.standardizedFileURL == env.layout.efiNVRAM.standardizedFileURL
         )
         #expect(config.platform is VZGenericPlatformConfiguration)
+        let platform = try #require(config.platform as? VZGenericPlatformConfiguration)
+        if #available(macOS 15.0, *) {
+            #expect(
+                platform.isNestedVirtualizationEnabled
+                    == VZGenericPlatformConfiguration.isNestedVirtualizationSupported)
+        }
         #expect(config.serialPorts.count == 1)
         #expect(config.serialPorts[0] is VZVirtioConsoleDeviceSerialPortConfiguration)
         #expect(config.serialPorts[0].attachment is VZFileSerialPortAttachment)
@@ -86,6 +92,19 @@ struct VMConfigurationBuilderTests {
         let fs = withShare.directorySharingDevices[0] as? VZVirtioFileSystemDeviceConfiguration
         #expect(fs?.tag == VMConfigurationBuilder.configShareTag)
         #expect(VMConfigurationBuilder.configShareTag == "gmak8-config")
+    }
+
+    @Test func nestedVirtEnabledIffPlatformSupportsIt() throws {
+        let env = try makeLayoutHarness()
+        defer { env.cleanup() }
+        let config = try VMConfigurationBuilder.make(layout: env.layout, hardware: env.hardware)
+        let platform = try #require(config.platform as? VZGenericPlatformConfiguration)
+        if #available(macOS 15.0, *) {
+            #expect(NestedVirtualization.isSupported == VZGenericPlatformConfiguration.isNestedVirtualizationSupported)
+            #expect(platform.isNestedVirtualizationEnabled == NestedVirtualization.isSupported)
+        } else {
+            #expect(!NestedVirtualization.isSupported)
+        }
     }
 
     @Test func hostDirectorySharesUseVirtioFSTags() throws {

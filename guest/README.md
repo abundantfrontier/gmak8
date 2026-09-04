@@ -96,7 +96,7 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | --- | --- | --- |
 | `GET` | `/health` | Agent process is up. Does **not** report data-disk mount. |
 | `GET` | `/disks` | `gmak8_data` / `kite_data` are `mounted` when `/mnt/data` is `GMAK8_DATA`. |
-| `GET` | `/kvm` | `kvm` is true iff `/dev/kvm` exists as a character device. |
+| `GET` | `/kvm` | `kvm` is true iff `/dev/kvm` exists as a character device. Host must enable VZ nested virt (`isNestedVirtualizationSupported`); M1/M2 and macOS 14 stay false. |
 | `GET` | `/kubeconfig` | Bytes of `/etc/rancher/k3s/k3s.yaml`, or 404 if missing. |
 | `GET` | `/k3s` | JSON: systemd active, installed version, on-disk data-dir minor if known. |
 | `POST` | `/k3s/start` | `systemctl start --no-block k3s` (after the host compatibility probe). |

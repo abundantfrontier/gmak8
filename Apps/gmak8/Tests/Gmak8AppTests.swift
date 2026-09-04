@@ -277,6 +277,9 @@ struct Gmak8AppTests {
         #expect(SettingsCopy.virtctlHelp.contains("virtctl"))
         #expect(SettingsCopy.telemetryOff.contains("Docker Hub"))
         #expect(HostUserIdentity.warning.contains("501") || HostUserIdentity.warning.contains("runAsUser"))
+        #expect(ClusterOverviewCopy.kvmPresent.contains("/dev/kvm"))
+        #expect(ClusterOverviewCopy.kvmMissing.contains("not present"))
+        #expect(StatusPresentation.nestedVirtLine(true) == "Nested virt: Yes")
     }
 
     @Test func recoveryCopiesMatchLockedDiskAndTranslocation() {

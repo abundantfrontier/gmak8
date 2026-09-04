@@ -16,7 +16,7 @@ public enum VMConfigurationBuilder {
         let config = VZVirtualMachineConfiguration()
         config.cpuCount = clampedCPUCount(hardware.cpuCount)
         config.memorySize = clampedMemorySize(hardware.memoryBytes)
-        config.platform = VZGenericPlatformConfiguration()
+        config.platform = NestedVirtualization.makePlatform()
 
         let bootLoader = VZEFIBootLoader()
         bootLoader.variableStore = try EFIVariableStore.openOrCreate(at: layout.efiNVRAM)

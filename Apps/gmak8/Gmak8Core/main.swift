@@ -106,8 +106,11 @@ do {
         }
     )
     let processExit = CoreProcessExit()
+    let nestedVirt = NestedVirtualization.isSupported
+    Gmak8Log.core.info("nested virt enabled=\(nestedVirt, privacy: .public)")
     let engine = ClusterEngine(
         scheduler: DispatchEngineScheduler(),
+        nestedVirt: nestedVirt,
         runtime: CoreVirtualMachineRuntime(
             controller: controller,
             configDirectory: paths.configDirectory

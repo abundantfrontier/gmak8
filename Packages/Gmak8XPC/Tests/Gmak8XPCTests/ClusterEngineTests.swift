@@ -24,6 +24,21 @@ struct ClusterEngineTests {
         #expect(engine.currentStatus().step == nil)
     }
 
+    @Test func nestedVirtCapabilityIsReportedSeparatelyFromGuestKvm() {
+        let scheduler = ManualEngineScheduler()
+        let engine = ClusterEngine(scheduler: scheduler, nestedVirt: true)
+        #expect(engine.currentStatus().nestedVirt)
+        #expect(engine.currentStatus().kvmPresent == nil)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        #expect(engine.currentStatus().nestedVirt)
+        #expect(engine.currentStatus().kvmPresent == nil)
+        #expect(engine.submit(.stop) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().kvmPresent == nil)
+    }
+
     @Test func startWhenStartingOrRunningConflicts() {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler)

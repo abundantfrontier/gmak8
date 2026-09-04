@@ -77,6 +77,21 @@ struct KubernetesBringUpTests {
         #expect(env.steps.contains(ClusterStartStep.nodeReady))
         #expect(env.server.state.airgapImports == 0)
         #expect(env.server.state.k3sStarts == 1)
+        #expect(env.engine.currentStatus().kvmPresent == false)
+        #expect(env.logs.contains { $0.contains("/dev/kvm absent") })
+    }
+
+    @Test func guestKvmPresentIsReportedOnEngineStatus() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, kvm: true)
+        defer { env.tearDown() }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.engine.currentStatus().kvmPresent == true)
+        #expect(env.logs.contains { $0.contains("/dev/kvm present") })
     }
 
     @Test func presentAirgapSkipsImport() async throws {
@@ -375,6 +390,7 @@ private struct BringUpHarness {
         mounted: Bool = true,
         airgapPresent: Bool = true,
         holdAirgapPut: Bool = false,
+        kvm: Bool = false,
         streamClient: Bool = false,
         airgapProvider: (any AirgapProviding)? = nil,
         runtime: (any VirtualMachineRuntime)? = nil
@@ -401,7 +417,8 @@ private struct BringUpHarness {
             bytesFree: bytesFree,
             mounted: mounted,
             airgapPresent: airgapPresent,
-            holdAirgapPut: holdAirgapPut
+            holdAirgapPut: holdAirgapPut,
+            kvm: kvm
         )
         server = try BringUpHTTPServer(state: state)
         tracker = StepTracker()
@@ -533,6 +550,7 @@ private final class BringUpAgentState: @unchecked Sendable {
     var lastAirgapBody = Data()
     var events: [String] = []
     var holdAirgapPut: Bool
+    var kvm: Bool
     private let putLock = NSCondition()
     private var airgapPutStarted = false
 
@@ -544,7 +562,8 @@ private final class BringUpAgentState: @unchecked Sendable {
         bytesFree: UInt64,
         mounted: Bool,
         airgapPresent: Bool,
-        holdAirgapPut: Bool = false
+        holdAirgapPut: Bool = false,
+        kvm: Bool = false
     ) {
         self.yaml = yaml
         self.dataDirMinor = dataDirMinor
@@ -554,6 +573,7 @@ private final class BringUpAgentState: @unchecked Sendable {
         self.mounted = mounted
         self.airgapPresent = airgapPresent
         self.holdAirgapPut = holdAirgapPut
+        self.kvm = kvm
     }
 
     func noteAirgapPutStartedAndWaitIfHeld() {
@@ -686,6 +706,12 @@ private func response(for request: (String, String, Data), state: BringUpAgentSt
     switch (request.0, request.1) {
     case ("GET", "/health"):
         return (200, Data(#"{"ok":true}"#.utf8), "application/json")
+    case ("GET", "/kvm"):
+        return (
+            200,
+            Data((state.kvm ? #"{"kvm":true}"# : #"{"kvm":false}"#).utf8),
+            "application/json"
+        )
     case ("GET", "/disks"):
         if !state.mounted {
             return (

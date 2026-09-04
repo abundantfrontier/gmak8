@@ -91,7 +91,7 @@ struct ClusterOverviewView: View {
         overviewCard(title: ClusterOverviewCopy.node) {
             if let node = overview.overview?.node {
                 labeled(node.name, node.ready ? ClusterOverviewCopy.nodeReady : ClusterOverviewCopy.nodeNotReady)
-                labeled("kvm", kvmLine(node.kvmPresent))
+                labeled("kvm", kvmLine(session.status.kvmPresent ?? node.kvmPresent))
             } else {
                 Text(ClusterOverviewCopy.noNode)
                     .foregroundStyle(.secondary)

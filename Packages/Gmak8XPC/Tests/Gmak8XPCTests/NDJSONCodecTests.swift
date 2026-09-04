@@ -87,7 +87,26 @@ struct NDJSONCodecTests {
         #expect(line.contains("\"imageJob\":null"))
         #expect(line.contains("\"publishedPorts\":[]"))
         #expect(line.contains("\"nestedVirt\":false"))
+        #expect(line.contains("\"kvmPresent\":null"))
         #expect(try NDJSONCodec.decodeEvent(line: line) == event)
+    }
+
+    @Test func statusEventRoundTripIncludesKvmPresent() throws {
+        let event = EngineEvent.status(
+            EngineStatus(state: .running, nestedVirt: true, kvmPresent: true)
+        )
+        let line = try utf8Line(event)
+        #expect(line.contains("\"nestedVirt\":true"))
+        #expect(line.contains("\"kvmPresent\":true"))
+        #expect(try NDJSONCodec.decodeEvent(line: line) == event)
+        let legacy = #"{"type":"status","state":"running","nestedVirt":true}"#
+        let decoded = try NDJSONCodec.decodeEvent(line: legacy)
+        guard case .status(let status) = decoded else {
+            Issue.record("expected status")
+            return
+        }
+        #expect(status.nestedVirt)
+        #expect(status.kvmPresent == nil)
     }
 
     @Test func publishedPortRoundTripIncludesCollisionModel() throws {

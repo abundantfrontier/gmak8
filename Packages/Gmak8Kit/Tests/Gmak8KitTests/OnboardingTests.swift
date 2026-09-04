@@ -175,6 +175,8 @@ struct OnboardingTests {
         #expect(!NestedVirtualizationProbe.isSupported(macOSMajor: 14, platformReportsSupported: true))
         #expect(NestedVirtualizationProbe.isSupported(macOSMajor: 15, platformReportsSupported: true))
         #expect(!NestedVirtualizationProbe.isSupported(macOSMajor: 15, platformReportsSupported: false))
+        #expect(NestedVirtualizationProbe.isSupported(macOSMajor: 16, platformReportsSupported: true))
+        #expect(!NestedVirtualizationProbe.isSupported(macOSMajor: 14, platformReportsSupported: false))
     }
 
     @Test func assetsAndPermissionsGateCreate() {

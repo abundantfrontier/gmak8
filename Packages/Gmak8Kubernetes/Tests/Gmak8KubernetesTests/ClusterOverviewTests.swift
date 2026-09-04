@@ -14,6 +14,9 @@ struct ClusterOverviewTests {
         #expect(snapshot.kubernetesVersion == K3sPin.version)
         #expect(snapshot.node?.name == "gmak8")
         #expect(snapshot.node?.ready == true)
+        #expect(snapshot.node?.kvmPresent == false)
+        #expect(ClusterOverviewCopy.kvmPresent.contains("/dev/kvm"))
+        #expect(ClusterOverviewCopy.kvmMissing.contains("not present"))
         #expect(snapshot.addons.map(\.name) == ClusterAddonMatcher.kubernetesAddons)
         #expect(snapshot.addons.allSatisfy { $0.ready })
     }
