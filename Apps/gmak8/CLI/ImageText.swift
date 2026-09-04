@@ -61,7 +61,7 @@ enum ImageLoad {
     }
 }
 
-private final class ImageLoadWait: @unchecked Sendable {
+final class ImageLoadWait: @unchecked Sendable {
     let group = DispatchGroup()
     private let lock = NSLock()
     private var sawJob = false
@@ -110,6 +110,12 @@ private final class ImageLoadWait: @unchecked Sendable {
         case .log(_, let line):
             if line.hasPrefix("imported") {
                 imported = line
+                if !finished {
+                    finished = true
+                    lock.unlock()
+                    group.leave()
+                    return
+                }
             }
         case .images:
             break

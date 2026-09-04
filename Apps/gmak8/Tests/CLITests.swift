@@ -43,10 +43,38 @@ struct CLITests {
         ])
         let text = ImageText.renderList(list)
         #expect(text.contains("nginx:dev"))
+        #expect(text.contains("sha256:abc"))
+        #expect(text.contains("1.0 KiB"))
         #expect(text.contains("system"))
         #expect(ImageText.renderList(NodeImageList()) == "No node images.")
         #expect(ImageText.formatBytes(512) == "512 B")
         #expect(ImageText.formatBytes(1024) == "1.0 KiB")
+        #expect(ImageText.formatBytes(26_214_400) == "25.0 MiB")
+    }
+
+    @Test func imageLoadWaitFinishesOnJobClearAndImportedLog() {
+        let wait = ImageLoadWait()
+        wait.handle(
+            .status(
+                EngineStatus(
+                    state: .running,
+                    imageJob: ImageJobStatus(bytesReceived: 4, bytesTotal: 8)
+                )
+            )
+        )
+        wait.handle(.log(source: .engine, line: "imported sha256:abc nginx:dev"))
+        wait.handle(.status(EngineStatus(state: .running, imageJob: nil)))
+        #expect(wait.group.wait(timeout: .now() + 1) == .success)
+        #expect(wait.importedLine == "imported sha256:abc nginx:dev")
+        #expect(wait.status?.imageJob == nil)
+        #expect(wait.error == nil)
+    }
+
+    @Test func imageLoadWaitFailsOnSubscribeError() {
+        let wait = ImageLoadWait()
+        wait.fail(.engineError(.conflict))
+        #expect(wait.group.wait(timeout: .now() + 1) == .success)
+        #expect(wait.error == .engineError(.conflict))
     }
 
     @Test func statusTextDisplayNamesMatchClusterStates() {
@@ -238,6 +266,81 @@ struct CLITests {
         #expect(engine.currentStatus().state == .running)
         try EngineClient.submit(.stop, socketURL: socketURL)
         #expect(engine.currentStatus().state == .stopping)
+    }
+
+    @Test func imageListConflictsWhenClusterStopped() throws {
+        let socketURL = uniqueSocketURL()
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: ClusterEngine(scheduler: ManualEngineScheduler(), images: FakeNodeImageRuntime()),
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+        )
+        try server.start()
+        defer { server.stop() }
+
+        #expect(throws: CLIError.engineError(.conflict)) {
+            try EngineClient.listImages(socketURL: socketURL, timeout: timeval(tv_sec: 2, tv_usec: 0))
+        }
+        #expect(throws: CLIError.engineError(.conflict)) {
+            try EngineClient.pruneImages(socketURL: socketURL, timeout: timeval(tv_sec: 2, tv_usec: 0))
+        }
+    }
+
+    @Test func imageListLoadPruneOverFakeSocket() async throws {
+        let socketURL = uniqueSocketURL()
+        let scheduler = ManualEngineScheduler()
+        let images = FakeNodeImageRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, images: images)
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: engine,
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+        )
+        try server.start()
+        defer { server.stop() }
+
+        try EngineClient.submit(.start, socketURL: socketURL)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+
+        let empty = try EngineClient.listImages(socketURL: socketURL, timeout: timeval(tv_sec: 2, tv_usec: 0))
+        #expect(empty.items.isEmpty)
+        #expect(ImageText.renderList(empty) == "No node images.")
+
+        let tar = FileManager.default.temporaryDirectory.appending(path: "gmak8-cli-load-\(UUID().uuidString).tar")
+        try Data("tiny-oci-tar-body".utf8).write(to: tar)
+        defer { try? FileManager.default.removeItem(at: tar) }
+
+        try EngineClient.submit(.loadImage(path: tar.path(percentEncoded: false)), socketURL: socketURL)
+        #expect(engine.currentStatus().imageJob != nil)
+        scheduler.runNext()
+        var spins = 0
+        while engine.currentStatus().imageJob != nil && spins < 200 {
+            try await Task.sleep(for: .milliseconds(10))
+            spins += 1
+        }
+        #expect(engine.currentStatus().imageJob == nil)
+        #expect(engine.currentStatus().lastError == nil)
+
+        let listed = try EngineClient.listImages(socketURL: socketURL, timeout: timeval(tv_sec: 2, tv_usec: 0))
+        #expect(listed.items.contains { $0.refs.contains("nginx:dev") })
+        #expect(ImageText.renderList(listed).contains("nginx:dev"))
+
+        let pruned = try EngineClient.pruneImages(socketURL: socketURL, timeout: timeval(tv_sec: 2, tv_usec: 0))
+        #expect(pruned.items.isEmpty)
+        #expect(images.pruneCount == 1)
+    }
+
+    @Test func imageListMissingSocketIsEngineNotRunning() {
+        let url = URL(fileURLWithPath: "/tmp/gmak8-missing-\(UUID().uuidString).sock")
+        #expect(throws: CLIError.engineNotRunning) {
+            try EngineClient.listImages(socketURL: url)
+        }
+        #expect(throws: CLIError.engineNotRunning) {
+            try EngineClient.pruneImages(socketURL: url)
+        }
     }
 
     @Test func subscribeStreamsInitialStatus() async throws {
