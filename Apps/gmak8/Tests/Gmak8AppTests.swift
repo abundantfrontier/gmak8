@@ -289,6 +289,8 @@ struct Gmak8AppTests {
         #expect(!SystemImageMatcher.isSystem(refs: ["nginx:dev"]))
         #expect(SettingsCopy.balloonUnsupported.contains("not supported"))
         #expect(SettingsCopy.virtctlHelp.contains("virtctl"))
+        #expect(OnboardingCopy.useEurekaAPIOnly.contains("API-only"))
+        #expect(OnboardingCopy.eurekaExplanation.contains("docs/eureka-local.md"))
         #expect(SettingsCopy.telemetryOff.contains("Docker Hub"))
         #expect(HostUserIdentity.warning.contains("501") || HostUserIdentity.warning.contains("runAsUser"))
         #expect(ClusterOverviewCopy.kvmPresent.contains("/dev/kvm"))

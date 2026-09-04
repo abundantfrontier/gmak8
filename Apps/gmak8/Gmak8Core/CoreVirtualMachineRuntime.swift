@@ -81,20 +81,22 @@ func loadCoreSettings(from paths: HostPaths) -> Settings {
     return loaded
 }
 
-func writeClusterConfig(directory: URL, settings: Settings) throws {
+func writeClusterConfig(
+    directory: URL,
+    settings: Settings,
+    host: HostSnapshot? = nil
+) throws {
     try ClusterConfigFiles.write(
         directory: directory,
         settings: settings,
         proxy: SystemProxy.fromSystem()
     )
-    if settings.profile == .eureka {
-        let yamlURL = directory.appending(path: "k3s/config.yaml")
-        let yaml = (try? String(contentsOf: yamlURL, encoding: .utf8)) ?? ""
-        if !K3sConfig.hasDataDiskLocalPath(yaml) {
-            throw ClusterBringUpError(
-                message: "Eureka profile requires default-local-storage-path: /mnt/data/local-path")
-        }
-    }
+    let yamlURL = directory.appending(path: "k3s/config.yaml")
+    let yaml = (try? String(contentsOf: yamlURL, encoding: .utf8)) ?? ""
+    let resolvedHost =
+        host
+        ?? HostSnapshot.live(nestedVirtualizationSupported: NestedVirtualization.isSupported)
+    try EurekaProfileGate.validateStart(settings: settings, k3sYAML: yaml, host: resolvedHost)
 }
 
 func hostDirectoryShares(from settings: Settings) -> [HostDirectoryShare] {

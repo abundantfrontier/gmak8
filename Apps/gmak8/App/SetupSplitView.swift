@@ -266,18 +266,36 @@ struct SetupSplitView: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
-            Stepper(value: cpuBinding, in: 1...max(1, setup.host.processorCount)) {
-                Text("vCPU \(settingsStore.settings.cpu)")
+            if settingsStore.profileRefusal == nil {
+                Stepper(value: cpuBinding, in: 1...max(1, setup.host.processorCount)) {
+                    Text("vCPU \(settingsStore.settings.cpu)")
+                }
+                Stepper(value: memoryBinding, in: 2...max(2, setup.host.physicalMemoryGiB)) {
+                    Text("RAM \(settingsStore.settings.memoryGiB) GiB")
+                }
+                Stepper(value: diskBinding, in: 20...1_024) {
+                    Text("Disk \(settingsStore.settings.dataDiskGiB) GiB")
+                }
+                Text(OnboardingCopy.sparseDisk)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            Stepper(value: memoryBinding, in: 2...max(2, setup.host.physicalMemoryGiB)) {
-                Text("RAM \(settingsStore.settings.memoryGiB) GiB")
+            if settingsStore.settings.profile == .eureka
+                || settingsStore.settings.profile == .eurekaAPIOnly
+            {
+                Text(OnboardingCopy.eurekaExplanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Stepper(value: diskBinding, in: 20...1_024) {
-                Text("Disk \(settingsStore.settings.dataDiskGiB) GiB")
+            if let refusal = settingsStore.profileRefusal {
+                Text(refusal.onboardingMessage)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                Button(OnboardingCopy.useEurekaAPIOnly) {
+                    setup.applyProfile(.eurekaAPIOnly, settingsStore: settingsStore)
+                }
             }
-            Text(OnboardingCopy.sparseDisk)
-                .font(.caption)
-                .foregroundStyle(.secondary)
             HStack {
                 Text(OnboardingCopy.clusterName)
                 TextField(OnboardingCopy.clusterName, text: clusterNameBinding)
@@ -352,7 +370,9 @@ struct SetupSplitView: View {
     }
 
     private var clusterReadyToStart: Bool {
-        setup.assets.assetStatus[.guest] == .ready && setup.assets.assetStatus[.k3sAirgap] == .ready
+        setup.assets.assetStatus[.guest] == .ready
+            && setup.assets.assetStatus[.k3sAirgap] == .ready
+            && settingsStore.profileRefusal == nil
     }
 
     private var friendlyStartError: String? {

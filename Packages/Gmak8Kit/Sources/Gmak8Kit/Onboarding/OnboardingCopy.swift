@@ -43,6 +43,7 @@ public enum OnboardingCopy {
     public static let profileTitle = "Profile and resources"
     public static let eurekaExplanation =
         "This will not run the full GCE stack or stock env.py. u1.xlarge will Pending on this Mac. Use u1.nano/u1.medium and the airgapped aarch64 disk in docs/eureka-local.md. One nested VM + APIs + virtctl. HTTPS to the LoadBalancer IP is not available locally."
+    public static let useEurekaAPIOnly = "Use Eureka API-only"
     public static let sparseDisk = "The data disk is sparse; it grows as you use it, up to the cap."
 
     public static let cliTitle = "CLI"

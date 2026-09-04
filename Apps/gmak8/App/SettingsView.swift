@@ -113,6 +113,20 @@ struct SettingsView: View {
                         Text(profile.displayName).tag(profile)
                     }
                 }
+                if settings.profile == .eureka || settings.profile == .eurekaAPIOnly {
+                    Text(OnboardingCopy.eurekaExplanation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let refusal = settingsStore.profileRefusal {
+                    Text(refusal.onboardingMessage)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                    Button(OnboardingCopy.useEurekaAPIOnly) {
+                        settingsStore.applyProfile(.eurekaAPIOnly)
+                    }
+                }
                 TextField(SettingsCopy.clusterName, text: stringBinding(\.clusterName))
                 Text(SettingsCopy.clusterNameReset)
                     .font(.caption)
@@ -289,14 +303,7 @@ struct SettingsView: View {
     private var profileBinding: Binding<Profile> {
         Binding(
             get: { settings.profile },
-            set: { profile in
-                settingsStore.update { current in
-                    current.profile = profile
-                    if profile != .kubernetes {
-                        current.kubeVirtAddon = true
-                    }
-                }
-            }
+            set: { settingsStore.applyProfile($0) }
         )
     }
 

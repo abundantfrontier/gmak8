@@ -35,7 +35,7 @@ struct SoakPlanTests {
         #expect(!SoakPlan.dockerHubAllowed)
         #expect(!SoakPlan.virtctlLiveEnabled)
         #expect(SoakPlan.imageLoadSkipReason.contains("Docker Hub"))
-        #expect(SoakPlan.virtctlDeferredReason.contains("27-28"))
+        #expect(SoakPlan.virtctlDeferredReason.contains("eureka-local.md"))
         #expect(
             SoakPlan.joinedSteps(gate: SoakPlan.gate09)
                 == "startStop,dirtyKillFsck,loadImage,nginxNodePortCurl"

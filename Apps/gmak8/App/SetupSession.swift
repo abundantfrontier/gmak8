@@ -133,19 +133,8 @@ final class SetupSession: ObservableObject {
     }
 
     func applyProfile(_ profile: Profile, settingsStore: SettingsStore) {
-        var draft = OnboardingDraft(host: host)
-        draft.clusterName = settingsStore.settings.clusterName
-        draft.setCurrentContextOnStart = settingsStore.settings.setCurrentContextOnStart
-        draft.applyProfile(profile, host: host)
-        settingsStore.update { settings in
-            settings.profile = draft.profile
-            if draft.profileIsAccepted {
-                settings.cpu = draft.cpu
-                settings.memoryGiB = draft.memoryGiB
-                settings.dataDiskGiB = draft.dataDiskGiB
-            }
-        }
-        assets.profile = draft.profile
+        settingsStore.applyProfile(profile)
+        assets.profile = settingsStore.settings.profile
     }
 
     func start(settingsStore: SettingsStore, clusterSession: ClusterSession) {

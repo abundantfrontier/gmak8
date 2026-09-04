@@ -159,7 +159,7 @@ struct OnboardingView: View {
                 Text(refusal.onboardingMessage)
                     .foregroundStyle(.red)
                     .font(.caption)
-                Button("Use Eureka API-only") {
+                Button(OnboardingCopy.useEurekaAPIOnly) {
                     onboarding.applyProfile(.eurekaAPIOnly)
                 }
             }

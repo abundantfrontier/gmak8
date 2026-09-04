@@ -56,6 +56,10 @@ The CLI (`status`, `version`, `start`, `stop`, `image list|load|prune`) is `gmak
 
 MIT License. See [LICENSE](LICENSE). Third-party notices (gvproxy) are in [NOTICE](NOTICE).
 
+## Profiles
+
+First-run and Settings pick **Kubernetes**, **Eureka**, or **Eureka API-only**. People do not author extra profiles. Eureka is a KubeVirt addon pack on this appliance (M3+ / macOS 15+ nested virt for a Running VMI). Overrides, virtctl PATH, and the Builderdash Mac/ARM matrix are in [docs/eureka-local.md](docs/eureka-local.md). k3s config deltas: [docs/k3s-deltas.md](docs/k3s-deltas.md).
+
 ## Design
 
 See [docs/design.md](docs/design.md).

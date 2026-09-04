@@ -89,6 +89,24 @@ public struct Settings: Codable, Equatable, Sendable {
         profile != .kubernetes || kubeVirtAddon
     }
 
+    /// Stamps CPU/RAM/disk from the profile table. Returns a refusal without changing sizes.
+    @discardableResult
+    public mutating func applyProfile(_ profile: Profile, host: HostSnapshot) -> ProfileRefusal? {
+        self.profile = profile
+        if profile != .kubernetes {
+            kubeVirtAddon = true
+        }
+        switch profile.resourceDefaults(host: host) {
+        case .accepted(let resources):
+            cpu = resources.cpu
+            memoryGiB = resources.memoryGiB
+            dataDiskGiB = resources.dataDiskGiB
+            return nil
+        case .refused(let refusal):
+            return refusal
+        }
+    }
+
     public var k3sDisable: [String] {
         K3sConfig.disableList(
             traefik: disableTraefik,

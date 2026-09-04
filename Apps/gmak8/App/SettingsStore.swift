@@ -9,6 +9,7 @@ typealias ClusterSettings = Settings
 final class SettingsStore: ObservableObject, @unchecked Sendable {
     @Published private(set) var settings: Settings
     @Published private(set) var needsOnboarding: Bool
+    @Published private(set) var profileRefusal: ProfileRefusal?
     @Published var lastError: String?
 
     private let paths: HostPaths
@@ -20,6 +21,10 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         let settingsExist = fileManager.fileExists(atPath: paths.settingsFile.path(percentEncoded: false))
         self.needsOnboarding = FirstRunGate.shouldShowOnboarding(settingsFileExists: settingsExist)
         self.settings = SettingsStore.loadOrDefault(paths: paths, fileManager: fileManager)
+        self.profileRefusal = EurekaProfileGate.refusal(
+            settings: self.settings,
+            host: SettingsStore.currentHostSnapshot()
+        )
         if !settingsExist {
             try? self.settings.save(to: paths.settingsFile, fileManager: fileManager)
             try? AssetLibrary.ensureLayout(
@@ -32,7 +37,15 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
 
     func update(_ mutate: (inout Settings) -> Void) {
         mutate(&settings)
+        profileRefusal = EurekaProfileGate.refusal(settings: settings, host: Self.currentHostSnapshot())
         persist()
+    }
+
+    func applyProfile(_ profile: Profile) {
+        let host = Self.currentHostSnapshot()
+        update { current in
+            _ = current.applyProfile(profile, host: host)
+        }
     }
 
     func setLibraryFolder(_ url: URL) {
@@ -68,6 +81,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
 
     func completeOnboarding(_ newSettings: Settings) {
         settings = newSettings
+        profileRefusal = EurekaProfileGate.refusal(settings: settings, host: Self.currentHostSnapshot())
         persist()
         if lastError == nil {
             needsOnboarding = false
@@ -145,21 +159,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
     }
 
     static func currentHostSnapshot() -> HostSnapshot {
-        let memoryGiB = Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
-        let freeDiskGiB: Int
-        if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [
-            .volumeAvailableCapacityForImportantUsageKey
-        ]),
-            let capacity = values.volumeAvailableCapacityForImportantUsage
-        {
-            freeDiskGiB = Int(capacity / 1_073_741_824)
-        } else {
-            freeDiskGiB = 100
-        }
-        return HostSnapshot(
-            processorCount: ProcessInfo.processInfo.processorCount,
-            physicalMemoryGiB: max(memoryGiB, 1),
-            freeDiskGiB: max(freeDiskGiB, 0),
+        HostSnapshot.live(
             nestedVirtualizationSupported: SystemVirtualizationCapabilities.nestedVirtualizationSupported
         )
     }

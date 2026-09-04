@@ -75,15 +75,19 @@ public struct OnboardingDraft: Equatable, Sendable {
     }
 
     public mutating func applyProfile(_ profile: Profile, host: HostSnapshot) {
-        self.profile = profile
-        switch profile.resourceDefaults(host: host) {
-        case .accepted(let resources):
-            cpu = resources.cpu
-            memoryGiB = resources.memoryGiB
-            dataDiskGiB = resources.dataDiskGiB
-            profileRefusal = nil
-        case .refused(let refusal):
-            profileRefusal = refusal
+        var next = Settings(
+            profile: .kubernetes,
+            cpu: cpu,
+            memoryGiB: memoryGiB,
+            dataDiskGiB: dataDiskGiB
+        )
+        let refusal = next.applyProfile(profile, host: host)
+        self.profile = next.profile
+        profileRefusal = refusal
+        if refusal == nil {
+            cpu = next.cpu
+            memoryGiB = next.memoryGiB
+            dataDiskGiB = next.dataDiskGiB
         }
     }
 

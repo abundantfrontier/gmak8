@@ -1,3 +1,5 @@
+import Foundation
+
 public enum Profile: String, Codable, Equatable, Sendable, CaseIterable {
     case kubernetes
     case eureka
@@ -32,6 +34,26 @@ public struct HostSnapshot: Equatable, Sendable {
         self.freeDiskGiB = freeDiskGiB
         self.nestedVirtualizationSupported = nestedVirtualizationSupported
     }
+
+    public static func live(nestedVirtualizationSupported: Bool) -> HostSnapshot {
+        let memoryGiB = Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
+        let freeDiskGiB: Int
+        if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [
+            .volumeAvailableCapacityForImportantUsageKey
+        ]),
+            let capacity = values.volumeAvailableCapacityForImportantUsage
+        {
+            freeDiskGiB = Int(capacity / 1_073_741_824)
+        } else {
+            freeDiskGiB = 100
+        }
+        return HostSnapshot(
+            processorCount: ProcessInfo.processInfo.processorCount,
+            physicalMemoryGiB: max(memoryGiB, 1),
+            freeDiskGiB: max(freeDiskGiB, 0),
+            nestedVirtualizationSupported: nestedVirtualizationSupported
+        )
+    }
 }
 
 public struct ProfileResources: Equatable, Sendable {
@@ -50,10 +72,11 @@ public struct ProfileResources: Equatable, Sendable {
     }
 }
 
-public enum ProfileRefusal: Error, Equatable, Sendable {
+public enum ProfileRefusal: Error, Equatable, Sendable, LocalizedError {
     case insufficientMemory(requiredGiB: Int, availableGiB: Int)
     case insufficientDisk(requiredGiB: Int, availableGiB: Int)
     case nestedVirtualizationUnsupported
+    case missingDataDiskLocalPath
 
     public var onboardingMessage: String {
         switch self {
@@ -66,8 +89,13 @@ public enum ProfileRefusal: Error, Equatable, Sendable {
         case .nestedVirtualizationUnsupported:
             return
                 "This Mac cannot run nested VMs (needs Apple Silicon M3 or later and macOS 15+). Switch to Eureka API-only or Kubernetes."
+        case .missingDataDiskLocalPath:
+            return
+                "Eureka profile requires default-local-storage-path: /mnt/data/local-path. Do not disable local-storage."
         }
     }
+
+    public var errorDescription: String? { onboardingMessage }
 }
 
 public enum ProfileResolution: Equatable, Sendable {

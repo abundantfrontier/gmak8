@@ -7,6 +7,8 @@ public enum KubeVirtPin {
     public static let featureGates = ["VMExport", "EnableVirtioFsConfigVolumes"]
     public static let smokeInstancetype = "u1.nano"
     public static let smokeInstancetypeKind = "VirtualMachineClusterInstancetype"
+    public static let smokeDiskImage = "quay.io/containerdisks/fedora:40"
+    public static let localDocs = "docs/eureka-local.md"
     public static let guestYAMLDirectory = "/usr/local/share/gmak8/kubevirt"
     public static let virtctlHelperName = "virtctl"
 
