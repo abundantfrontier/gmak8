@@ -98,6 +98,13 @@ struct Gmak8AppTests {
         #expect(keep.action(for: .stopAndQuit) == .stopClusterThenTerminate)
     }
 
+    @Test func stopAndQuitKeepsExtraIfStopDidNotReachEngine() {
+        #expect(StopThenQuit.extraMayTerminate(stopReachedEngine: true))
+        #expect(!StopThenQuit.extraMayTerminate(stopReachedEngine: false))
+        #expect(StopThenQuit.stopFailedMessage.contains("menu bar extra"))
+        #expect(!StopThenQuit.stopFailedMessage.lowercased().contains("docker"))
+    }
+
     @Test func headlessClusterWithoutExtraIsRefused() {
         #expect(QuitPolicy.isHeadless(clusterStays: true, extraRemains: false))
         #expect(!QuitPolicy.isHeadless(clusterStays: true, extraRemains: true))

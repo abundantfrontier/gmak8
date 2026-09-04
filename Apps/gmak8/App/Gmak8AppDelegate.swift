@@ -164,8 +164,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
             return .terminateCancel
         case .stopClusterThenTerminate:
             Task { [weak self] in
-                await self?.session.stopClusterBestEffort()
-                NSApp.reply(toApplicationShouldTerminate: true)
+                await self?.finishStopThenQuit()
             }
             return .terminateLater
         }
@@ -208,8 +207,7 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
             NSApp.reply(toApplicationShouldTerminate: false)
         case .stopClusterThenTerminate:
             Task { [weak self] in
-                await self?.session.stopClusterBestEffort()
-                NSApp.reply(toApplicationShouldTerminate: true)
+                await self?.finishStopThenQuit()
             }
         default:
             keepExtraHideWindows()
@@ -224,6 +222,28 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
         default:
             becomeAccessory(stopCluster: false)
         }
+    }
+
+    private func finishStopThenQuit() async {
+        let reachedEngine = await session.stopClusterBestEffort()
+        if StopThenQuit.extraMayTerminate(stopReachedEngine: reachedEngine) {
+            NSApp.reply(toApplicationShouldTerminate: true)
+            return
+        }
+        NSApp.reply(toApplicationShouldTerminate: false)
+        presentStopFailedAlert()
+        keepExtraHideWindows()
+    }
+
+    private func presentStopFailedAlert() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Cluster is still running"
+        alert.informativeText = StopThenQuit.stopFailedMessage
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func becomeAccessory(stopCluster: Bool) {

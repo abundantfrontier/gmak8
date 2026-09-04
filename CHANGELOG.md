@@ -15,6 +15,7 @@
 ### Fixed
 
 - Cluster/Workloads/KubeVirt Swiftkube polls share NIO's singleton event-loop group so the UI no longer leaks threads or fails kubeconfig reads with Cocoa error 256.
+- Stop Cluster and Quit keeps the menu bar extra if stop never reached gmak8-core, so a running cluster is never left with no extra.
 
 ### Notes
 

@@ -78,7 +78,8 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
         submit(.stop)
     }
 
-    func stopClusterBestEffort() async {
+    @discardableResult
+    func stopClusterBestEffort() async -> Bool {
         startAfterStop = ClusterRestart.pending(after: .stop)
         do {
             let socketURL = self.socketURL
@@ -86,13 +87,17 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
                 try EngineClient.submit(.stop, socketURL: socketURL)
             }.value
             connectionError = nil
+            return true
         } catch let error as CLIError where error == .engineNotRunning {
             markDisconnected(.engineNotRunning)
             connectionError = nil
+            return true
         } catch let error as CLIError {
             connectionError = error
+            return false
         } catch {
             connectionError = .communicationFailed
+            return false
         }
     }
 

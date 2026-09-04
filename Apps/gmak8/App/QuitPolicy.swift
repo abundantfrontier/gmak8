@@ -90,6 +90,16 @@ struct QuitPolicy: Equatable, Sendable {
     }
 }
 
+enum StopThenQuit {
+    static let stopFailedMessage =
+        "Could not stop the cluster. The menu bar extra will stay until it is stopped."
+
+    /// Never quit the extra if stop did not reach gmak8-core (running cluster with no extra).
+    static func extraMayTerminate(stopReachedEngine: Bool) -> Bool {
+        stopReachedEngine
+    }
+}
+
 enum ClusterStopIntent: Equatable, Sendable {
     case restart
     case stop
