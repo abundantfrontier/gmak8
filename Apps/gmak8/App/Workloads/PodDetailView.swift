@@ -36,7 +36,10 @@ struct PodDetailView: View {
             }
             switch pane {
             case .status:
-                statusPane
+                ScrollView {
+                    statusPane
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             case .logs:
                 logsPane
             case .events:
@@ -51,6 +54,7 @@ struct PodDetailView: View {
             }
         }
         .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle(name)
         .toolbar {
             ToolbarItemGroup {

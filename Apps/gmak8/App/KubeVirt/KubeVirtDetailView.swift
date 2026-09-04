@@ -30,7 +30,10 @@ struct KubeVirtDetailView: View {
             .pickerStyle(.segmented)
             switch pane {
             case .status:
-                statusPane
+                ScrollView {
+                    statusPane
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             case .events:
                 eventsPane
             case .yaml:
@@ -43,6 +46,7 @@ struct KubeVirtDetailView: View {
             }
         }
         .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle(name)
         .toolbar {
             ToolbarItemGroup {
