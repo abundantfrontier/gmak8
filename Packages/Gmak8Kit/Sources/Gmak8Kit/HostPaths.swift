@@ -127,6 +127,14 @@ public struct HostPaths: Equatable, Sendable {
         airgapCacheDirectory.appending(path: "\(AirgapPin.archiveFileName).sig")
     }
 
+    public var kubevirtAirgapFile: URL {
+        airgapCacheDirectory.appending(path: KubeVirtAirgapPin.archiveFileName)
+    }
+
+    public var kubevirtAirgapSignatureFile: URL {
+        airgapCacheDirectory.appending(path: "\(KubeVirtAirgapPin.archiveFileName).sig")
+    }
+
     public var guestCacheDirectory: URL {
         applicationSupport
             .appending(path: "cache", directoryHint: .isDirectory)

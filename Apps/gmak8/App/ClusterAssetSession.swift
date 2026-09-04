@@ -15,7 +15,11 @@ final class ClusterAssetSession: ObservableObject {
     @Published var k3sItems: [AssetLibraryItem] = []
     @Published var libraryRoot: URL
 
-    let visibleAssets: [OnboardingAssetKind] = OnboardingAssets.visible(for: .kubernetes)
+    @Published var profile: Profile = .kubernetes
+
+    var visibleAssets: [OnboardingAssetKind] {
+        OnboardingAssets.visible(for: profile)
+    }
 
     private let paths: HostPaths
     private let publicKeyPEM: String
@@ -114,13 +118,16 @@ final class ClusterAssetSession: ObservableObject {
         do {
             switch kind {
             case .guest:
-                try copyPickedFile(url, into: AssetLibrary.guestDownloadDestination(root: libraryRoot, fileName: url.lastPathComponent))
+                try copyPickedFile(
+                    url, into: AssetLibrary.guestDownloadDestination(root: libraryRoot, fileName: url.lastPathComponent)
+                )
                 try GuestOSDiskInstall.install(from: url, to: paths.osImage, fileManager: fileManager)
             case .k3sAirgap, .kubevirtAirgap:
                 guard let store = store(for: kind) else {
                     return
                 }
-                try copyPickedFile(url, into: AssetLibrary.k3sDownloadDestination(root: libraryRoot, fileName: url.lastPathComponent))
+                try copyPickedFile(
+                    url, into: AssetLibrary.k3sDownloadDestination(root: libraryRoot, fileName: url.lastPathComponent))
                 _ = try store.importLocalFile(url)
             }
             assetStatus[kind] = .ready
@@ -189,7 +196,12 @@ final class ClusterAssetSession: ObservableObject {
                 label: kind.title
             )
         case .kubevirtAirgap:
-            return nil
+            return SignedAssetStore(
+                cacheDirectory: paths.airgapCacheDirectory,
+                pin: KubeVirtAirgapPin.bundled.signed,
+                publicKeyPEM: publicKeyPEM,
+                label: kind.title
+            )
         }
     }
 

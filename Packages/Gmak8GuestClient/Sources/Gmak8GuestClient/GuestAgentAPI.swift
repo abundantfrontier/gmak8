@@ -49,6 +49,35 @@ public struct GuestDisks: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestKubeVirt: Codable, Equatable, Sendable {
+    public var installed: Bool
+    public var phase: String
+    public var u1Nano: Bool
+    public var kvm: Bool
+
+    public init(installed: Bool = false, phase: String = "", u1Nano: Bool = false, kvm: Bool = false) {
+        self.installed = installed
+        self.phase = phase
+        self.u1Nano = u1Nano
+        self.kvm = kvm
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        installed = try container.decodeIfPresent(Bool.self, forKey: .installed) ?? false
+        phase = try container.decodeIfPresent(String.self, forKey: .phase) ?? ""
+        u1Nano = try container.decodeIfPresent(Bool.self, forKey: .u1Nano) ?? false
+        kvm = try container.decodeIfPresent(Bool.self, forKey: .kvm) ?? false
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case installed
+        case phase
+        case u1Nano = "u1_nano"
+        case kvm
+    }
+}
+
 public struct GuestKVM: Codable, Equatable, Sendable {
     public var kvm: Bool
 

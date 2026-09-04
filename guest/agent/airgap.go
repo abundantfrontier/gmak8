@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	k3sImagesDir      = "/mnt/data/rancher/agent/images"
-	dataTmpDir        = "/mnt/data/tmp"
-	maxAirgapBytes    = 500 * 1024 * 1024
-	defaultAirgapName = "gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"
+	k3sImagesDir           = "/mnt/data/rancher/agent/images"
+	dataTmpDir             = "/mnt/data/tmp"
+	maxAirgapBytes         = 500 * 1024 * 1024
+	maxKubevirtAirgapBytes = 1500 * 1024 * 1024
+	defaultAirgapName      = "gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"
 )
 
 // AirgapReport is GET /airgap. Present is true when k3s can import from agent/images.
@@ -32,7 +33,11 @@ func (h *realHost) ImportAirgap(name string, r io.Reader, size int64) (AirgapRep
 	if err != nil {
 		return AirgapReport{}, err
 	}
-	if size <= 0 || size > maxAirgapBytes {
+	max := int64(maxAirgapBytes)
+	if strings.Contains(strings.ToLower(clean), "kubevirt") {
+		max = maxKubevirtAirgapBytes
+	}
+	if size <= 0 || size > max {
 		return AirgapReport{}, fmt.Errorf("airgap archive exceeds size budget")
 	}
 	disks := h.Disks()

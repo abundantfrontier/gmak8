@@ -16,29 +16,31 @@ import (
 )
 
 type fakeHost struct {
-	mu            sync.Mutex
-	disks         DisksReport
-	kvm           bool
-	kubeconfig    []byte
-	kubeconfigErr error
-	k3s           K3sReport
-	node          NodeReport
-	services      ServiceListReport
-	servicesErr   error
-	times         []time.Time
-	shutdowns     int
-	k3sStarts     int
-	startK3sErr   error
-	airgap        AirgapReport
-	airgapImports int
-	importErr     error
-	images        ImageListReport
-	imagesErr     error
-	imageImports  int
-	lastImageBody []byte
-	imageBusy     bool
-	pruneErr      error
-	prunes        int
+	mu               sync.Mutex
+	disks            DisksReport
+	kvm              bool
+	kubeconfig       []byte
+	kubeconfigErr    error
+	k3s              K3sReport
+	node             NodeReport
+	services         ServiceListReport
+	servicesErr      error
+	times            []time.Time
+	shutdowns        int
+	k3sStarts        int
+	startK3sErr      error
+	airgap           AirgapReport
+	airgapImports    int
+	importErr        error
+	images           ImageListReport
+	imagesErr        error
+	imageImports     int
+	lastImageBody    []byte
+	imageBusy        bool
+	pruneErr         error
+	prunes           int
+	kubevirt         KubeVirtReport
+	kubevirtInstalls int
 }
 
 func (f *fakeHost) Disks() DisksReport { return f.disks }
@@ -162,6 +164,16 @@ func (f *fakeHost) HostMounts() (HostMountReport, error) {
 }
 func (f *fakeHost) ApplyHostMounts() (HostMountReport, error) {
 	return f.HostMounts()
+}
+func (f *fakeHost) KubeVirt() (KubeVirtReport, error) {
+	return f.kubevirt, nil
+}
+func (f *fakeHost) InstallKubeVirt() (KubeVirtReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.kubevirtInstalls++
+	f.kubevirt = KubeVirtReport{Installed: true, Phase: "Deployed", U1Nano: true, KVM: f.kvm}
+	return f.kubevirt, nil
 }
 func (f *fakeHost) Services() (ServiceListReport, error) {
 	if f.servicesErr != nil {
@@ -493,6 +505,9 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodGet, "/images/prune"},
 		{http.MethodPost, "/host-mounts"},
 		{http.MethodGet, "/host-mounts/apply"},
+		{http.MethodPost, "/kubevirt"},
+		{http.MethodGet, "/kubevirt/install"},
+		{http.MethodGet, "/airgap/kubevirt"},
 		{http.MethodGet, "/nope"},
 	}
 	for _, tc := range cases {
@@ -633,6 +648,56 @@ func TestImagesListImportPrune(t *testing.T) {
 	}
 	if len(pruned.Deleted) != 1 {
 		t.Fatalf("pruned %+v", pruned)
+	}
+}
+
+func TestKubeVirtHTTP(t *testing.T) {
+	host := &fakeHost{}
+	h := NewHandler(host)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/kubevirt", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/kubevirt/install", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("install status %d %s", rec.Code, rec.Body.String())
+	}
+	var report KubeVirtReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if !report.Installed || report.Phase != "Deployed" || !report.U1Nano {
+		t.Fatalf("%+v", report)
+	}
+	if host.kubevirtInstalls != 1 {
+		t.Fatalf("installs %d", host.kubevirtInstalls)
+	}
+
+	body := []byte("tiny-kubevirt-airgap")
+	req := httptest.NewRequest(http.MethodPut, "/airgap/kubevirt", bytes.NewReader(body))
+	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put status %d %s", rec.Code, rec.Body.String())
+	}
+
+	wrong := httptest.NewRequest(http.MethodPut, "/airgap/kubevirt?name=gmak8-k3s-airgap-v1.33.3-arm64.tar.zst", bytes.NewReader(body))
+	wrong.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, wrong)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("k3s name on kubevirt PUT status %d %s", rec.Code, rec.Body.String())
+	}
+
+	oversize := httptest.NewRequest(http.MethodPut, "/airgap/kubevirt", bytes.NewReader([]byte("x")))
+	oversize.Header.Set("Content-Length", strconv.FormatInt(maxKubevirtAirgapBytes+1, 10))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, oversize)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversize status %d %s", rec.Code, rec.Body.String())
 	}
 }
 

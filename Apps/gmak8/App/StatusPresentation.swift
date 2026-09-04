@@ -8,7 +8,7 @@ enum EngineStatusAfterDisconnect {
 }
 
 enum StatusPresentation {
-    static let kubeVirtVersion = "1.6.1"
+    static var kubeVirtVersion: String { KubeVirtPin.displayVersion }
 
     static func shortK3sVersion(_ version: String = K3sPin.version) -> String {
         var trimmed = version

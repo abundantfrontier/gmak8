@@ -347,6 +347,7 @@ struct SetupSplitView: View {
     }
 
     private func reloadAssets() {
+        setup.assets.profile = settingsStore.settings.profile
         setup.assets.setLibraryFolderPath(settingsStore.settings.libraryFolderPath)
     }
 

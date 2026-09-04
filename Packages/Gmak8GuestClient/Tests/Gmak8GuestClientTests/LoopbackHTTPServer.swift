@@ -243,6 +243,10 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
                 200, #"{"deleted":["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}"#)
         case ("GET", "/host-mounts"), ("POST", "/host-mounts/apply"):
             return .json(200, #"{"items":[]}"#)
+        case ("GET", "/kubevirt"), ("POST", "/kubevirt/install"):
+            return .json(200, #"{"installed":true,"phase":"Deployed","u1_nano":true,"kvm":false}"#)
+        case ("PUT", let path) where path.hasPrefix("/airgap/kubevirt"):
+            return .json(200, #"{"present":true,"files":["gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst"],"bytes":1}"#)
         case ("PUT", "/time"):
             if request.body.isEmpty {
                 return .json(400, #"{"ok":false,"error":"expected unix timestamp or RFC3339"}"#)

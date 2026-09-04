@@ -41,6 +41,9 @@ DerivedData/
 ThirdParty/gvproxy/bin/
 ThirdParty/gvproxy/src/
 
+# Fetched virtctl helper (pin + scripts live in-tree)
+ThirdParty/virtctl/bin/
+
 # Editors
 *~
 *.swp

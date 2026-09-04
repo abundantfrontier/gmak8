@@ -55,11 +55,32 @@ do {
         let device = try await controller.virtioSocketDevice()
         return VZGuestAgentConnector.makeClient(device: device, queue: VirtualMachineQueue.shared)
     }
+    let kubevirtAirgap: (any AirgapProviding)? = {
+        guard settingsForConfig.kubeVirtEnabled else {
+            return nil
+        }
+        let pin = KubeVirtAirgapPin.bundled
+        if pin.signed.hasStubDigest {
+            return nil
+        }
+        return HostAirgapProvider(
+            paths: paths,
+            pin: AirgapPin(
+                k3sVersion: pin.kubevirtVersion,
+                fileName: pin.fileName,
+                url: pin.url,
+                sha256: pin.sha256,
+                maxBytes: pin.maxBytes,
+                guestImagesDirectory: AirgapPin.guestImagesDirectory
+            ))
+    }()
     let bringUp = KubernetesBringUp(
         makeClient: makeClient,
         kubeconfigStore: KubeconfigStore.current(),
         setCurrentContext: setCurrentContext,
         airgapProvider: HostAirgapProvider(paths: paths),
+        kubevirtAirgapProvider: kubevirtAirgap,
+        installKubeVirt: settingsForConfig.kubeVirtEnabled,
         apiPort: { controller.apiHostPort }
     )
     let settingsURL = paths.settingsFile

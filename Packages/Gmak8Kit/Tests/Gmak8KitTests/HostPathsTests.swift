@@ -56,6 +56,8 @@ struct HostPathsTests {
         #expect(paths.k3sAirgapFile.lastPathComponent == AirgapPin.archiveFileName)
         #expect(paths.k3sAirgapFile.deletingLastPathComponent() == paths.airgapCacheDirectory)
         #expect(paths.k3sAirgapSignatureFile.lastPathComponent == "\(AirgapPin.archiveFileName).sig")
+        #expect(paths.kubevirtAirgapFile.lastPathComponent == KubeVirtAirgapPin.archiveFileName)
+        #expect(paths.kubevirtAirgapFile.deletingLastPathComponent() == paths.airgapCacheDirectory)
     }
 
     @Test func logsDirectoryIsLibraryLogsGmak8() {

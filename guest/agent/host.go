@@ -25,6 +25,8 @@ type Host interface {
 	PruneImages() (ImagePruneReport, error)
 	HostMounts() (HostMountReport, error)
 	ApplyHostMounts() (HostMountReport, error)
+	KubeVirt() (KubeVirtReport, error)
+	InstallKubeVirt() (KubeVirtReport, error)
 	Services() (ServiceListReport, error)
 	SetTime(t time.Time) error
 	Shutdown() error
@@ -59,6 +61,9 @@ type realHost struct {
 	runCtr         func(timeout time.Duration, args ...string) ([]byte, error)
 	hostMountsPath string
 	runMount       func(args ...string) error
+	kubevirtDir    string
+	kubectl        func(args ...string) ([]byte, error)
+	kubevirtPoll   time.Duration
 }
 
 func defaultHost() *realHost {

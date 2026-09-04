@@ -11,6 +11,8 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
     private let setCurrentContext: Bool
     private let matrix: CompatibilityMatrix
     private let airgapProvider: any AirgapProviding
+    private let kubevirtAirgapProvider: (any AirgapProviding)?
+    private let installKubeVirt: Bool
     private let apiPort: @Sendable () -> Int
     private let checkAPI: @Sendable (Int) async -> Bool
     private let pollInterval: Duration
@@ -25,6 +27,8 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         setCurrentContext: Bool,
         matrix: CompatibilityMatrix = .bundled,
         airgapProvider: (any AirgapProviding)? = nil,
+        kubevirtAirgapProvider: (any AirgapProviding)? = nil,
+        installKubeVirt: Bool = false,
         apiPort: @escaping @Sendable () -> Int,
         checkAPI: (@Sendable (Int) async -> Bool)? = nil,
         pollInterval: Duration = .milliseconds(200),
@@ -35,6 +39,8 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         self.setCurrentContext = setCurrentContext
         self.matrix = matrix
         self.airgapProvider = airgapProvider ?? HostAirgapProvider(paths: .current())
+        self.kubevirtAirgapProvider = kubevirtAirgapProvider
+        self.installKubeVirt = installKubeVirt
         self.apiPort = apiPort
         self.checkAPI =
             checkAPI ?? { port in
@@ -203,8 +209,70 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             return try await client.node().ready
         }
 
+        if installKubeVirt {
+            try await installKubeVirtIfNeeded(
+                generation: generation,
+                isCurrent: isCurrent,
+                setStep: setStep,
+                setImageJob: setImageJob,
+                log: log
+            )
+        }
+
         let kvmPresent = await probeKvm(log: log)
         return ClusterBringUpResult(apiEndpoint: "https://127.0.0.1:\(port)", kvmPresent: kvmPresent)
+    }
+
+    private func installKubeVirtIfNeeded(
+        generation: UInt64,
+        isCurrent: @escaping @Sendable (UInt64) -> Bool,
+        setStep: @escaping @Sendable (String) -> Void,
+        setImageJob: @escaping @Sendable (ImageJobStatus?) -> Void,
+        log: @escaping @Sendable (String) -> Void
+    ) async throws {
+        setStep(ClusterStartStep.kubeVirt)
+        try Task.checkCancellation()
+        guard isCurrent(generation) else {
+            throw CancellationError()
+        }
+        if let provider = kubevirtAirgapProvider, let archive = try? provider.resolvedArchive() {
+            do {
+                let client = try await makeClient()
+                setImageJob(ImageJobStatus(bytesReceived: 0, bytesTotal: archive.byteCount))
+                _ = try await client.importKubevirtAirgap(
+                    fileURL: archive.url, name: archive.fileName
+                ) { received, total in
+                    setImageJob(ImageJobStatus(bytesReceived: received, bytesTotal: total))
+                }
+                setImageJob(nil)
+            } catch let error as GuestAgentError {
+                if case .httpStatus(let code, _) = error, code == 404 {
+                    log("kubevirt airgap: guest image has no /airgap/kubevirt")
+                } else {
+                    log("kubevirt airgap: \(error.localizedDescription)")
+                }
+                setImageJob(nil)
+            }
+        }
+        do {
+            let report = try await makeClient().installKubeVirt()
+            log("kubevirt phase \(report.phase) u1.nano=\(report.u1Nano)")
+        } catch let error as GuestAgentError {
+            if case .httpStatus(let code, _) = error, code == 404 {
+                log("kubevirt: guest image has no /kubevirt/install")
+                return
+            }
+            throw ClusterBringUpError(message: error.localizedDescription)
+        }
+        try await wait(
+            generation: generation,
+            isCurrent: isCurrent,
+            setStep: setStep,
+            step: ClusterStartStep.kubeVirt
+        ) {
+            let report = try await self.makeClient().kubevirt()
+            return report.u1Nano || report.phase == "Deployed"
+        }
     }
 
     private func probeKvm(log: @escaping @Sendable (String) -> Void) async -> Bool {

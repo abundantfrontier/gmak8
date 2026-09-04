@@ -134,9 +134,11 @@ final class OnboardingSession: ObservableObject {
 
     func applyProfile(_ profile: Profile) {
         draft.applyProfile(profile, host: host)
+        assets.profile = draft.profile
     }
 
     func refreshCachedAssets() {
+        assets.profile = draft.profile
         assets.refresh()
     }
 

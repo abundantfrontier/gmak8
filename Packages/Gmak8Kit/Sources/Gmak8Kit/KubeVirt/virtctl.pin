@@ -1,0 +1,6 @@
+# Upstream virtctl for Contents/Helpers → ~/.local/bin/virtctl. Do not vendor the Mach-O.
+VIRTCTL_VERSION=v1.6.1
+VIRTCTL_NAME=virtctl
+VIRTCTL_URL=https://github.com/kubevirt/kubevirt/releases/download/v1.6.1/virtctl-v1.6.1-darwin-arm64
+VIRTCTL_SHA256=66767c0c7220123961704e7f41a8f86fc43e98a41ef0d0ff0372f32d31940090
+VIRTCTL_MAX_BYTES=83886080

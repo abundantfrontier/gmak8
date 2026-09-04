@@ -43,7 +43,7 @@ public enum SoakPlan {
     public static let dockerHubAllowed = false
     public static let virtctlLiveEnabled = false
     public static let imageLoadSkipReason = "no airgap workload blob; refusing Docker Hub pull"
-    public static let virtctlDeferredReason = "KubeVirt/virtctl soaks wait for PRs 25-28"
+    public static let virtctlDeferredReason = "virtctl --stdio soak waits for a Ready VMI (PRs 27-28)"
     public static let githubHostedMacImages = ["macos-15", "macos-14", "macos-latest"]
 
     public static let steps09: [SoakStep] = [

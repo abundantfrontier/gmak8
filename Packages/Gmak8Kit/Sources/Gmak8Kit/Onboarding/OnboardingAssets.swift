@@ -24,7 +24,7 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
         case .k3sAirgap:
             return "From GitHub k3s-io · Kubernetes 1.33.3 · Apple Silicon"
         case .kubevirtAirgap:
-            return "KubeVirt images · add with the Eureka profile"
+            return "KubeVirt 1.6.1 + CDI · Eureka profile · Apple Silicon"
         }
     }
 
@@ -35,7 +35,7 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
         case .k3sAirgap:
             return AirgapPin.bundled.fileName
         case .kubevirtAirgap:
-            return "gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst"
+            return KubeVirtAirgapPin.bundled.fileName
         }
     }
 
@@ -59,8 +59,11 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
 }
 
 public enum OnboardingAssets {
-    public static func visible(for _: Profile) -> [OnboardingAssetKind] {
-        [.guest, .k3sAirgap]
+    public static func visible(for profile: Profile) -> [OnboardingAssetKind] {
+        if profile == .kubernetes {
+            return [.guest, .k3sAirgap]
+        }
+        return [.guest, .k3sAirgap, .kubevirtAirgap]
     }
 
     public static func isRequiredToContinue(_ kind: OnboardingAssetKind) -> Bool {
@@ -81,7 +84,7 @@ public enum OnboardingAssets {
         case .k3sAirgap:
             return AirgapPin.bundled.signed.remoteDownloadEnabled
         case .kubevirtAirgap:
-            return false
+            return KubeVirtAirgapPin.bundled.signed.remoteDownloadEnabled
         }
     }
 
@@ -92,7 +95,7 @@ public enum OnboardingAssets {
         case .k3sAirgap:
             return AirgapPin.bundled.signed.chooseFileEnabled
         case .kubevirtAirgap:
-            return false
+            return KubeVirtAirgapPin.bundled.signed.chooseFileEnabled
         }
     }
 }

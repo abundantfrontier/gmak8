@@ -28,6 +28,9 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /node", s.handleNode)
 	mux.HandleFunc("GET /airgap", s.handleAirgap)
 	mux.HandleFunc("PUT /airgap/k3s", s.handleAirgapImport)
+	mux.HandleFunc("PUT /airgap/kubevirt", s.handleKubevirtAirgapImport)
+	mux.HandleFunc("GET /kubevirt", s.handleKubeVirt)
+	mux.HandleFunc("POST /kubevirt/install", s.handleKubeVirtInstall)
 	mux.HandleFunc("GET /images", s.handleImages)
 	mux.HandleFunc("PUT /images/import", s.handleImageImport)
 	mux.HandleFunc("POST /images/prune", s.handleImagePrune)
@@ -103,7 +106,11 @@ func (s *Server) handleAirgapImport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid content-length"})
 		return
 	}
-	if size > maxAirgapBytes {
+	max := int64(maxAirgapBytes)
+	if strings.Contains(strings.ToLower(name), "kubevirt") {
+		max = maxKubevirtAirgapBytes
+	}
+	if size > max {
 		writeJSON(w, http.StatusRequestEntityTooLarge, errorResponse{Error: "airgap archive exceeds size budget"})
 		return
 	}
@@ -153,6 +160,39 @@ func (s *Server) handleImageImport(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleImagePrune(w http.ResponseWriter, _ *http.Request) {
 	report, err := s.host.PruneImages()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleKubevirtAirgapImport(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Gmak8-Name") == "" && r.URL.Query().Get("name") == "" {
+		r.Header.Set("X-Gmak8-Name", "gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst")
+	}
+	name := r.Header.Get("X-Gmak8-Name")
+	if q := r.URL.Query().Get("name"); q != "" {
+		name = q
+	}
+	if !strings.Contains(strings.ToLower(name), "kubevirt") {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "airgap name must contain kubevirt"})
+		return
+	}
+	s.handleAirgapImport(w, r)
+}
+
+func (s *Server) handleKubeVirt(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.KubeVirt()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleKubeVirtInstall(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.InstallKubeVirt()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return

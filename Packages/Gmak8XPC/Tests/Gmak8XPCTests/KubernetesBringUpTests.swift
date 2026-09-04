@@ -94,6 +94,19 @@ struct KubernetesBringUpTests {
         #expect(env.logs.contains { $0.contains("/dev/kvm present") })
     }
 
+    @Test func kubevirtInstallWaitsForClusterInstancetype() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, installKubeVirt: true)
+        defer { env.tearDown() }
+
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.steps.contains(ClusterStartStep.kubeVirt))
+        #expect(env.logs.contains { $0.contains("u1.nano") })
+    }
+
     @Test func presentAirgapSkipsImport() async throws {
         let env = try BringUpHarness(yaml: k3sYAML, airgapPresent: true)
         defer { env.tearDown() }
@@ -391,6 +404,7 @@ private struct BringUpHarness {
         airgapPresent: Bool = true,
         holdAirgapPut: Bool = false,
         kvm: Bool = false,
+        installKubeVirt: Bool = false,
         streamClient: Bool = false,
         airgapProvider: (any AirgapProviding)? = nil,
         runtime: (any VirtualMachineRuntime)? = nil
@@ -442,6 +456,7 @@ private struct BringUpHarness {
             kubeconfigStore: store,
             setCurrentContext: false,
             airgapProvider: airgapProvider,
+            installKubeVirt: installKubeVirt,
             apiPort: { apiPort },
             checkAPI: { _ in true },
             pollInterval: .milliseconds(5),
@@ -754,6 +769,14 @@ private func response(for request: (String, String, Data), state: BringUpAgentSt
         return (200, Data(#"{"present":false,"files":[],"bytes":0}"#.utf8), "application/json")
     case ("GET", "/host-mounts"), ("POST", "/host-mounts/apply"):
         return (200, Data(#"{"items":[]}"#.utf8), "application/json")
+    case ("GET", "/kubevirt"), ("POST", "/kubevirt/install"):
+        return (
+            200,
+            Data(#"{"installed":true,"phase":"Deployed","u1_nano":true,"kvm":false}"#.utf8),
+            "application/json"
+        )
+    case (let method, let path) where method == "PUT" && path.hasPrefix("/airgap/kubevirt"):
+        return (200, Data(#"{"present":true,"files":[],"bytes":0}"#.utf8), "application/json")
     case ("PUT", "/airgap/k3s"):
         state.noteAirgapPutStartedAndWaitIfHeld()
         state.airgapImports += 1

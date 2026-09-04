@@ -1,0 +1,7 @@
+kubevirt-operator.yaml
+kubevirt-cr.yaml
+cdi-operator.yaml
+cdi-cr.yaml
+local-path-storageprofile.yaml
+common-clusterinstancetypes.yaml
+common-clusterpreferences.yaml

@@ -145,6 +145,7 @@ final class SetupSession: ObservableObject {
                 settings.dataDiskGiB = draft.dataDiskGiB
             }
         }
+        assets.profile = draft.profile
     }
 
     func start(settingsStore: SettingsStore, clusterSession: ClusterSession) {

@@ -27,6 +27,8 @@ let package = Package(
                 .copy("Airgap/k3s-airgap.pin"),
                 .copy("Airgap/cosign.pub"),
                 .copy("Guest/guest.pin"),
+                .copy("KubeVirt/virtctl.pin"),
+                .copy("KubeVirt/kubevirt-airgap.pin"),
             ]
         ),
         .testTarget(

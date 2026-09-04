@@ -113,6 +113,39 @@ public struct GuestAgentClient: Sendable {
         try await send(method: "POST", path: "/images/prune", body: nil, as: GuestImagePrune.self)
     }
 
+    public func kubevirt() async throws -> GuestKubeVirt {
+        try await send(method: "GET", path: "/kubevirt", body: nil, as: GuestKubeVirt.self)
+    }
+
+    public func installKubeVirt() async throws -> GuestKubeVirt {
+        try await send(method: "POST", path: "/kubevirt/install", body: nil, as: GuestKubeVirt.self)
+    }
+
+    public func importKubevirtAirgap(
+        fileURL: URL,
+        name: String,
+        onProgress: (@Sendable (Int64, Int64) -> Void)? = nil
+    ) async throws -> GuestAirgap {
+        let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
+        let response = try await transport.sendFile(
+            method: "PUT",
+            path: "/airgap/kubevirt?name=\(encoded)",
+            fileURL: fileURL,
+            contentType: "application/octet-stream",
+            extraHeaders: ["X-Gmak8-Name": name],
+            onProgress: onProgress
+        )
+        if response.statusCode < 200 || response.statusCode >= 300 {
+            let message = (try? JSONDecoder().decode(GuestOK.self, from: response.body))?.error
+            throw GuestAgentError.httpStatus(response.statusCode, message)
+        }
+        do {
+            return try JSONDecoder().decode(GuestAirgap.self, from: response.body)
+        } catch {
+            throw GuestAgentError.decode(String(describing: error))
+        }
+    }
+
     public func hostMounts() async throws -> GuestHostMountList {
         try await send(method: "GET", path: "/host-mounts", body: nil, as: GuestHostMountList.self)
     }

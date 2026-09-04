@@ -91,11 +91,22 @@ struct OnboardingTests {
         #expect(FirstRunGate.clusterActionsEnabled(needsOnboarding: false))
     }
 
-    @Test func kubevirtAirgapRowIsOmittedUntilAStoreExists() {
+    @Test func kubevirtAirgapRowIsVisibleForEurekaProfiles() {
         #expect(OnboardingAssets.visible(for: .kubernetes) == [.guest, .k3sAirgap])
-        #expect(OnboardingAssets.visible(for: .eureka) == [.guest, .k3sAirgap])
-        #expect(OnboardingAssets.visible(for: .eurekaAPIOnly) == [.guest, .k3sAirgap])
-        #expect(!OnboardingAssets.visible(for: .eureka).contains(.kubevirtAirgap))
+        #expect(OnboardingAssets.visible(for: .eureka) == [.guest, .k3sAirgap, .kubevirtAirgap])
+        #expect(OnboardingAssets.visible(for: .eurekaAPIOnly) == [.guest, .k3sAirgap, .kubevirtAirgap])
+        #expect(OnboardingAssets.visible(for: .eureka).contains(.kubevirtAirgap))
+        #expect(!OnboardingAssets.isRequiredToContinue(.kubevirtAirgap))
+        #expect(!OnboardingAssets.remoteDownloadEnabled(.kubevirtAirgap))
+        #expect(OnboardingAssetKind.kubevirtAirgap.fileName.contains("kubevirt"))
+        #expect(KubeVirtPin.version == "v1.6.1")
+        #expect(KubeVirtPin.cdiVersion == "v1.62.0")
+        #expect(KubeVirtPin.instancetypesVersion == "v1.4.0")
+        #expect(KubeVirtPin.featureGates == ["VMExport", "EnableVirtioFsConfigVolumes"])
+        #expect(KubeVirtPin.smokeInstancetype == "u1.nano")
+        #expect(VirtctlPin.bundled.fileName == "virtctl")
+        #expect(VirtctlPin.bundled.sha256.count == 64)
+        #expect(KubeVirtAirgapPin.bundled.signed.hasStubDigest)
         #expect(OnboardingAssetKind.guest.fileName.hasPrefix("gmak8-guest-"))
         #expect(OnboardingAssetKind.k3sAirgap.fileName == AirgapPin.archiveFileName)
         #expect(OnboardingAssetKind.k3sAirgap.title == "Kubernetes images")
@@ -292,7 +303,10 @@ struct OnboardingTests {
     @Test func remoteDownloadOnlyForGmak8SignedReleaseWithRealDigest() {
         let stub = SignedAssetPin(
             fileName: GuestAssetPin.archiveFileName,
-            url: URL(string: "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(GuestAssetPin.archiveFileName)")!,
+            url: URL(
+                string:
+                    "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(GuestAssetPin.archiveFileName)"
+            )!,
             sha256: "0000000000000000000000000000000000000000000000000000000000000000",
             maxBytes: GuestAssetPin.maxCompressedBytes
         )
@@ -303,7 +317,9 @@ struct OnboardingTests {
         #expect(AirgapPin.bundled.signed.remoteDownloadEnabled)
         let published = SignedAssetPin(
             fileName: AirgapPin.archiveFileName,
-            url: URL(string: "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(AirgapPin.archiveFileName)")!,
+            url: URL(
+                string:
+                    "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(AirgapPin.archiveFileName)")!,
             sha256: AirgapPin.bundled.sha256,
             maxBytes: AirgapPin.maxCompressedBytes
         )

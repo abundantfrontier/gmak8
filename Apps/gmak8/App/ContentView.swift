@@ -31,6 +31,7 @@ struct RootView: View {
 
 struct ContentView: View {
     @EnvironmentObject private var session: ClusterSession
+    @EnvironmentObject private var settingsStore: SettingsStore
     @EnvironmentObject private var appDelegate: Gmak8AppDelegate
     @Environment(\.openWindow) private var openWindow
     @StateObject private var assets = ClusterAssetSession()
@@ -96,7 +97,11 @@ struct ContentView: View {
         .frame(minWidth: 520, minHeight: 420)
         .onAppear {
             appDelegate.bindOpenWindow(openWindow)
+            assets.profile = settingsStore.settings.profile
             assets.refresh()
+        }
+        .onChange(of: settingsStore.settings.profile) { _, profile in
+            assets.profile = profile
         }
     }
 }

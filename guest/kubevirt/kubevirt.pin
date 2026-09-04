@@ -1,0 +1,8 @@
+# Pinned Eureka-aligned KubeVirt pack. Do not curl GitHub at cluster start.
+KUBEVIRT_VERSION=v1.6.1
+CDI_VERSION=v1.62.0
+INSTANCETYPES_VERSION=v1.4.0
+FEATURE_GATES=VMExport,EnableVirtioFsConfigVolumes
+SMOKE_INSTANCETYPE=u1.nano
+SMOKE_INSTANCETYPE_KIND=VirtualMachineClusterInstancetype
+YAML_DIR=/usr/local/share/gmak8/kubevirt

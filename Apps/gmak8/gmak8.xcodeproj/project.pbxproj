@@ -352,6 +352,7 @@
 				A20000000000000000000017 /* Embed LaunchAgents */,
 				A3000000000000000000001A /* Embed gmak8 CLI */,
 				A50000000000000000000001 /* Embed gvproxy */,
+				A51000000000000000000001 /* Embed virtctl */,
 			);
 			buildRules = (
 			);
@@ -528,6 +529,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
 			shellScript = "\"${SRCROOT}/../../scripts/embed-gvproxy.sh\"\n";
+		};
+		A51000000000000000000001 /* Embed virtctl */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../../ThirdParty/virtctl/bin/virtctl",
+			);
+			name = "Embed virtctl";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(WRAPPER_NAME)/Contents/Helpers/virtctl",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"${SRCROOT}/../../scripts/embed-virtctl.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

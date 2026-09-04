@@ -20,7 +20,7 @@ DISK_SYNC=full
 DISK_FORBIDDEN=virtio-blk
 FSCK_FLAG=-n
 IMAGE_SKIP_REASON="no airgap workload blob; refusing Docker Hub pull"
-VIRTCTL_DEFERRED="KubeVirt/virtctl soaks wait for PRs 25-28"
+VIRTCTL_DEFERRED="virtctl --stdio soak waits for a Ready VMI (PRs 27-28)"
 STEPS_09="startStop,dirtyKillFsck,loadImage,nginxNodePortCurl"
 STEPS_10_ONLY="pvcUnderMntData,u1NanoClusterInstancetype,aarch64VMIReady,saVirtiofs,virtctlPortForwardStdio"
 
@@ -42,7 +42,7 @@ Usage: bash scripts/soak.sh --self-test|--plan|--live|--nodeport [--cycles N] [-
   --nodeport   Curl an already-Running NodePort on ${NODEPORT_HOST} (no start/stop).
 
 Nightly default is ${DEFAULT_CYCLES} start/stop cycles. 1.0 KubeVirt steps are listed
-but skipped until PRs 25-28. Never pulls from Docker Hub. NodePort curl is ${NODEPORT_HOST} only.
+but skipped until a Ready VMI (PRs 27-28). Never pulls from Docker Hub. NodePort curl is ${NODEPORT_HOST} only.
 EOF
 }
 
