@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Gmak8Kit
+import Gmak8Kubernetes
 
 enum TerminalLauncher {
     static let terminalBundleIdentifier = "com.apple.Terminal"
@@ -39,16 +40,29 @@ enum TerminalLauncher {
         runAppleScript(appleScriptSource(workingDirectory: workingDirectory.path(percentEncoded: false)))
     }
 
+    static let execShells = ["/bin/sh", "/bin/bash", "/bin/ash"]
+
+    static func kubectlExecArgs(namespace: String, pod: String, container: String?) -> String {
+        var args = "-n \(shellQuoted(namespace)) \(shellQuoted(pod))"
+        if let container, !container.isEmpty {
+            args += " -c \(shellQuoted(container))"
+        }
+        return args
+    }
+
     static func execCommand(kubeconfigPath: String, namespace: String, pod: String, container: String?)
         -> String
     {
-        var command =
-            "export KUBECONFIG=\(shellQuoted(kubeconfigPath)) && kubectl exec -it -n \(shellQuoted(namespace)) \(shellQuoted(pod))"
-        if let container, !container.isEmpty {
-            command += " -c \(shellQuoted(container))"
+        let args = kubectlExecArgs(namespace: namespace, pod: pod, container: container)
+        var steps = ["export KUBECONFIG=\(shellQuoted(kubeconfigPath))"]
+        for shell in execShells {
+            let quoted = shellQuoted(shell)
+            steps.append(
+                "if kubectl exec \(args) -- \(quoted) -c 'exit 0' >/dev/null 2>&1; then exec kubectl exec -it \(args) -- \(quoted); fi"
+            )
         }
-        command += " -- /bin/sh"
-        return command
+        steps.append("echo \(shellQuoted(WorkloadsCopy.noShell))")
+        return steps.joined(separator: "; ")
     }
 
     static func portForwardCommand(

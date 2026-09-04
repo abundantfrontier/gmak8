@@ -159,6 +159,8 @@ public enum WorkloadsCopy {
     public static let containers = "Containers"
     public static let portForward = "Port-forward"
     public static let openShell = "Open shell in Terminal"
+    public static let noShell =
+        "This container has no shell (distroless). Use Logs on the pod detail instead."
     public static let localPort = "Local port"
     public static let remotePort = "Remote port"
     public static let bindLoopback = "Binds 127.0.0.1 only."

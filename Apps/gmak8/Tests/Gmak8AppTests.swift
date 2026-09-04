@@ -140,8 +140,11 @@ struct Gmak8AppTests {
             container: "coredns"
         )
         #expect(exec.contains("kubectl exec -it"))
-        #expect(exec.contains("-- /bin/sh"))
+        #expect(exec.contains("-- '/bin/sh'"))
+        #expect(exec.contains("-- '/bin/bash'"))
         #expect(exec.contains("-c 'coredns'"))
+        #expect(exec.contains(WorkloadsCopy.noShell))
+        #expect(WorkloadsCopy.noShell.contains("distroless"))
         let forward = TerminalLauncher.portForwardCommand(
             kubeconfigPath: path,
             namespace: "default",

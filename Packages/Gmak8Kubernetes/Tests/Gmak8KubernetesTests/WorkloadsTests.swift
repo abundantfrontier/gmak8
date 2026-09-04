@@ -8,6 +8,8 @@ struct WorkloadsTests {
         #expect(WorkloadsCopy.empty == "Apply a manifest, or gmak8 build an image and deploy.")
         #expect(!WorkloadsCopy.empty.lowercased().contains("nginx"))
         #expect(WorkloadsCopy.pods == "Pods")
+        #expect(WorkloadsCopy.noShell.contains("distroless"))
+        #expect(WorkloadsCopy.noShell.contains("Logs"))
         #expect(WorkloadKind.allCases.first == .pod)
     }
 
