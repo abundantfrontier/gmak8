@@ -51,6 +51,22 @@ enum EngineClient {
         return try readStatus(fd: fd)
     }
 
+    static func listImages(
+        socketURL: URL,
+        fileManager: FileManager = .default,
+        timeout: timeval = timeval(tv_sec: 30, tv_usec: 0)
+    ) throws -> NodeImageList {
+        try readImageList(request: .imageList, socketURL: socketURL, fileManager: fileManager, timeout: timeout)
+    }
+
+    static func pruneImages(
+        socketURL: URL,
+        fileManager: FileManager = .default,
+        timeout: timeval = timeval(tv_sec: 30, tv_usec: 0)
+    ) throws -> NodeImageList {
+        try readImageList(request: .imagePrune, socketURL: socketURL, fileManager: fileManager, timeout: timeout)
+    }
+
     static func submit(
         _ request: EngineRequest,
         socketURL: URL,
@@ -349,6 +365,42 @@ private func mapPostConnect(_ error: CLIError) -> CLIError {
         return error
     case .engineNotRunning, .communicationFailed:
         return .communicationFailed
+    }
+}
+
+private func readImageList(
+    request: EngineRequest,
+    socketURL: URL,
+    fileManager: FileManager,
+    timeout: timeval
+) throws -> NodeImageList {
+    let fd = try openConnection(socketURL: socketURL, fileManager: fileManager, timeout: timeout)
+    defer { Darwin.close(fd) }
+    let encoded = try NDJSONCodec.encodeLine(request)
+    do {
+        try writeAll(fd: fd, data: encoded)
+    } catch {
+        try rethrowFailedWrite(fd: fd)
+    }
+    return try readImages(fd: fd)
+}
+
+private func readImages(fd: Int32) throws -> NodeImageList {
+    var buffer = Data()
+    while true {
+        let line = try readLine(fd: fd, buffer: &buffer)
+        if let reply = try? NDJSONCodec.decodeReply(line: line) {
+            switch reply {
+            case .ok:
+                continue
+            case .error(let code):
+                throw CLIError.engineError(code)
+            }
+        }
+        if let event = try? NDJSONCodec.decodeEvent(line: line), case .images(let list) = event {
+            return list
+        }
+        throw CLIError.invalidReply
     }
 }
 

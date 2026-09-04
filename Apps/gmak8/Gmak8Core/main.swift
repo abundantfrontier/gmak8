@@ -118,7 +118,8 @@ do {
         bringUp: bringUp,
         publisher: publisher,
         diskReset: HostClusterDiskReset(paths: paths),
-        processExit: processExit
+        processExit: processExit,
+        images: GuestNodeImageRuntime(makeClient: makeClient)
     )
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
     processExit.setHandler { code in

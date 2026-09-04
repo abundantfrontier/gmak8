@@ -50,7 +50,7 @@ bash scripts/ci.sh
 
 Open `Apps/gmak8/gmak8.xcodeproj` and run the **gmak8** scheme if you are iterating in Xcode — still copy the result to `/Applications` before expecting `gmak8-core` to register.
 
-The CLI (`status`, `version`, `start`, `stop`) is `gmak8.app/Contents/Helpers/gmak8`, never PATH.
+The CLI (`status`, `version`, `start`, `stop`, `image list|load|prune`) is `gmak8.app/Contents/Helpers/gmak8`, never PATH.
 
 ## License
 

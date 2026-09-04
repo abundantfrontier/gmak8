@@ -65,6 +65,10 @@
 		A12000000000000000000002 /* WorkloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12000000000000000000001 /* WorkloadsView.swift */; };
 		A12000000000000000000004 /* WorkloadsSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12000000000000000000003 /* WorkloadsSession.swift */; };
 		A12000000000000000000006 /* PodDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12000000000000000000005 /* PodDetailView.swift */; };
+		A13000000000000000000002 /* ImagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000001 /* ImagesView.swift */; };
+		A13000000000000000000004 /* ImagesSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000003 /* ImagesSession.swift */; };
+		A14000000000000000000002 /* ImageText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14000000000000000000001 /* ImageText.swift */; };
+		A14000000000000000000003 /* ImageText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14000000000000000000001 /* ImageText.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -169,6 +173,9 @@
 		A12000000000000000000001 /* WorkloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkloadsView.swift; sourceTree = "<group>"; };
 		A12000000000000000000003 /* WorkloadsSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkloadsSession.swift; sourceTree = "<group>"; };
 		A12000000000000000000005 /* PodDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodDetailView.swift; sourceTree = "<group>"; };
+		A13000000000000000000001 /* ImagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesView.swift; sourceTree = "<group>"; };
+		A13000000000000000000003 /* ImagesSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesSession.swift; sourceTree = "<group>"; };
+		A14000000000000000000001 /* ImageText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageText.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -250,6 +257,7 @@
 				A11000000000000000000006 /* ClusterOverviewSession.swift */,
 				A11000000000000000000004 /* ClusterOverviewView.swift */,
 				A12000000000000000000007 /* Workloads */,
+				A13000000000000000000007 /* Images */,
 				A80000000000000000000001 /* OnboardingView.swift */,
 				A80000000000000000000005 /* RecoveryView.swift */,
 				A90000000000000000000004 /* SparkleUpdateController.swift */,
@@ -268,6 +276,15 @@
 				A12000000000000000000005 /* PodDetailView.swift */,
 			);
 			path = Workloads;
+			sourceTree = "<group>";
+		};
+		A13000000000000000000007 /* Images */ = {
+			isa = PBXGroup;
+			children = (
+				A13000000000000000000003 /* ImagesSession.swift */,
+				A13000000000000000000001 /* ImagesView.swift */,
+			);
+			path = Images;
 			sourceTree = "<group>";
 		};
 		A10000000000000000000009 /* Products */ = {
@@ -316,6 +333,7 @@
 				A30000000000000000000005 /* Gmak8CLI.swift */,
 				A30000000000000000000006 /* EngineClient.swift */,
 				A30000000000000000000007 /* StatusText.swift */,
+				A14000000000000000000001 /* ImageText.swift */,
 			);
 			path = CLI;
 			sourceTree = "<group>";
@@ -543,6 +561,8 @@
 				A12000000000000000000004 /* WorkloadsSession.swift in Sources */,
 				A12000000000000000000002 /* WorkloadsView.swift in Sources */,
 				A12000000000000000000006 /* PodDetailView.swift in Sources */,
+				A13000000000000000000004 /* ImagesSession.swift in Sources */,
+				A13000000000000000000002 /* ImagesView.swift in Sources */,
 				A80000000000000000000002 /* OnboardingView.swift in Sources */,
 				A90000000000000000000005 /* SparkleUpdateController.swift in Sources */,
 			);
@@ -557,6 +577,7 @@
 				A30000000000000000000017 /* CLITests.swift in Sources */,
 				A30000000000000000000015 /* EngineClient.swift in Sources */,
 				A30000000000000000000016 /* StatusText.swift in Sources */,
+				A14000000000000000000003 /* ImageText.swift in Sources */,
 				A70000000000000000000003 /* MenuBarIconAppearance.swift in Sources */,
 				A70000000000000000000006 /* QuitPolicy.swift in Sources */,
 				A70000000000000000000009 /* StatusPresentation.swift in Sources */,
@@ -580,6 +601,7 @@
 				A30000000000000000000012 /* Gmak8CLI.swift in Sources */,
 				A30000000000000000000013 /* EngineClient.swift in Sources */,
 				A30000000000000000000014 /* StatusText.swift in Sources */,
+				A14000000000000000000002 /* ImageText.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

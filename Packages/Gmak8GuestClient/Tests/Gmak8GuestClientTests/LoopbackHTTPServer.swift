@@ -224,6 +224,23 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
                 return .json(code, #"{"ok":false,"error":"kubectl failed"}"#)
             }
             return .json(200, state.servicesJSON)
+        case ("GET", "/images"):
+            return .json(200, state.imagesJSON)
+        case (let method, let path) where method == "PUT" && path.hasPrefix("/images/import"):
+            if let code = state.imageImportStatus, code >= 400 {
+                return .json(code, #"{"ok":false,"error":"image import failed"}"#)
+            }
+            state.lastImageBody = request.body
+            state.imagesJSON =
+                #"{"items":[{"id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","refs":["nginx:dev"],"size_bytes":\#(request.body.count),"system":false}]}"#
+            return .json(
+                200,
+                #"{"digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","refs":["nginx:dev"]}"#
+            )
+        case ("POST", "/images/prune"):
+            state.imagesJSON = #"{"items":[]}"#
+            return .json(
+                200, #"{"deleted":["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}"#)
         case ("PUT", "/time"):
             if request.body.isEmpty {
                 return .json(400, #"{"ok":false,"error":"expected unix timestamp or RFC3339"}"#)
@@ -256,4 +273,7 @@ final class FixtureState: @unchecked Sendable {
     var servicesJSON =
         #"{"items":[{"namespace":"default","name":"nginx","type":"NodePort","ports":[{"name":"http","port":80,"nodePort":30080,"protocol":"TCP"}]}]}"#
     var servicesStatus: Int?
+    var imagesJSON = #"{"items":[]}"#
+    var lastImageBody = Data()
+    var imageImportStatus: Int?
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -19,6 +20,9 @@ type Host interface {
 	Node() NodeReport
 	Airgap() AirgapReport
 	ImportAirgap(name string, r io.Reader, size int64) (AirgapReport, error)
+	ListImages() (ImageListReport, error)
+	ImportImage(name string, r io.Reader, size int64) (ImageImportReport, error)
+	PruneImages() (ImagePruneReport, error)
 	Services() (ServiceListReport, error)
 	SetTime(t time.Time) error
 	Shutdown() error
@@ -49,6 +53,8 @@ type realHost struct {
 	k3sVersionFile string
 	imagesDir      string
 	tmpDir         string
+	importing      atomic.Bool
+	runCtr         func(timeout time.Duration, args ...string) ([]byte, error)
 }
 
 func defaultHost() *realHost {

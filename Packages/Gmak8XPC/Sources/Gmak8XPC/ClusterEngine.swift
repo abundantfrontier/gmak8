@@ -1,4 +1,5 @@
 import Foundation
+import Gmak8GuestClient
 
 public protocol EngineScheduler: Sendable {
     func schedule(_ work: @escaping @Sendable () -> Void)
@@ -75,6 +76,8 @@ public final class ClusterEngine: @unchecked Sendable {
     private let publisher: any PortPublisher
     private let diskReset: any ClusterDiskResetting
     private let processExit: any ProcessExiting
+    private let images: any NodeImageRuntime
+    private let fileManager: FileManager
 
     private var state: ClusterState = .stopped
     private var step: String?
@@ -94,7 +97,9 @@ public final class ClusterEngine: @unchecked Sendable {
         bringUp: any ClusterBringUp = NoOpClusterBringUp(),
         publisher: any PortPublisher = NoOpPortPublisher(),
         diskReset: any ClusterDiskResetting = NoOpClusterDiskReset(),
-        processExit: any ProcessExiting = NoProcessExit()
+        processExit: any ProcessExiting = NoProcessExit(),
+        images: any NodeImageRuntime = NoOpNodeImageRuntime(),
+        fileManager: FileManager = .default
     ) {
         self.scheduler = scheduler
         self.nestedVirt = nestedVirt
@@ -103,6 +108,8 @@ public final class ClusterEngine: @unchecked Sendable {
         self.publisher = publisher
         self.diskReset = diskReset
         self.processExit = processExit
+        self.images = images
+        self.fileManager = fileManager
         self.runtime.setUnexpectedStopHandler { [weak self] error in
             self?.handleUnexpectedStop(error)
         }
@@ -248,7 +255,179 @@ public final class ClusterEngine: @unchecked Sendable {
             }
         case .status, .subscribe:
             return .ok
+        case .loadImage(let path):
+            return requestLoadImageLocked(path: path, work: &work, events: &events)
+        case .imageList, .imagePrune:
+            return .ok
         }
+    }
+
+    public func listImages() async throws -> NodeImageList {
+        try requireImagesReady()
+        let items = try await images.list()
+        return NodeImageList(items: NodeImageMapping.nodeImages(items))
+    }
+
+    public func pruneImages() async throws -> NodeImageList {
+        try requireImagesReady()
+        _ = try await images.prune()
+        let items = try await images.list()
+        let list = NodeImageList(items: NodeImageMapping.nodeImages(items))
+        broadcast([
+            .log(source: .engine, line: "pruned images"),
+            .images(list),
+        ])
+        return list
+    }
+
+    private func requireImagesReady() throws {
+        let ready = withLock {
+            switch state {
+            case .running, .degraded:
+                return true
+            case .stopped, .starting, .paused, .stopping, .failed:
+                return false
+            }
+        }
+        if !ready {
+            throw ClusterBringUpError(message: "cluster is not running")
+        }
+    }
+
+    private func requestLoadImageLocked(
+        path: String,
+        work: inout (@Sendable () -> Void)?,
+        events: inout [EngineEvent]
+    ) -> EngineReply {
+        switch state {
+        case .running, .degraded:
+            break
+        case .stopped, .starting, .paused, .stopping, .failed:
+            lastError = "cluster is not running"
+            events.append(.status(currentStatusLocked()))
+            return .error(.conflict)
+        }
+        if imageJob != nil {
+            return .error(.conflict)
+        }
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            lastError = "image path is required"
+            events.append(.status(currentStatusLocked()))
+            return .error(.invalidRequest)
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: trimmed, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            lastError = "image tar not found"
+            events.append(.status(currentStatusLocked()))
+            return .error(.invalidRequest)
+        }
+        let attrs = try? fileManager.attributesOfItem(atPath: trimmed)
+        let size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+        guard size > 0 else {
+            lastError = "image tar is empty"
+            events.append(.status(currentStatusLocked()))
+            return .error(.invalidRequest)
+        }
+        lastError = nil
+        imageJob = ImageJobStatus(bytesReceived: 0, bytesTotal: size)
+        events.append(.status(currentStatusLocked()))
+        events.append(.log(source: .engine, line: "loadImage accepted"))
+        work = { [weak self] in
+            self?.beginLoadImage(path: trimmed, size: size)
+        }
+        return .ok
+    }
+
+    private func beginLoadImage(path: String, size: Int64) {
+        Task { [weak self] in
+            await self?.performLoadImage(path: path, size: size)
+        }
+    }
+
+    private func performLoadImage(path: String, size: Int64) async {
+        do {
+            let disks = try await images.disks()
+            guard disks.isDataMounted else {
+                failLoadImage("data disk is not mounted")
+                return
+            }
+            guard ImagePreflight.hasRoom(fileSize: size, bytesFree: disks.bytesFree) else {
+                failLoadImage(
+                    "data disk has \(disks.bytesFree) bytes free; image import needs \(ImagePreflight.bytesNeeded(fileSize: size)) (archive + 20%)"
+                )
+                return
+            }
+            let url = URL(fileURLWithPath: path)
+            let result = try await images.importImage(
+                fileURL: url,
+                name: url.lastPathComponent
+            ) { [weak self] received, total in
+                let importing = total > 0 && received >= total
+                self?.setUserImageJob(
+                    ImageJobStatus(bytesReceived: received, bytesTotal: total, importing: importing)
+                )
+            }
+            var listed: NodeImageList = NodeImageList()
+            if let items = try? await images.list() {
+                listed = NodeImageList(items: NodeImageMapping.nodeImages(items))
+            }
+            finishLoadImage(
+                result: result,
+                list: listed
+            )
+        } catch {
+            failLoadImage(error.localizedDescription)
+        }
+    }
+
+    private func setUserImageJob(_ job: ImageJobStatus?) {
+        var events: [EngineEvent] = []
+        withLock {
+            switch state {
+            case .running, .degraded:
+                imageJob = job
+                events.append(.status(currentStatusLocked()))
+            case .stopped, .starting, .paused, .stopping, .failed:
+                break
+            }
+        }
+        broadcast(events)
+    }
+
+    private func failLoadImage(_ message: String) {
+        var events: [EngineEvent] = []
+        withLock {
+            imageJob = nil
+            lastError = message
+            events.append(.status(currentStatusLocked()))
+            events.append(.log(source: .engine, line: message))
+        }
+        broadcast(events)
+    }
+
+    private func finishLoadImage(result: GuestImageImport, list: NodeImageList) {
+        var events: [EngineEvent] = []
+        withLock {
+            imageJob = nil
+            switch state {
+            case .running, .degraded:
+                lastError = nil
+                events.append(.status(currentStatusLocked()))
+                var line = "imported"
+                if !result.digest.isEmpty {
+                    line += " \(result.digest)"
+                }
+                if let ref = result.refs.first {
+                    line += " \(ref)"
+                }
+                events.append(.log(source: .engine, line: line))
+                events.append(.images(list))
+            case .stopped, .starting, .paused, .stopping, .failed:
+                events.append(.status(currentStatusLocked()))
+            }
+        }
+        broadcast(events)
     }
 
     private func requestStopLocked(

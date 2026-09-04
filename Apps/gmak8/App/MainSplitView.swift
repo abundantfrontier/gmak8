@@ -29,7 +29,7 @@ struct MainSplitView: View {
             case .kubeVirt:
                 emptyPane(ClusterOverviewCopy.kubeVirt, ClusterOverviewCopy.kubeVirtEmpty)
             case .images:
-                emptyPane(ClusterOverviewCopy.images, ClusterOverviewCopy.imagesEmpty)
+                ImagesView()
             case .diagnostics:
                 RecoveryView()
             }

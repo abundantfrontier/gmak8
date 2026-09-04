@@ -323,6 +323,16 @@ private final class Connection: @unchecked Sendable {
         case .failure(let code):
             writeReply(.error(code))
         case .success(let request):
+            switch request {
+            case .imageList:
+                runImageList(server: server)
+                return
+            case .imagePrune:
+                runImagePrune(server: server)
+                return
+            default:
+                break
+            }
             let reply = server.engine.submit(request)
             writeReply(reply)
             switch request {
@@ -344,6 +354,38 @@ private final class Connection: @unchecked Sendable {
                 subscriberID = id
             default:
                 break
+            }
+        }
+    }
+
+    private func runImageList(server: EngineSocketServer) {
+        Task {
+            do {
+                let list = try await server.engine.listImages()
+                queue.async { [weak self] in
+                    self?.writeReply(.ok)
+                    self?.writeEvent(.images(list))
+                }
+            } catch {
+                queue.async { [weak self] in
+                    self?.writeReply(.error(.conflict))
+                }
+            }
+        }
+    }
+
+    private func runImagePrune(server: EngineSocketServer) {
+        Task {
+            do {
+                let list = try await server.engine.pruneImages()
+                queue.async { [weak self] in
+                    self?.writeReply(.ok)
+                    self?.writeEvent(.images(list))
+                }
+            } catch {
+                queue.async { [weak self] in
+                    self?.writeReply(.error(.conflict))
+                }
             }
         }
     }

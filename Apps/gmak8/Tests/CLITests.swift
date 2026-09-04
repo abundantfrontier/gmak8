@@ -31,6 +31,24 @@ struct CLITests {
         )
     }
 
+    @Test func imageTextRendersUserAndSystemRows() {
+        let list = NodeImageList(items: [
+            NodeImage(id: "sha256:abc", refs: ["nginx:dev"], sizeBytes: 1024, system: false),
+            NodeImage(
+                id: "sha256:def",
+                refs: ["docker.io/rancher/mirrored-pause:3.6"],
+                sizeBytes: 26_214_400,
+                system: true
+            ),
+        ])
+        let text = ImageText.renderList(list)
+        #expect(text.contains("nginx:dev"))
+        #expect(text.contains("system"))
+        #expect(ImageText.renderList(NodeImageList()) == "No node images.")
+        #expect(ImageText.formatBytes(512) == "512 B")
+        #expect(ImageText.formatBytes(1024) == "1.0 KiB")
+    }
+
     @Test func statusTextDisplayNamesMatchClusterStates() {
         #expect(StatusText.displayName(.stopped) == "Stopped")
         #expect(StatusText.displayName(.starting) == "Starting")

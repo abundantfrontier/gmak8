@@ -1,4 +1,5 @@
 import Foundation
+import Gmak8GuestClient
 import Testing
 
 @testable import Gmak8XPC
@@ -315,6 +316,101 @@ struct ClusterEngineTests {
         runtime.fireDegraded(message)
         #expect(engine.currentStatus().state == .degraded)
         #expect(engine.currentStatus().lastError == message)
+    }
+
+    @Test func loadImageConflictsWhenStopped() {
+        let engine = ClusterEngine(scheduler: ManualEngineScheduler())
+        #expect(engine.submit(.loadImage(path: "/tmp/foo.tar")) == .error(.conflict))
+        #expect(engine.currentStatus().lastError == "cluster is not running")
+    }
+
+    @Test func loadImageRejectsMissingPath() {
+        let scheduler = ManualEngineScheduler()
+        let engine = ClusterEngine(scheduler: scheduler)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        #expect(engine.submit(.loadImage(path: "")) == .error(.invalidRequest))
+        #expect(
+            engine.submit(.loadImage(path: "/tmp/gmak8-missing-\(UUID().uuidString).tar"))
+                == .error(.invalidRequest)
+        )
+    }
+
+    @Test func imagePreflightAddsTwentyPercent() {
+        #expect(ImagePreflight.bytesNeeded(fileSize: 100) == 120)
+        #expect(ImagePreflight.hasRoom(fileSize: 100, bytesFree: 120))
+        #expect(!ImagePreflight.hasRoom(fileSize: 100, bytesFree: 119))
+    }
+
+    @Test func loadImageImportsViaRuntimeAndClearsJob() async throws {
+        let scheduler = ManualEngineScheduler()
+        let runtime = FakeNodeImageRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, images: runtime)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+
+        let tar = FileManager.default.temporaryDirectory.appending(path: "gmak8-load-\(UUID().uuidString).tar")
+        try Data("tiny-oci-tar-body".utf8).write(to: tar)
+        defer { try? FileManager.default.removeItem(at: tar) }
+
+        #expect(engine.submit(.loadImage(path: tar.path(percentEncoded: false))) == .ok)
+        #expect(engine.currentStatus().imageJob != nil)
+        scheduler.runNext()
+        var spins = 0
+        while engine.currentStatus().imageJob != nil && spins < 200 {
+            try await Task.sleep(for: .milliseconds(10))
+            spins += 1
+        }
+        #expect(engine.currentStatus().imageJob == nil)
+        #expect(engine.currentStatus().lastError == nil)
+        #expect(runtime.importedURLs.count == 1)
+        let listed = try await engine.listImages()
+        #expect(listed.items.contains { $0.refs.contains("nginx:dev") })
+    }
+
+    @Test func loadImageFailsPreflightWhenDiskIsTight() async throws {
+        let scheduler = ManualEngineScheduler()
+        let runtime = FakeNodeImageRuntime()
+        runtime.disksValue = GuestDisks(
+            gmak8Data: .mounted,
+            kiteData: .mounted,
+            mountpoint: "/mnt/data",
+            label: "GMAK8_DATA",
+            bytesTotal: 100,
+            bytesFree: 1
+        )
+        let engine = ClusterEngine(scheduler: scheduler, images: runtime)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+
+        let tar = FileManager.default.temporaryDirectory.appending(path: "gmak8-load-\(UUID().uuidString).tar")
+        try Data("tiny-oci-tar-body".utf8).write(to: tar)
+        defer { try? FileManager.default.removeItem(at: tar) }
+
+        #expect(engine.submit(.loadImage(path: tar.path(percentEncoded: false))) == .ok)
+        scheduler.runNext()
+        var spins = 0
+        while engine.currentStatus().imageJob != nil && spins < 200 {
+            try await Task.sleep(for: .milliseconds(10))
+            spins += 1
+        }
+        #expect(engine.currentStatus().imageJob == nil)
+        #expect(engine.currentStatus().lastError?.contains("20%") == true)
+        #expect(runtime.importedURLs.isEmpty)
+    }
+
+    @Test func secondLoadImageConflictsWhileJobRuns() throws {
+        let scheduler = ManualEngineScheduler()
+        let engine = ClusterEngine(scheduler: scheduler, images: FakeNodeImageRuntime())
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        let tar = FileManager.default.temporaryDirectory.appending(path: "gmak8-load-\(UUID().uuidString).tar")
+        try Data("tiny-oci-tar-body".utf8).write(to: tar)
+        defer { try? FileManager.default.removeItem(at: tar) }
+        #expect(engine.submit(.loadImage(path: tar.path(percentEncoded: false))) == .ok)
+        #expect(engine.submit(.loadImage(path: tar.path(percentEncoded: false))) == .error(.conflict))
     }
 
     private func statusStates(_ events: [EngineEvent]) -> [ClusterState] {

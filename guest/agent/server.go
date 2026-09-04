@@ -28,6 +28,9 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /node", s.handleNode)
 	mux.HandleFunc("GET /airgap", s.handleAirgap)
 	mux.HandleFunc("PUT /airgap/k3s", s.handleAirgapImport)
+	mux.HandleFunc("GET /images", s.handleImages)
+	mux.HandleFunc("PUT /images/import", s.handleImageImport)
+	mux.HandleFunc("POST /images/prune", s.handleImagePrune)
 	mux.HandleFunc("GET /services", s.handleServices)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
@@ -103,6 +106,51 @@ func (s *Server) handleAirgapImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	report, err := s.host.ImportAirgap(name, io.LimitReader(r.Body, size), size)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleImages(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.ListImages()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleImageImport(w http.ResponseWriter, r *http.Request) {
+	name := r.Header.Get("X-Gmak8-Name")
+	if q := r.URL.Query().Get("name"); q != "" {
+		name = q
+	}
+	cl := r.Header.Get("Content-Length")
+	if cl == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "content-length required"})
+		return
+	}
+	size, err := strconv.ParseInt(cl, 10, 64)
+	if err != nil || size <= 0 {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid content-length"})
+		return
+	}
+	report, err := s.host.ImportImage(name, io.LimitReader(r.Body, size), size)
+	if err != nil {
+		if err == errImageBusy {
+			writeJSON(w, http.StatusConflict, errorResponse{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleImagePrune(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.PruneImages()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return

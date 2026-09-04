@@ -28,6 +28,9 @@ public enum EngineRequest: Equatable, Sendable {
     case reset(force: Bool)
     case status
     case subscribe
+    case loadImage(path: String)
+    case imageList
+    case imagePrune
 }
 
 public enum EngineReply: Equatable, Sendable {
@@ -162,10 +165,60 @@ public struct PublishedPort: Equatable, Sendable, Codable {
 public struct ImageJobStatus: Equatable, Sendable, Codable {
     public var bytesReceived: Int64
     public var bytesTotal: Int64?
+    public var importing: Bool
 
-    public init(bytesReceived: Int64, bytesTotal: Int64? = nil) {
+    public init(bytesReceived: Int64, bytesTotal: Int64? = nil, importing: Bool = false) {
         self.bytesReceived = bytesReceived
         self.bytesTotal = bytesTotal
+        self.importing = importing
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case bytesReceived
+        case bytesTotal
+        case importing
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bytesReceived = try container.decode(Int64.self, forKey: .bytesReceived)
+        bytesTotal = try container.decodeIfPresent(Int64.self, forKey: .bytesTotal)
+        importing = try container.decodeIfPresent(Bool.self, forKey: .importing) ?? false
+    }
+}
+
+public struct NodeImage: Equatable, Sendable, Codable, Identifiable, Hashable {
+    public var id: String
+    public var refs: [String]
+    public var sizeBytes: Int64
+    public var system: Bool
+
+    public init(id: String, refs: [String] = [], sizeBytes: Int64 = 0, system: Bool = false) {
+        self.id = id
+        self.refs = refs
+        self.sizeBytes = sizeBytes
+        self.system = system
+    }
+
+    public var displayName: String {
+        refs.first ?? id
+    }
+}
+
+public struct NodeImageList: Equatable, Sendable, Codable {
+    public var items: [NodeImage]
+
+    public init(items: [NodeImage] = []) {
+        self.items = items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([NodeImage].self, forKey: .items) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case items
     }
 }
 
@@ -203,12 +256,14 @@ public struct EngineStatus: Equatable, Sendable {
 public enum EngineEvent: Equatable, Sendable {
     case status(EngineStatus)
     case log(source: LogSource, line: String)
+    case images(NodeImageList)
 }
 
 extension EngineRequest: Codable {
     enum CodingKeys: String, CodingKey {
         case op
         case force
+        case path
     }
 
     public init(from decoder: Decoder) throws {
@@ -228,6 +283,13 @@ extension EngineRequest: Codable {
             self = .status
         case "subscribe":
             self = .subscribe
+        case "loadImage":
+            let path = try container.decodeIfPresent(String.self, forKey: .path) ?? ""
+            self = .loadImage(path: path)
+        case "imageList":
+            self = .imageList
+        case "imagePrune":
+            self = .imagePrune
         default:
             throw EngineErrorCode.unknownOp
         }
@@ -249,6 +311,13 @@ extension EngineRequest: Codable {
             try container.encode("status", forKey: .op)
         case .subscribe:
             try container.encode("subscribe", forKey: .op)
+        case .loadImage(let path):
+            try container.encode("loadImage", forKey: .op)
+            try container.encode(path, forKey: .path)
+        case .imageList:
+            try container.encode("imageList", forKey: .op)
+        case .imagePrune:
+            try container.encode("imagePrune", forKey: .op)
         }
     }
 }
@@ -333,6 +402,7 @@ extension EngineEvent: Codable {
         case lastError
         case publishedPorts
         case imageJob
+        case items
     }
 
     public init(from decoder: Decoder) throws {
@@ -345,6 +415,9 @@ extension EngineEvent: Codable {
             let source = try container.decode(LogSource.self, forKey: .source)
             let line = try container.decode(String.self, forKey: .line)
             self = .log(source: source, line: line)
+        case "images":
+            let items = try container.decodeIfPresent([NodeImage].self, forKey: .items) ?? []
+            self = .images(NodeImageList(items: items))
         default:
             throw EngineErrorCode.invalidRequest
         }
@@ -360,6 +433,9 @@ extension EngineEvent: Codable {
             try container.encode("log", forKey: .type)
             try container.encode(source, forKey: .source)
             try container.encode(line, forKey: .line)
+        case .images(let list):
+            try container.encode("images", forKey: .type)
+            try container.encode(list.items, forKey: .items)
         }
     }
 }

@@ -21,7 +21,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 
 - `Apps/gmak8` — SwiftUI app (`gmak8.app`)
 - `Apps/gmak8/Gmak8Core` — LaunchAgent (`gmak8-core`) listening on `engine.sock`
-- `Apps/gmak8/CLI` — ArgumentParser CLI (`gmak8`) on `engine.sock` (`status`, `version`)
+- `Apps/gmak8/CLI` — ArgumentParser CLI (`gmak8`) on `engine.sock` (`status`, `version`, `image list|load|prune`)
 - `Packages/Gmak8Kit` — paths, settings, logging
 - `Packages/Gmak8Kubernetes` — Swiftkube Cluster overview client (fake client for UI tests)
 - `Packages/Gmak8XPC` — NDJSON engine protocol, fake cluster state machine, peer/Team ID policy
@@ -29,6 +29,6 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - `Packages/Gmak8GuestClient` — vsock HTTP client to the guest agent on port 1024
 - `docs/design.md` — product and implementation design
 - `guest/mkosi` — Debian 13 arm64 appliance (data-disk format unit, KVM)
-- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `POST /k3s/start`, `/node`, `GET /airgap`, `PUT /airgap/k3s`, `PUT /time`, `POST /shutdown`; `-check-data-dir` before k3s)
+- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `POST /k3s/start`, `/node`, `GET /airgap`, `PUT /airgap/k3s`, `GET /images`, `PUT /images/import`, `POST /images/prune`, `PUT /time`, `POST /shutdown`; `-check-data-dir` before k3s)
 - `guest/k3s` — k3s `v1.33.3+k3s1` pin, install script, config template (helm-controller on; admin kubeconfig `/etc/rancher/k3s/k3s.yaml`)
 - `guest/airgap` — k3s airgap pin, keyful Cosign pubkey, fetch/sign/verify scripts (do not vendor the tarball)

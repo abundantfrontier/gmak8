@@ -62,6 +62,6 @@ public enum ClusterOverviewCopy {
     public static let workloadsEmpty = "Apply a manifest, or gmak8 build an image and deploy."
     public static let kubeVirtEmpty =
         "KubeVirt is an Eureka profile addon. It is hidden on the Kubernetes profile."
-    public static let imagesEmpty = "Node images list, load, and prune arrive next."
+    public static let imagesEmpty = ImagesCopy.empty
     public static let refresh = "Refresh"
 }

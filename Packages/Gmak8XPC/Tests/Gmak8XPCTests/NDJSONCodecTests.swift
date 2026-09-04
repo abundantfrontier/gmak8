@@ -12,6 +12,14 @@ struct NDJSONCodecTests {
         #expect(try utf8Line(EngineRequest.reset(force: false)) == "{\"force\":false,\"op\":\"reset\"}\n")
         #expect(try utf8Line(EngineRequest.status) == "{\"op\":\"status\"}\n")
         #expect(try utf8Line(EngineRequest.subscribe) == "{\"op\":\"subscribe\"}\n")
+        #expect(try utf8Line(EngineRequest.imageList) == "{\"op\":\"imageList\"}\n")
+        #expect(try utf8Line(EngineRequest.imagePrune) == "{\"op\":\"imagePrune\"}\n")
+        let loaded = try utf8Line(EngineRequest.loadImage(path: "/tmp/foo.tar"))
+        #expect(loaded.contains("\"op\":\"loadImage\""))
+        #expect(loaded.contains("foo.tar"))
+        #expect(
+            try NDJSONCodec.decode(EngineRequest.self, line: loaded) == .loadImage(path: "/tmp/foo.tar")
+        )
     }
 
     @Test func encodesOkAndErrorReplies() throws {
@@ -40,7 +48,7 @@ struct NDJSONCodecTests {
     }
 
     @Test func unknownOpIsUnknownOp() {
-        switch NDJSONCodec.decodeRequest(line: "{\"op\":\"loadImage\"}") {
+        switch NDJSONCodec.decodeRequest(line: "{\"op\":\"portForwardStart\"}") {
         case .failure(let code):
             #expect(code == .unknownOp)
         case .success:
@@ -127,6 +135,26 @@ struct NDJSONCodecTests {
         #expect(line.contains("\"step\":\"airgap\""))
         #expect(line.contains("\"bytesReceived\":12"))
         #expect(line.contains("\"bytesTotal\":24"))
+        #expect(try NDJSONCodec.decodeEvent(line: line) == event)
+    }
+
+    @Test func loadImageDecodesPathAndEmptyPath() throws {
+        #expect(
+            try NDJSONCodec.decode(EngineRequest.self, line: "{\"op\":\"loadImage\",\"path\":\"/tmp/a.tar\"}")
+                == .loadImage(path: "/tmp/a.tar")
+        )
+        #expect(try NDJSONCodec.decode(EngineRequest.self, line: "{\"op\":\"loadImage\"}") == .loadImage(path: ""))
+    }
+
+    @Test func imagesEventRoundTrip() throws {
+        let event = EngineEvent.images(
+            NodeImageList(items: [
+                NodeImage(id: "sha256:abc", refs: ["nginx:dev"], sizeBytes: 12, system: false)
+            ])
+        )
+        let line = try utf8Line(event)
+        #expect(line.contains("\"type\":\"images\""))
+        #expect(line.contains("\"nginx:dev\""))
         #expect(try NDJSONCodec.decodeEvent(line: line) == event)
     }
 

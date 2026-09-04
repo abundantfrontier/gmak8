@@ -103,6 +103,9 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | `GET` | `/node` | JSON: Node.Ready from `kubectl get nodes` (false if k3s is not up). |
 | `GET` | `/airgap` | JSON: whether k3s airgap archives are in `/mnt/data/rancher/agent/images`. |
 | `PUT` | `/airgap/k3s` | Stream an airgap `.tar` / `.tar.zst` into `agent/images` (vsock, 0600, fsync). Header `X-Gmak8-Name`. |
+| `GET` | `/images` | containerd `k8s.io` images (`k3s ctr -n k8s.io images ls`). System images are `docker.io/rancher/*`. |
+| `PUT` | `/images/import` | Stream an OCI/Docker tar to `/mnt/data/tmp`, `k3s ctr -n k8s.io images import`, unlink temp. Query `name=`. |
+| `POST` | `/images/prune` | `k3s ctr -n k8s.io images prune`. |
 | `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
 | `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |
 

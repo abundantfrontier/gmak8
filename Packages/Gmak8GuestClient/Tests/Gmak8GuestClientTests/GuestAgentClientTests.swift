@@ -68,6 +68,26 @@ struct GuestAgentClientTests {
         #expect(services.items[0].ports[0].protocolName == "TCP")
         let emptyServices = try JSONDecoder().decode(GuestServiceList.self, from: Data(#"{}"#.utf8))
         #expect(emptyServices.items.isEmpty)
+
+        let images = try JSONDecoder().decode(
+            GuestImageList.self,
+            from: Data(
+                #"{"items":[{"id":"sha256:abc","refs":["nginx:dev"],"size_bytes":12,"system":false}]}"#
+                    .utf8
+            )
+        )
+        #expect(images.items.count == 1)
+        #expect(images.items[0].refs == ["nginx:dev"])
+        #expect(images.items[0].sizeBytes == 12)
+        let emptyImages = try JSONDecoder().decode(GuestImageList.self, from: Data(#"{}"#.utf8))
+        #expect(emptyImages.items.isEmpty)
+        let imported = try JSONDecoder().decode(
+            GuestImageImport.self,
+            from: Data(#"{"digest":"sha256:abc","refs":["nginx:dev"]}"#.utf8)
+        )
+        #expect(imported.digest == "sha256:abc")
+        let pruned = try JSONDecoder().decode(GuestImagePrune.self, from: Data(#"{}"#.utf8))
+        #expect(pruned.deleted.isEmpty)
     }
 
     @Test func healthJSONDoesNotCarryDiskKeys() throws {
@@ -142,6 +162,20 @@ struct GuestAgentClientTests {
             fileURL: fixture, name: "gmak8-k3s-airgap-v1.33.3-arm64.tar.zst")
         #expect(imported.present)
         #expect(state.lastAirgapBody == Data("tiny-airgap-fixture".utf8))
+
+        let listedImages = try await client.images()
+        #expect(listedImages.items.isEmpty)
+        let imageTar = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-image-fixture-\(UUID().uuidString).tar")
+        try Data("tiny-oci-tar".utf8).write(to: imageTar)
+        defer { try? FileManager.default.removeItem(at: imageTar) }
+        let imageImport = try await client.importImage(fileURL: imageTar, name: "nginx.dev.tar")
+        #expect(imageImport.digest.hasPrefix("sha256:"))
+        #expect(state.lastImageBody == Data("tiny-oci-tar".utf8))
+        #expect(try await client.images().items.count == 1)
+        let pruned = try await client.pruneImages()
+        #expect(pruned.deleted.count == 1)
+        #expect(try await client.images().items.isEmpty)
 
         state.kubeconfig = nil
         do {

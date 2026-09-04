@@ -167,6 +167,82 @@ public struct GuestAirgap: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestImage: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var refs: [String]
+    public var sizeBytes: Int64
+    public var system: Bool
+
+    public init(id: String, refs: [String] = [], sizeBytes: Int64 = 0, system: Bool = false) {
+        self.id = id
+        self.refs = refs
+        self.sizeBytes = sizeBytes
+        self.system = system
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case refs
+        case sizeBytes = "size_bytes"
+        case system
+    }
+}
+
+public struct GuestImageList: Codable, Equatable, Sendable {
+    public var items: [GuestImage]
+
+    public init(items: [GuestImage] = []) {
+        self.items = items
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([GuestImage].self, forKey: .items) ?? []
+    }
+}
+
+public struct GuestImageImport: Codable, Equatable, Sendable {
+    public var digest: String
+    public var refs: [String]
+
+    public init(digest: String, refs: [String] = []) {
+        self.digest = digest
+        self.refs = refs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        digest = try container.decodeIfPresent(String.self, forKey: .digest) ?? ""
+        refs = try container.decodeIfPresent([String].self, forKey: .refs) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case digest
+        case refs
+    }
+}
+
+public struct GuestImagePrune: Codable, Equatable, Sendable {
+    public var deleted: [String]
+
+    public init(deleted: [String] = []) {
+        self.deleted = deleted
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        deleted = try container.decodeIfPresent([String].self, forKey: .deleted) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case deleted
+    }
+}
+
 public enum GuestTime: Equatable, Sendable {
     case unix(Int64)
     case rfc3339(String)

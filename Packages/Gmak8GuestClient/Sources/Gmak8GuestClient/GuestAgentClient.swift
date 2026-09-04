@@ -80,6 +80,39 @@ public struct GuestAgentClient: Sendable {
         try await send(method: "GET", path: "/services", body: nil, as: GuestServiceList.self)
     }
 
+    public func images() async throws -> GuestImageList {
+        try await send(method: "GET", path: "/images", body: nil, as: GuestImageList.self)
+    }
+
+    public func importImage(
+        fileURL: URL,
+        name: String,
+        onProgress: (@Sendable (Int64, Int64) -> Void)? = nil
+    ) async throws -> GuestImageImport {
+        let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
+        let response = try await transport.sendFile(
+            method: "PUT",
+            path: "/images/import?name=\(encoded)",
+            fileURL: fileURL,
+            contentType: "application/octet-stream",
+            extraHeaders: ["X-Gmak8-Name": name],
+            onProgress: onProgress
+        )
+        if response.statusCode < 200 || response.statusCode >= 300 {
+            let message = (try? JSONDecoder().decode(GuestOK.self, from: response.body))?.error
+            throw GuestAgentError.httpStatus(response.statusCode, message)
+        }
+        do {
+            return try JSONDecoder().decode(GuestImageImport.self, from: response.body)
+        } catch {
+            throw GuestAgentError.decode(String(describing: error))
+        }
+    }
+
+    public func pruneImages() async throws -> GuestImagePrune {
+        try await send(method: "POST", path: "/images/prune", body: nil, as: GuestImagePrune.self)
+    }
+
     public func setTime(_ time: GuestTime) async throws {
         _ = try await send(method: "PUT", path: "/time", body: try time.encodeBody(), as: GuestOK.self)
     }

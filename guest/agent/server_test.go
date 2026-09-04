@@ -32,6 +32,13 @@ type fakeHost struct {
 	airgap        AirgapReport
 	airgapImports int
 	importErr     error
+	images        ImageListReport
+	imagesErr     error
+	imageImports  int
+	lastImageBody []byte
+	imageBusy     bool
+	pruneErr      error
+	prunes        int
 }
 
 func (f *fakeHost) Disks() DisksReport { return f.disks }
@@ -90,6 +97,65 @@ func (f *fakeHost) ImportAirgap(name string, r io.Reader, size int64) (AirgapRep
 		Bytes:   uint64(len(data)),
 	}
 	return f.airgap, nil
+}
+func (f *fakeHost) ListImages() (ImageListReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.imagesErr != nil {
+		return ImageListReport{}, f.imagesErr
+	}
+	if f.images.Items == nil {
+		return ImageListReport{Items: []Image{}}, nil
+	}
+	return f.images, nil
+}
+func (f *fakeHost) ImportImage(name string, r io.Reader, size int64) (ImageImportReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.imageBusy {
+		return ImageImportReport{}, errImageBusy
+	}
+	if f.importErr != nil {
+		return ImageImportReport{}, f.importErr
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return ImageImportReport{}, err
+	}
+	if int64(len(data)) != size {
+		return ImageImportReport{}, errString("short image write")
+	}
+	clean, err := sanitizeImageName(name)
+	if err != nil {
+		return ImageImportReport{}, err
+	}
+	f.imageImports++
+	f.lastImageBody = data
+	img := Image{ID: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Refs: []string{clean}, SizeBytes: size, System: false}
+	f.images = ImageListReport{Items: []Image{img}}
+	return ImageImportReport{Digest: img.ID, Refs: img.Refs}, nil
+}
+func (f *fakeHost) PruneImages() (ImagePruneReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pruneErr != nil {
+		return ImagePruneReport{}, f.pruneErr
+	}
+	f.prunes++
+	deleted := make([]string, 0, len(f.images.Items))
+	for _, img := range f.images.Items {
+		if !img.System {
+			deleted = append(deleted, img.ID)
+		}
+	}
+	kept := make([]Image, 0)
+	for _, img := range f.images.Items {
+		if img.System {
+			kept = append(kept, img)
+		}
+	}
+	f.images.Items = kept
+	return ImagePruneReport{Deleted: deleted}, nil
 }
 func (f *fakeHost) Services() (ServiceListReport, error) {
 	if f.servicesErr != nil {
@@ -416,6 +482,9 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodPost, "/kubeconfig"},
 		{http.MethodPost, "/airgap"},
 		{http.MethodGet, "/airgap/k3s"},
+		{http.MethodPost, "/images"},
+		{http.MethodGet, "/images/import"},
+		{http.MethodGet, "/images/prune"},
 		{http.MethodGet, "/nope"},
 	}
 	for _, tc := range cases {
@@ -479,6 +548,83 @@ func TestAirgapGetAndPut(t *testing.T) {
 	h.ServeHTTP(rec, oversize)
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversize status %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestImagesListImportPrune(t *testing.T) {
+	host := &fakeHost{}
+	h := NewHandler(host)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/images", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status %d %s", rec.Code, rec.Body.String())
+	}
+	var listed ImageListReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if listed.Items == nil || len(listed.Items) != 0 {
+		t.Fatalf("empty list %+v", listed)
+	}
+
+	body := []byte("tiny-oci-tar")
+	req := httptest.NewRequest(http.MethodPut, "/images/import?name=nginx.dev.tar", bytes.NewReader(body))
+	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("import status %d %s", rec.Code, rec.Body.String())
+	}
+	var imported ImageImportReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &imported); err != nil {
+		t.Fatal(err)
+	}
+	if imported.Digest == "" || len(imported.Refs) != 1 {
+		t.Fatalf("imported %+v", imported)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/images", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Items) != 1 {
+		t.Fatalf("after import %+v", listed)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/images/import", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing length status %d", rec.Code)
+	}
+
+	host.mu.Lock()
+	host.imageBusy = true
+	host.mu.Unlock()
+	busy := httptest.NewRequest(http.MethodPut, "/images/import?name=nginx.dev.tar", bytes.NewReader(body))
+	busy.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, busy)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("busy status %d %s", rec.Code, rec.Body.String())
+	}
+	host.mu.Lock()
+	host.imageBusy = false
+	host.mu.Unlock()
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/images/prune", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("prune status %d %s", rec.Code, rec.Body.String())
+	}
+	var pruned ImagePruneReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &pruned); err != nil {
+		t.Fatal(err)
+	}
+	if len(pruned.Deleted) != 1 {
+		t.Fatalf("pruned %+v", pruned)
 	}
 }
 
