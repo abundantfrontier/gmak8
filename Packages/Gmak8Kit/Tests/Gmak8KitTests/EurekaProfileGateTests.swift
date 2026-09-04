@@ -95,6 +95,7 @@ struct EurekaProfileGateTests {
         #expect(settings.memoryGiB == 16)
         #expect(settings.dataDiskGiB == 256)
         #expect(settings.kubeVirtAddon)
+        #expect(settings.publishL1SSH)
 
         let small = HostSnapshot(
             processorCount: 8,
@@ -113,6 +114,7 @@ struct EurekaProfileGateTests {
         #expect(api.cpu == 4)
         #expect(api.memoryGiB == 4)
         #expect(api.dataDiskGiB == 60)
+        #expect(!api.publishL1SSH)
     }
 
     @Test func missingLocalPathCopyIsHonest() {

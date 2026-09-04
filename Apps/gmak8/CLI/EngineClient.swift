@@ -70,6 +70,37 @@ enum EngineClient {
         try readImageList(request: .imagePrune, socketURL: socketURL, fileManager: fileManager, timeout: timeout)
     }
 
+    static func portForwardStart(
+        kind: PortForwardKind,
+        namespace: String,
+        name: String,
+        local: Int,
+        remote: Int,
+        socketURL: URL,
+        fileManager: FileManager = .default,
+        timeout: timeval = timeval(tv_sec: 5, tv_usec: 0)
+    ) throws -> String {
+        let fd = try openConnection(socketURL: socketURL, fileManager: fileManager, timeout: timeout)
+        defer { Darwin.close(fd) }
+        let data = try NDJSONCodec.encodeLine(
+            EngineRequest.portForwardStart(
+                kind: kind, namespace: namespace, name: name, local: local, remote: remote)
+        )
+        do {
+            try writeAll(fd: fd, data: data)
+        } catch {
+            try rethrowFailedWrite(fd: fd)
+        }
+        switch try readReply(fd: fd) {
+        case .started(let id):
+            return id
+        case .ok:
+            throw CLIError.invalidReply
+        case .error(let code, let message):
+            throw CLIError.engineError(code, message: message)
+        }
+    }
+
     static func submit(
         _ request: EngineRequest,
         socketURL: URL,
@@ -85,7 +116,7 @@ enum EngineClient {
             try rethrowFailedWrite(fd: fd)
         }
         switch try readReply(fd: fd) {
-        case .ok:
+        case .ok, .started:
             return
         case .error(let code, let message):
             throw CLIError.engineError(code, message: message)
@@ -109,7 +140,7 @@ enum EngineClient {
         }
         do {
             switch try readReply(fd: fd, buffer: &buffer) {
-            case .ok:
+            case .ok, .started:
                 break
             case .error(let code, let message):
                 throw CLIError.engineError(code, message: message)
@@ -352,7 +383,7 @@ private func readStatusAfterFailedWrite(fd: Int32) throws -> EngineStatus {
 private func rethrowFailedWrite(fd: Int32) throws -> Never {
     do {
         switch try readReply(fd: fd) {
-        case .ok:
+        case .ok, .started:
             throw CLIError.communicationFailed
         case .error(let code, let message):
             throw CLIError.engineError(code, message: message)
@@ -394,7 +425,7 @@ private func readImages(fd: Int32) throws -> NodeImageList {
         let line = try readLine(fd: fd, buffer: &buffer)
         if let reply = try? NDJSONCodec.decodeReply(line: line) {
             switch reply {
-            case .ok:
+            case .ok, .started:
                 continue
             case .error(let code, let message):
                 throw CLIError.engineError(code, message: message)
@@ -413,7 +444,7 @@ private func readStatus(fd: Int32) throws -> EngineStatus {
         let line = try readLine(fd: fd, buffer: &buffer)
         if let reply = try? NDJSONCodec.decodeReply(line: line) {
             switch reply {
-            case .ok:
+            case .ok, .started:
                 continue
             case .error(let code, let message):
                 throw CLIError.engineError(code, message: message)

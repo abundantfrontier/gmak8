@@ -111,6 +111,9 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | `POST` | `/images/prune` | `k3s ctr -n k8s.io images prune`. |
 | `GET` | `/host-mounts` | User virtio-fs shares from `/mnt/config/host-mounts.json`, with `stat` uid/gid. |
 | `POST` | `/host-mounts/apply` | `mount -t virtiofs` each share at `/mnt/host/<name>`. |
+| `GET` | `/sshd` | Debian `ssh` unit active. |
+| `POST` | `/sshd/start` | `systemctl unmask` + `start --no-block ssh`. Eureka jump only. |
+| `POST` | `/sshd/stop` | `systemctl stop --no-block ssh`. |
 | `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
 | `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |
 
@@ -136,8 +139,10 @@ module is present). There is no TCG fallback.
 
 ## sshd
 
-`openssh-server` is installed and **disabled**. PR 30 starts it when the Eureka
-profile publishes L1:22 for the Builderdash jump. Do not mask the unit.
+`openssh-server` is installed and **disabled**. The Eureka profile can start it
+(`POST /sshd/start`, Debian unit `ssh`) and publish L1:22 to
+`127.0.0.1:22022` for the Builderdash jump. Do not mask the unit. Never bind
+host port 22.
 
 ## OS replace / EFI
 

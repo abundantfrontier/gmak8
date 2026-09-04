@@ -201,6 +201,15 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
         case ("POST", "/k3s/start"):
             state.k3sActive = true
             return .json(200, #"{"ok":true}"#)
+        case ("GET", "/sshd"):
+            return .json(200, state.sshdRunning ? #"{"running":true}"# : #"{"running":false}"#)
+        case ("POST", "/sshd/start"):
+            state.sshdRunning = true
+            state.sshdStarts += 1
+            return .json(200, #"{"running":true}"#)
+        case ("POST", "/sshd/stop"):
+            state.sshdRunning = false
+            return .json(200, #"{"running":false}"#)
         case ("GET", "/airgap"):
             if state.airgapPresent {
                 return .json(
@@ -282,4 +291,6 @@ final class FixtureState: @unchecked Sendable {
     var imagesJSON = #"{"items":[]}"#
     var lastImageBody = Data()
     var imageImportStatus: Int?
+    var sshdRunning = false
+    var sshdStarts = 0
 }

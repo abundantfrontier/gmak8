@@ -159,6 +159,52 @@ struct CLITests {
         #expect(CLIError.communicationFailed.errorDescription == "could not talk to gmak8-core.")
     }
 
+    @Test func portForwardStartOverFakeSocketReturnsId() throws {
+        let socketURL = uniqueSocketURL()
+        let scheduler = ManualEngineScheduler()
+        let forwards = RecordingPortForwardRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, portForwards: forwards)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        let server = try EngineSocketServer(
+            socketURL: socketURL,
+            engine: engine,
+            identityResolver: FixedPeerIdentityResolver(teamID: nil),
+            daemonIdentity: PeerIdentity(pid: getpid(), teamID: nil)
+        )
+        try server.start()
+        defer { server.stop() }
+
+        let id = try EngineClient.portForwardStart(
+            kind: .vm,
+            namespace: "default",
+            name: "build",
+            local: 2222,
+            remote: 22,
+            socketURL: socketURL
+        )
+        #expect(id == "pf-1")
+        try EngineClient.submit(.portForwardStop(id: id), socketURL: socketURL)
+        #expect(forwards.sessions.isEmpty)
+        do {
+            _ = try EngineClient.portForwardStart(
+                kind: .pod,
+                namespace: "default",
+                name: "x",
+                local: 18080,
+                remote: 8080,
+                socketURL: socketURL
+            )
+            Issue.record("expected invalidRequest")
+        } catch let error as CLIError {
+            guard case .engineError(.invalidRequest, let message) = error else {
+                Issue.record("\(error)")
+                return
+            }
+            #expect(message?.contains("pod") == true)
+        }
+    }
+
     @Test func statusOverFakeSocketUsesSameCodec() throws {
         let socketURL = uniqueSocketURL()
         let engine = ClusterEngine(scheduler: ManualEngineScheduler())

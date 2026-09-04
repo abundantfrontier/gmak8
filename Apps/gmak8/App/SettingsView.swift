@@ -231,7 +231,12 @@ struct SettingsView: View {
                     Text(SettingsCopy.ingressValue)
                 }
                 Toggle(SettingsCopy.publishNodePorts, isOn: boolBinding(\.publishNodePorts))
+                Toggle(SettingsCopy.publishL1SSH, isOn: boolBinding(\.publishL1SSH))
+                    .disabled(settings.profile != .eureka)
                 Text(SettingsCopy.virtctlHelp)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(SettingsCopy.publishL1SSHHelp)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(SettingsCopy.proxyNote)

@@ -94,6 +94,34 @@ struct KubernetesBringUpTests {
         #expect(env.logs.contains { $0.contains("/dev/kvm present") })
     }
 
+    @Test func sshdStartAfterNodeReady() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, startSSHD: true)
+        defer { env.tearDown() }
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.steps.contains(ClusterStartStep.sshd))
+        #expect(env.server.state.sshdStarts == 1)
+        #expect(env.logs.contains { $0.contains("guest sshd running") })
+        #expect(!env.logs.contains { $0.contains("0.0.0.0") })
+    }
+
+    @Test func missingSSHDEndpointIsNotFatal() async throws {
+        let env = try BringUpHarness(yaml: k3sYAML, startSSHD: true, sshdPresent: false)
+        defer { env.tearDown() }
+        #expect(env.engine.submit(.start) == .ok)
+        env.scheduler.runNext()
+        try await waitUntil {
+            env.engine.currentStatus().state == .running
+        }
+        #expect(env.steps.contains(ClusterStartStep.sshd))
+        #expect(env.server.state.sshdStarts == 0)
+        #expect(env.logs.contains { $0.contains("no /sshd/start") })
+        #expect(env.engine.currentStatus().state == .running)
+    }
+
     @Test func kubevirtInstallWaitsForClusterInstancetype() async throws {
         let env = try BringUpHarness(yaml: k3sYAML, installKubeVirt: true)
         defer { env.tearDown() }
@@ -405,6 +433,8 @@ private struct BringUpHarness {
         holdAirgapPut: Bool = false,
         kvm: Bool = false,
         installKubeVirt: Bool = false,
+        startSSHD: Bool = false,
+        sshdPresent: Bool = true,
         streamClient: Bool = false,
         airgapProvider: (any AirgapProviding)? = nil,
         runtime: (any VirtualMachineRuntime)? = nil
@@ -432,7 +462,8 @@ private struct BringUpHarness {
             mounted: mounted,
             airgapPresent: airgapPresent,
             holdAirgapPut: holdAirgapPut,
-            kvm: kvm
+            kvm: kvm,
+            sshdPresent: sshdPresent
         )
         server = try BringUpHTTPServer(state: state)
         tracker = StepTracker()
@@ -457,6 +488,7 @@ private struct BringUpHarness {
             setCurrentContext: false,
             airgapProvider: airgapProvider,
             installKubeVirt: installKubeVirt,
+            startSSHD: { startSSHD },
             apiPort: { apiPort },
             checkAPI: { _ in true },
             pollInterval: .milliseconds(5),
@@ -566,6 +598,8 @@ private final class BringUpAgentState: @unchecked Sendable {
     var events: [String] = []
     var holdAirgapPut: Bool
     var kvm: Bool
+    var sshdPresent: Bool
+    var sshdStarts = 0
     private let putLock = NSCondition()
     private var airgapPutStarted = false
 
@@ -578,7 +612,8 @@ private final class BringUpAgentState: @unchecked Sendable {
         mounted: Bool,
         airgapPresent: Bool,
         holdAirgapPut: Bool = false,
-        kvm: Bool = false
+        kvm: Bool = false,
+        sshdPresent: Bool = true
     ) {
         self.yaml = yaml
         self.dataDirMinor = dataDirMinor
@@ -589,6 +624,7 @@ private final class BringUpAgentState: @unchecked Sendable {
         self.airgapPresent = airgapPresent
         self.holdAirgapPut = holdAirgapPut
         self.kvm = kvm
+        self.sshdPresent = sshdPresent
     }
 
     func noteAirgapPutStartedAndWaitIfHeld() {
@@ -769,6 +805,14 @@ private func response(for request: (String, String, Data), state: BringUpAgentSt
         return (200, Data(#"{"present":false,"files":[],"bytes":0}"#.utf8), "application/json")
     case ("GET", "/host-mounts"), ("POST", "/host-mounts/apply"):
         return (200, Data(#"{"items":[]}"#.utf8), "application/json")
+    case ("GET", "/sshd"):
+        return (200, Data(#"{"running":true}"#.utf8), "application/json")
+    case ("POST", "/sshd/start"):
+        if !state.sshdPresent {
+            return (404, Data(#"{"ok":false,"error":"not found"}"#.utf8), "application/json")
+        }
+        state.sshdStarts += 1
+        return (200, Data(#"{"running":true}"#.utf8), "application/json")
     case ("GET", "/kubevirt"), ("POST", "/kubevirt/install"):
         return (
             200,

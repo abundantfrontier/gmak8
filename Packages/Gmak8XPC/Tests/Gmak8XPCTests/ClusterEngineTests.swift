@@ -339,6 +339,67 @@ struct ClusterEngineTests {
         #expect(engine.currentStatus().lastError == "cluster is not running")
     }
 
+    @Test func portForwardStartsOnlyWhenRunningAndRejectsPod() {
+        let scheduler = ManualEngineScheduler()
+        let forwards = RecordingPortForwardRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, portForwards: forwards)
+        #expect(
+            engine.submit(
+                .portForwardStart(
+                    kind: .vm, namespace: "default", name: "build", local: 2222, remote: 22)
+            ) == .error(.conflict, message: PortForwardError.notRunning.errorDescription)
+        )
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(engine.currentStatus().state == .running)
+        #expect(
+            engine.submit(
+                .portForwardStart(
+                    kind: .pod, namespace: "default", name: "x", local: 18080, remote: 8080)
+            ) == .error(.invalidRequest, message: PortForwardError.unsupportedKind(.pod).errorDescription)
+        )
+        #expect(
+            engine.submit(
+                .portForwardStart(
+                    kind: .vm, namespace: "default", name: "build", local: 22, remote: 22)
+            ) == .error(.invalidRequest, message: PortForwardError.forbiddenHostPort(22).errorDescription)
+        )
+        let reply = engine.submit(
+            .portForwardStart(
+                kind: .vmi, namespace: "kubevirt", name: "fedora", local: 2222, remote: 22)
+        )
+        #expect(reply == .started(id: "pf-1"))
+        #expect(forwards.sessions.count == 1)
+        #expect(forwards.argumentLog[0].contains("--address"))
+        #expect(forwards.argumentLog[0].contains("127.0.0.1"))
+        #expect(!forwards.argumentLog[0].contains { $0.contains("0.0.0.0") })
+        #expect(engine.submit(.portForwardStop(id: "pf-1")) == .ok)
+        #expect(forwards.sessions.isEmpty)
+        #expect(
+            engine.submit(
+                .portForwardStart(
+                    kind: .vm, namespace: "default", name: "build", local: 2222, remote: 22)
+            ) == .started(id: "pf-2")
+        )
+        #expect(engine.submit(.stop) == .ok)
+        scheduler.runNext()
+        #expect(forwards.stopAllCount == 1)
+        #expect(forwards.sessions.isEmpty)
+    }
+
+    @Test func portForwardWithoutVirtctlIsUnavailable() {
+        let scheduler = ManualEngineScheduler()
+        let engine = ClusterEngine(scheduler: scheduler)
+        #expect(engine.submit(.start) == .ok)
+        scheduler.runNext()
+        #expect(
+            engine.submit(
+                .portForwardStart(
+                    kind: .vm, namespace: "default", name: "build", local: 2222, remote: 22)
+            ) == .error(.unavailable, message: PortForwardError.virtctlMissing.errorDescription)
+        )
+    }
+
     @Test func loadImageRejectsMissingPath() {
         let scheduler = ManualEngineScheduler()
         let engine = ClusterEngine(scheduler: scheduler)

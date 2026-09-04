@@ -1,5 +1,6 @@
 import ArgumentParser
 import Gmak8Kit
+import Gmak8XPC
 
 @main
 struct Gmak8: ParsableCommand {
@@ -7,7 +8,7 @@ struct Gmak8: ParsableCommand {
         commandName: "gmak8",
         abstract: "Control the local gmak8 Kubernetes cluster.",
         version: "gmak8 \(Gmak8Kit.version)",
-        subcommands: [Status.self, Start.self, Stop.self, Version.self, Image.self]
+        subcommands: [Status.self, Start.self, Stop.self, Version.self, Image.self, PortForward.self]
     )
 }
 
@@ -61,6 +62,64 @@ extension Gmak8 {
             abstract: "List, load, and prune node containerd images.",
             subcommands: [List.self, Load.self, Prune.self]
         )
+    }
+}
+
+extension Gmak8 {
+    struct PortForward: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "port-forward",
+            abstract: "Forward a VM or VMI port to 127.0.0.1.",
+            subcommands: [Stop.self],
+            defaultSubcommand: Start.self
+        )
+    }
+}
+
+extension Gmak8.PortForward {
+    struct Start: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "start",
+            abstract: "Start a virtctl port-forward bound to 127.0.0.1."
+        )
+
+        @Argument(help: "vm/<name> or vmi/<name>")
+        var target: String
+
+        @Argument(help: "[local:]remote  (SSH 22 becomes 2222:22)")
+        var ports: String
+
+        @Option(name: .shortAndLong, help: "Kubernetes namespace.")
+        var namespace: String = "default"
+
+        func run() throws {
+            let (kind, name) = try VirtctlPortForward.parseTarget(target)
+            let parsed = try VirtctlPortForward.parsePorts(ports)
+            let id = try EngineClient.portForwardStart(
+                kind: kind,
+                namespace: namespace,
+                name: name,
+                local: parsed.local,
+                remote: parsed.remote,
+                socketURL: HostPaths.current().engineSocket
+            )
+            print("port-forward \(id) 127.0.0.1:\(parsed.local) -> \(kind.rawValue)/\(name) \(parsed.remote)")
+        }
+    }
+
+    struct Stop: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "stop",
+            abstract: "Stop a port-forward by id."
+        )
+
+        @Argument(help: "id from gmak8 port-forward start")
+        var id: String
+
+        func run() throws {
+            try EngineClient.submit(
+                .portForwardStop(id: id), socketURL: HostPaths.current().engineSocket)
+        }
     }
 }
 

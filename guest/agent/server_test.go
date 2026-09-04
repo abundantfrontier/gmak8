@@ -41,6 +41,8 @@ type fakeHost struct {
 	prunes           int
 	kubevirt         KubeVirtReport
 	kubevirtInstalls int
+	sshd             SSHDReport
+	sshdStarts       int
 }
 
 func (f *fakeHost) Disks() DisksReport { return f.disks }
@@ -183,6 +185,22 @@ func (f *fakeHost) Services() (ServiceListReport, error) {
 		return ServiceListReport{Items: []Service{}}, nil
 	}
 	return f.services, nil
+}
+func (f *fakeHost) SSHD() (SSHDReport, error) {
+	return f.sshd, nil
+}
+func (f *fakeHost) StartSSHD() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sshdStarts++
+	f.sshd.Running = true
+	return nil
+}
+func (f *fakeHost) StopSSHD() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sshd.Running = false
+	return nil
 }
 func (f *fakeHost) SetTime(t time.Time) error {
 	f.mu.Lock()
@@ -508,6 +526,7 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodPost, "/kubevirt"},
 		{http.MethodGet, "/kubevirt/install"},
 		{http.MethodGet, "/airgap/kubevirt"},
+		{http.MethodGet, "/sshd/start"},
 		{http.MethodGet, "/nope"},
 	}
 	for _, tc := range cases {

@@ -20,10 +20,30 @@ struct NDJSONCodecTests {
         #expect(
             try NDJSONCodec.decode(EngineRequest.self, line: loaded) == .loadImage(path: "/tmp/foo.tar")
         )
+        let forward = try utf8Line(
+            EngineRequest.portForwardStart(
+                kind: .vmi, namespace: "default", name: "build", local: 2222, remote: 22)
+        )
+        #expect(
+            forward
+                == "{\"kind\":\"vmi\",\"local\":2222,\"name\":\"build\",\"ns\":\"default\",\"op\":\"portForwardStart\",\"remote\":22}\n"
+        )
+        #expect(
+            try NDJSONCodec.decode(EngineRequest.self, line: forward)
+                == .portForwardStart(
+                    kind: .vmi, namespace: "default", name: "build", local: 2222, remote: 22)
+        )
+        #expect(
+            try utf8Line(EngineRequest.portForwardStop(id: "pf-1")) == "{\"id\":\"pf-1\",\"op\":\"portForwardStop\"}\n"
+        )
     }
 
     @Test func encodesOkAndErrorReplies() throws {
         #expect(try utf8Line(EngineReply.ok) == "{\"ok\":true}\n")
+        #expect(try utf8Line(EngineReply.started(id: "pf-1")) == "{\"id\":\"pf-1\",\"ok\":true}\n")
+        #expect(
+            try NDJSONCodec.decodeReply(line: "{\"ok\":true,\"id\":\"pf-1\"}") == .started(id: "pf-1")
+        )
         #expect(try utf8Line(EngineReply.error(.conflict)) == "{\"error\":\"conflict\"}\n")
         #expect(
             try utf8Line(EngineReply.error(.confirmationRequired)) == "{\"error\":\"confirmation_required\"}\n"
@@ -56,13 +76,17 @@ struct NDJSONCodecTests {
         )
     }
 
-    @Test func unknownOpIsUnknownOp() {
-        switch NDJSONCodec.decodeRequest(line: "{\"op\":\"portForwardStart\"}") {
+    @Test func unknownOpIsUnknownOp() throws {
+        switch NDJSONCodec.decodeRequest(line: "{\"op\":\"notARealOp\"}") {
         case .failure(let code):
             #expect(code == .unknownOp)
         case .success:
             Issue.record("expected unknown_op")
         }
+        #expect(
+            try NDJSONCodec.decode(EngineRequest.self, line: "{\"op\":\"portForwardStart\"}")
+                == .portForwardStart(kind: .pod, namespace: "default", name: "", local: 0, remote: 0)
+        )
     }
 
     @Test func invalidJSONIsInvalidRequest() {

@@ -21,7 +21,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 
 - `Apps/gmak8` — SwiftUI app (`gmak8.app`)
 - `Apps/gmak8/Gmak8Core` — LaunchAgent (`gmak8-core`) listening on `engine.sock`
-- `Apps/gmak8/CLI` — ArgumentParser CLI (`gmak8`) on `engine.sock` (`status`, `version`, `image list|load|prune`)
+- `Apps/gmak8/CLI` — ArgumentParser CLI (`gmak8`) on `engine.sock` (`status`, `version`, `image list|load|prune`, `port-forward`)
 - `Packages/Gmak8Kit` — paths, settings, logging
 - `Packages/Gmak8Kubernetes` — Swiftkube Cluster overview client (fake client for UI tests)
 - `Packages/Gmak8XPC` — NDJSON engine protocol, fake cluster state machine, peer/Team ID policy
@@ -29,7 +29,7 @@ gmak8 is a native **Swift / SwiftUI** macOS app (not Electron).
 - `Packages/Gmak8GuestClient` — vsock HTTP client to the guest agent on port 1024
 - `docs/design.md` — product and implementation design
 - `guest/mkosi` — Debian 13 arm64 appliance (data-disk format unit, KVM)
-- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `POST /k3s/start`, `/node`, `GET /airgap`, `PUT /airgap/k3s`, `PUT /airgap/kubevirt`, `GET /kubevirt`, `POST /kubevirt/install`, `GET /images`, `PUT /images/import`, `POST /images/prune`, `GET /host-mounts`, `POST /host-mounts/apply`, `PUT /time`, `POST /shutdown`; `-check-data-dir` / `-mount-host-shares`)
+- `guest/agent` — Go HTTP agent on vsock 1024 (`GET /health`, `/disks`, `/kvm`, `/kubeconfig`, `/k3s`, `POST /k3s/start`, `/node`, `GET /airgap`, `PUT /airgap/k3s`, `PUT /airgap/kubevirt`, `GET /kubevirt`, `POST /kubevirt/install`, `GET /images`, `PUT /images/import`, `POST /images/prune`, `GET /host-mounts`, `POST /host-mounts/apply`, `GET /sshd`, `POST /sshd/start`, `POST /sshd/stop`, `PUT /time`, `POST /shutdown`; `-check-data-dir` / `-mount-host-shares`)
 - `guest/k3s` — k3s `v1.33.3+k3s1` pin, install script, config template (helm-controller on; admin kubeconfig `/etc/rancher/k3s/k3s.yaml`)
 - `guest/airgap` — k3s airgap pin, keyful Cosign pubkey, fetch/sign/verify scripts (do not vendor the tarball)
 - `guest/kubevirt` — KubeVirt 1.6.2 (v1.6.1 has no linux/arm64) + CDI v1.62.0 + common-instancetypes v1.4.0 YAML (Cluster `u1.nano`), virtctl pin v1.6.1, airgap pin (do not vendor the tarball)

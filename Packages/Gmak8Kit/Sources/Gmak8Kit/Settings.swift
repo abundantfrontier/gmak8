@@ -27,6 +27,7 @@ public struct Settings: Codable, Equatable, Sendable {
     public var disableMetricsServer: Bool
     public var apiPort: Int
     public var guestSSHDebug: Bool
+    public var publishL1SSH: Bool
     public var registriesYAML: String
     public var registryHosts: [RegistryHost]
     public var hostMounts: [HostMount]
@@ -54,6 +55,7 @@ public struct Settings: Codable, Equatable, Sendable {
         disableMetricsServer: Bool = false,
         apiPort: Int = 6443,
         guestSSHDebug: Bool = false,
+        publishL1SSH: Bool = false,
         registriesYAML: String = "",
         registryHosts: [RegistryHost] = [],
         hostMounts: [HostMount] = []
@@ -80,6 +82,7 @@ public struct Settings: Codable, Equatable, Sendable {
         self.disableMetricsServer = disableMetricsServer
         self.apiPort = apiPort
         self.guestSSHDebug = guestSSHDebug
+        self.publishL1SSH = publishL1SSH || profile == .eureka
         self.registriesYAML = registriesYAML
         self.registryHosts = registryHosts
         self.hostMounts = hostMounts
@@ -96,6 +99,7 @@ public struct Settings: Codable, Equatable, Sendable {
         if profile != .kubernetes {
             kubeVirtAddon = true
         }
+        publishL1SSH = profile == .eureka
         switch profile.resourceDefaults(host: host) {
         case .accepted(let resources):
             cpu = resources.cpu
@@ -139,6 +143,7 @@ public struct Settings: Codable, Equatable, Sendable {
         case disableMetricsServer
         case apiPort
         case guestSSHDebug
+        case publishL1SSH
         case registriesYAML
         case registryHosts
         case hostMounts
@@ -168,6 +173,7 @@ public struct Settings: Codable, Equatable, Sendable {
         disableMetricsServer = try container.decodeIfPresent(Bool.self, forKey: .disableMetricsServer) ?? false
         apiPort = try container.decodeIfPresent(Int.self, forKey: .apiPort) ?? 6443
         guestSSHDebug = try container.decodeIfPresent(Bool.self, forKey: .guestSSHDebug) ?? false
+        publishL1SSH = try container.decodeIfPresent(Bool.self, forKey: .publishL1SSH) ?? (profile == .eureka)
         registriesYAML = try container.decodeIfPresent(String.self, forKey: .registriesYAML) ?? ""
         registryHosts = try container.decodeIfPresent([RegistryHost].self, forKey: .registryHosts) ?? []
         hostMounts = try container.decodeIfPresent([HostMount].self, forKey: .hostMounts) ?? []
@@ -200,6 +206,7 @@ public struct Settings: Codable, Equatable, Sendable {
         try container.encode(disableMetricsServer, forKey: .disableMetricsServer)
         try container.encode(apiPort, forKey: .apiPort)
         try container.encode(guestSSHDebug, forKey: .guestSSHDebug)
+        try container.encode(publishL1SSH, forKey: .publishL1SSH)
         try container.encode(registriesYAML, forKey: .registriesYAML)
         try container.encode(registryHosts, forKey: .registryHosts)
         try container.encode(hostMounts, forKey: .hostMounts)

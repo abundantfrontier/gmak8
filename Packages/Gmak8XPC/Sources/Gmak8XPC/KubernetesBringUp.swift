@@ -13,6 +13,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
     private let airgapProvider: any AirgapProviding
     private let kubevirtAirgapProvider: (any AirgapProviding)?
     private let installKubeVirt: Bool
+    private let startSSHD: @Sendable () -> Bool
     private let apiPort: @Sendable () -> Int
     private let checkAPI: @Sendable (Int) async -> Bool
     private let pollInterval: Duration
@@ -29,6 +30,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         airgapProvider: (any AirgapProviding)? = nil,
         kubevirtAirgapProvider: (any AirgapProviding)? = nil,
         installKubeVirt: Bool = false,
+        startSSHD: @escaping @Sendable () -> Bool = { false },
         apiPort: @escaping @Sendable () -> Int,
         checkAPI: (@Sendable (Int) async -> Bool)? = nil,
         pollInterval: Duration = .milliseconds(200),
@@ -41,6 +43,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         self.airgapProvider = airgapProvider ?? HostAirgapProvider(paths: .current())
         self.kubevirtAirgapProvider = kubevirtAirgapProvider
         self.installKubeVirt = installKubeVirt
+        self.startSSHD = startSSHD
         self.apiPort = apiPort
         self.checkAPI =
             checkAPI ?? { port in
@@ -209,6 +212,11 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             return try await client.node().ready
         }
 
+        if startSSHD() {
+            try await startSSHDIfNeeded(
+                generation: generation, isCurrent: isCurrent, setStep: setStep, log: log)
+        }
+
         if installKubeVirt {
             try await installKubeVirtIfNeeded(
                 generation: generation,
@@ -221,6 +229,29 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
 
         let kvmPresent = await probeKvm(log: log)
         return ClusterBringUpResult(apiEndpoint: "https://127.0.0.1:\(port)", kvmPresent: kvmPresent)
+    }
+
+    private func startSSHDIfNeeded(
+        generation: UInt64,
+        isCurrent: @escaping @Sendable (UInt64) -> Bool,
+        setStep: @escaping @Sendable (String) -> Void,
+        log: @escaping @Sendable (String) -> Void
+    ) async throws {
+        setStep(ClusterStartStep.sshd)
+        try Task.checkCancellation()
+        guard isCurrent(generation) else {
+            throw CancellationError()
+        }
+        do {
+            let report = try await makeClient().startSSHD()
+            log(report.running ? "guest sshd running" : "guest sshd start returned not running")
+        } catch let error as GuestAgentError {
+            if case .httpStatus(let code, _) = error, code == 404 {
+                log("sshd: guest image has no /sshd/start")
+                return
+            }
+            throw ClusterBringUpError(message: error.localizedDescription)
+        }
     }
 
     private func installKubeVirtIfNeeded(

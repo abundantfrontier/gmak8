@@ -81,6 +81,9 @@ do {
         airgapProvider: HostAirgapProvider(paths: paths),
         kubevirtAirgapProvider: kubevirtAirgap,
         installKubeVirt: settingsForConfig.kubeVirtEnabled,
+        startSSHD: {
+            (try? Settings.load(from: paths.settingsFile))?.publishL1SSH ?? false
+        },
         apiPort: { controller.apiHostPort }
     )
     let settingsURL = paths.settingsFile
@@ -94,7 +97,7 @@ do {
             return (try? Settings.load(from: settingsURL))?.publishNodePorts ?? true
         },
         baseline: {
-            [
+            var ports = [
                 PublishedPort.loopback(
                     service: "kubernetes",
                     namespace: "default",
@@ -124,6 +127,21 @@ do {
                     preferredHostPort: GuestNetwork.httpsHostPort
                 ),
             ]
+            let publishL1 = (try? Settings.load(from: settingsURL))?.publishL1SSH ?? false
+            if publishL1 {
+                ports.append(
+                    PublishedPort.loopback(
+                        service: L1SSHBridge.service,
+                        port: L1SSHBridge.guestPort,
+                        nodePort: L1SSHBridge.guestPort,
+                        hostPort: L1SSHBridge.hostPort,
+                        guestPort: L1SSHBridge.guestPort,
+                        scheme: "ssh",
+                        preferredHostPort: L1SSHBridge.hostPort
+                    )
+                )
+            }
+            return ports
         }
     )
     let processExit = CoreProcessExit()
@@ -140,7 +158,11 @@ do {
         publisher: publisher,
         diskReset: HostClusterDiskReset(paths: paths),
         processExit: processExit,
-        images: GuestNodeImageRuntime(makeClient: makeClient)
+        images: GuestNodeImageRuntime(makeClient: makeClient),
+        portForwards: ProcessPortForwardRuntime(
+            virtctl: VirtctlPortForward.resolveExecutable(),
+            kubeconfig: paths.kubeconfigFile
+        )
     )
     let server = try EngineSocketServer(socketURL: paths.engineSocket, engine: engine)
     processExit.setHandler { code in

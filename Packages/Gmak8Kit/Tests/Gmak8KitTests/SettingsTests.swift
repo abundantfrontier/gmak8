@@ -20,6 +20,46 @@ struct SettingsTests {
         #expect(settings.k3sDisable.isEmpty)
         #expect(settings.hostMounts.isEmpty)
         #expect(settings.apiPort == 6443)
+        #expect(!settings.publishL1SSH)
+    }
+
+    @Test func eurekaDefaultsPublishL1SSHAndKubernetesDoesNot() {
+        let eureka = Settings(profile: .eureka, cpu: 8, memoryGiB: 16, dataDiskGiB: 256)
+        #expect(eureka.publishL1SSH)
+        let api = Settings(profile: .eurekaAPIOnly, cpu: 4, memoryGiB: 4, dataDiskGiB: 60)
+        #expect(!api.publishL1SSH)
+    }
+
+    @Test func loadDefaultsPublishL1SSHFromProfileWhenMissing() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-settings-ssh-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        func write(_ name: String, profile: String) throws -> Settings {
+            let url = directory.appending(path: name)
+            let json = """
+                {
+                  "schemaVersion": 1,
+                  "profile": "\(profile)",
+                  "clusterName": "gmak8",
+                  "cpu": 4,
+                  "memoryGiB": 6,
+                  "dataDiskGiB": 60,
+                  "setCurrentContextOnStart": false,
+                  "keepClusterRunningOnQuit": true,
+                  "telemetry": false
+                }
+                """
+            try json.write(to: url, atomically: true, encoding: .utf8)
+            return try Settings.load(from: url)
+        }
+
+        #expect(try !write("k.json", profile: "kubernetes").publishL1SSH)
+        #expect(try write("e.json", profile: "eureka").publishL1SSH)
+        #expect(try !write("a.json", profile: "eurekaAPIOnly").publishL1SSH)
     }
 
     @Test func roundTripPreservesFieldsAndMode0600() throws {
@@ -61,6 +101,7 @@ struct SettingsTests {
         let json = try String(contentsOf: url, encoding: .utf8)
         #expect(json.contains("\"schemaVersion\""))
         #expect(json.contains("\"eurekaAPIOnly\""))
+        #expect(json.contains("\"publishL1SSH\""))
     }
 
     @Test func loadRejectsUnsupportedSchemaVersion() throws {

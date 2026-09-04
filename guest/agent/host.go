@@ -30,6 +30,9 @@ type Host interface {
 	Services() (ServiceListReport, error)
 	SetTime(t time.Time) error
 	Shutdown() error
+	SSHD() (SSHDReport, error)
+	StartSSHD() error
+	StopSSHD() error
 }
 
 type okResponse struct {
@@ -64,6 +67,7 @@ type realHost struct {
 	kubevirtDir    string
 	kubectl        func(args ...string) ([]byte, error)
 	kubevirtPoll   time.Duration
+	runSystemctl   func(args ...string) (string, error)
 }
 
 func defaultHost() *realHost {

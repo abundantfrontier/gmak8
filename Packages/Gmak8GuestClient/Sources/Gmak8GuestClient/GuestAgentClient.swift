@@ -44,6 +44,14 @@ public struct GuestAgentClient: Sendable {
         _ = try await send(method: "POST", path: "/k3s/start", body: nil, as: GuestOK.self)
     }
 
+    public func sshd() async throws -> GuestSSHD {
+        try await send(method: "GET", path: "/sshd", body: nil, as: GuestSSHD.self)
+    }
+
+    public func startSSHD() async throws -> GuestSSHD {
+        try await send(method: "POST", path: "/sshd/start", body: nil, as: GuestSSHD.self)
+    }
+
     public func airgap() async throws -> GuestAirgap {
         try await send(method: "GET", path: "/airgap", body: nil, as: GuestAirgap.self)
     }

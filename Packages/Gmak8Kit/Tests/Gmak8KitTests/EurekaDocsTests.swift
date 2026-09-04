@@ -20,6 +20,9 @@ struct EurekaDocsTests {
         #expect(text.contains("aarch64"))
         #expect(text.contains("proxy_conf"))
         #expect(text.contains("127.0.0.1"))
+        #expect(text.contains("gmak8 port-forward"))
+        #expect(text.contains("22022"))
+        #expect(text.contains("--address 127.0.0.1"))
         #expect(text.contains("one image at a time"))
         #expect(text.lowercased().contains("builderdash"))
         #expect(!text.lowercased().contains("copy the eureka tree"))
@@ -45,6 +48,7 @@ struct EurekaDocsTests {
         let script = try String(
             contentsOf: repoRoot().appending(path: SoakPlan.scriptFile), encoding: .utf8)
         #expect(script.contains(SoakPlan.virtctlDeferredReason))
+        #expect(script.contains("gmak8 port-forward SSH handshake"))
     }
 
     @Test func kubevirtPackAirgapSelfTest() throws {

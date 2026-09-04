@@ -39,7 +39,35 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /services", s.handleServices)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
+	mux.HandleFunc("GET /sshd", s.handleSSHD)
+	mux.HandleFunc("POST /sshd/start", s.handleSSHDStart)
+	mux.HandleFunc("POST /sshd/stop", s.handleSSHDStop)
 	return mux
+}
+
+func (s *Server) handleSSHD(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.SSHD()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleSSHDStart(w http.ResponseWriter, _ *http.Request) {
+	if err := s.host.StartSSHD(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	s.handleSSHD(w, nil)
+}
+
+func (s *Server) handleSSHDStop(w http.ResponseWriter, _ *http.Request) {
+	if err := s.host.StopSSHD(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	s.handleSSHD(w, nil)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {

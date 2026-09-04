@@ -36,6 +36,9 @@ public enum SettingsCopy {
     public static let ingressValue = "8080 / 8443"
     public static let publishNodePorts = "Publish NodePorts to 127.0.0.1"
     public static let virtctlHelp = "Eureka SSH uses virtctl, not these NodePorts."
+    public static let publishL1SSH = "Publish guest sshd to 127.0.0.1:22022"
+    public static let publishL1SSHHelp =
+        "Eureka jump for Builderdash proxy_conf. Never host port 22. Needs a guest image with sshd."
     public static let registries = "registries.yaml"
     public static let registriesHelp = "Mirrors and insecure registries. Passwords stay in Keychain."
     public static let registryHost = "Registry"

@@ -96,9 +96,32 @@ Builderdash (omnibond/builderdash, Eureka `image/build.py -k`) does **not** call
 | source disk | **aarch64** qcow2 — not the AlmaLinux-9 x86_64 GCS URL in `build.in` |
 | instancetype | Cluster `u1.medium` (or a namespaced copy). Stock `u1.xlarge` Pending |
 | DV size | one image at a time (35–100 Gi on the 256 Gi data disk) |
-| SSH | `proxy_conf` → `127.0.0.1` and the published L1 SSH port (gmak8 PR 30), **or** `gmak8 port-forward vm/<name> 2222:22` then SSH localhost |
+| SSH | Path A: virtctl `--stdio` on PATH. Path B: `gmak8 port-forward vm/<name> 2222:22` then SSH `127.0.0.1:2222`. Path C: Eureka publishes L1 sshd to `127.0.0.1:22022` for unmodified `proxy_conf` (Mac → L1 → VMI pod IP:22) |
 
-Until PR 30, virtctl `--stdio` (path A) is the SSH that works if the VMI is Running. Unmodified paramiko to the VMI pod IP does not, because that IP is inside L1.
+## Builderdash SSH (localhost)
+
+VMI pod IPs are not Mac routes. Unmodified paramiko to the VMI pod IP does not work from the host.
+
+**A — virtctl stdio** (Eureka `image/env.py` ProxyCommand):
+
+```
+ProxyCommand virtctl port-forward --stdio=true vm/{name}/{namespace} %p
+```
+
+**B — engine TCP forward** (any client that can SSH localhost):
+
+```bash
+gmak8 port-forward vm/<name> 2222:22
+# or: gmak8 port-forward vmi/<name> 2222:22 -n <ns>
+ssh -p 2222 user@127.0.0.1
+gmak8 port-forward stop <id>
+```
+
+gmak8-core execs bundled virtctl with `--address 127.0.0.1` only. Never `0.0.0.0`. Never host port 22/80/443. Bare `22` becomes `2222:22`. Pod port-forward stays the Workloads detail (Terminal), not this CLI.
+
+**C — L1 as jump** (Eureka profile, Settings → Network): guest sshd is started and published to **`127.0.0.1:22022`** (guest :22). Point Builderdash `proxy_conf` at `127.0.0.1` and that port. Needs a guest image that still has `/sshd/start` (rebuild os.img if the live image predates it). Never host :22.
+
+Soak for this path is an SSH handshake to `127.0.0.1`, not a full `build.py -k`.
 
 ## AFW / Python
 

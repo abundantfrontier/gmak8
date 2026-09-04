@@ -6,4 +6,5 @@ public enum ClusterStartStep {
     public static let api = "api"
     public static let nodeReady = "nodeReady"
     public static let kubeVirt = "kubeVirt"
+    public static let sshd = "sshd"
 }

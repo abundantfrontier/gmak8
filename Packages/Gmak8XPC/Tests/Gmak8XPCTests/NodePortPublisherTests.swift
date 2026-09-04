@@ -98,6 +98,44 @@ struct NodePortPublisherTests {
         #expect(!exposer.exposeCalls.contains { NodePortPublisher.forbiddenHostPorts.contains($0.0) })
     }
 
+    @Test func eurekaL1SSHBaselineBindsHighPortNot22() async throws {
+        let source = FakeServiceSource(services: [])
+        let exposer = FakeExposer()
+        let publisher = NodePortPublisher(
+            source: source,
+            exposer: exposer,
+            baseline: {
+                [
+                    PublishedPort.loopback(
+                        service: L1SSHBridge.service,
+                        port: L1SSHBridge.guestPort,
+                        nodePort: L1SSHBridge.guestPort,
+                        hostPort: L1SSHBridge.hostPort,
+                        guestPort: L1SSHBridge.guestPort,
+                        scheme: "ssh",
+                        preferredHostPort: L1SSHBridge.hostPort
+                    )
+                ]
+            },
+            pollInterval: .milliseconds(5)
+        )
+        publisher.start(onChange: {}, log: { _ in })
+        defer { publisher.cancel() }
+        try await waitUntil {
+            exposer.bound[L1SSHBridge.hostPort] == L1SSHBridge.guestPort
+        }
+        #expect(exposer.bound[22] == nil)
+        #expect(!exposer.exposeCalls.contains { $0.0 == 22 })
+        let row = publisher.snapshot()[0]
+        #expect(row.service == "sshd")
+        #expect(row.hostURL == "ssh://127.0.0.1:22022")
+        #expect(row.collision == .published)
+        #expect(!row.hostURL.contains("0.0.0.0"))
+        publisher.cancel()
+        #expect(exposer.unexposeCalls.contains(L1SSHBridge.hostPort))
+        #expect(exposer.bound[L1SSHBridge.hostPort] == nil)
+    }
+
     @Test func reservedBaselineHostPortIsCollision() async throws {
         let source = FakeServiceSource(services: [
             nodePort("clash", nodePort: 8080)

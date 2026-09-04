@@ -32,10 +32,13 @@ public enum EngineRequest: Equatable, Sendable {
     case loadImage(path: String)
     case imageList
     case imagePrune
+    case portForwardStart(kind: PortForwardKind, namespace: String, name: String, local: Int, remote: Int)
+    case portForwardStop(id: String)
 }
 
 public enum EngineReply: Equatable, Sendable {
     case ok
+    case started(id: String)
     case error(EngineErrorCode, message: String? = nil)
 }
 
@@ -268,6 +271,12 @@ extension EngineRequest: Codable {
         case op
         case force
         case path
+        case kind
+        case ns
+        case name
+        case local
+        case remote
+        case id
     }
 
     public init(from decoder: Decoder) throws {
@@ -294,6 +303,17 @@ extension EngineRequest: Codable {
             self = .imageList
         case "imagePrune":
             self = .imagePrune
+        case "portForwardStart":
+            let kind = try container.decodeIfPresent(PortForwardKind.self, forKey: .kind) ?? .pod
+            let namespace = try container.decodeIfPresent(String.self, forKey: .ns) ?? "default"
+            let name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+            let local = try container.decodeIfPresent(Int.self, forKey: .local) ?? 0
+            let remote = try container.decodeIfPresent(Int.self, forKey: .remote) ?? 0
+            self = .portForwardStart(
+                kind: kind, namespace: namespace, name: name, local: local, remote: remote)
+        case "portForwardStop":
+            let id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+            self = .portForwardStop(id: id)
         default:
             throw EngineErrorCode.unknownOp
         }
@@ -322,6 +342,16 @@ extension EngineRequest: Codable {
             try container.encode("imageList", forKey: .op)
         case .imagePrune:
             try container.encode("imagePrune", forKey: .op)
+        case .portForwardStart(let kind, let namespace, let name, let local, let remote):
+            try container.encode("portForwardStart", forKey: .op)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(namespace, forKey: .ns)
+            try container.encode(name, forKey: .name)
+            try container.encode(local, forKey: .local)
+            try container.encode(remote, forKey: .remote)
+        case .portForwardStop(let id):
+            try container.encode("portForwardStop", forKey: .op)
+            try container.encode(id, forKey: .id)
         }
     }
 }
@@ -331,6 +361,7 @@ extension EngineReply: Codable {
         case ok
         case error
         case message
+        case id
     }
 
     public init(from decoder: Decoder) throws {
@@ -341,6 +372,10 @@ extension EngineReply: Codable {
             return
         }
         if try container.decodeIfPresent(Bool.self, forKey: .ok) == true {
+            if let id = try container.decodeIfPresent(String.self, forKey: .id), !id.isEmpty {
+                self = .started(id: id)
+                return
+            }
             self = .ok
             return
         }
@@ -352,6 +387,9 @@ extension EngineReply: Codable {
         switch self {
         case .ok:
             try container.encode(true, forKey: .ok)
+        case .started(let id):
+            try container.encode(true, forKey: .ok)
+            try container.encode(id, forKey: .id)
         case .error(let code, let message):
             try container.encode(code, forKey: .error)
             try container.encodeIfPresent(message, forKey: .message)

@@ -78,6 +78,7 @@ public final class ClusterEngine: @unchecked Sendable {
     private let diskReset: any ClusterDiskResetting
     private let processExit: any ProcessExiting
     private let images: any NodeImageRuntime
+    private let portForwards: any PortForwardRuntime
     private let fileManager: FileManager
 
     private var state: ClusterState = .stopped
@@ -100,6 +101,7 @@ public final class ClusterEngine: @unchecked Sendable {
         diskReset: any ClusterDiskResetting = NoOpClusterDiskReset(),
         processExit: any ProcessExiting = NoProcessExit(),
         images: any NodeImageRuntime = NoOpNodeImageRuntime(),
+        portForwards: any PortForwardRuntime = NoOpPortForwardRuntime(),
         fileManager: FileManager = .default
     ) {
         self.scheduler = scheduler
@@ -110,6 +112,7 @@ public final class ClusterEngine: @unchecked Sendable {
         self.diskReset = diskReset
         self.processExit = processExit
         self.images = images
+        self.portForwards = portForwards
         self.fileManager = fileManager
         self.runtime.setUnexpectedStopHandler { [weak self] error in
             self?.handleUnexpectedStop(error)
@@ -260,6 +263,67 @@ public final class ClusterEngine: @unchecked Sendable {
             return requestLoadImageLocked(path: path, work: &work, events: &events)
         case .imageList, .imagePrune:
             return .ok
+        case .portForwardStart(let kind, let namespace, let name, let local, let remote):
+            return startPortForwardLocked(
+                kind: kind, namespace: namespace, name: name, local: local, remote: remote, events: &events)
+        case .portForwardStop(let id):
+            return stopPortForwardLocked(id: id, events: &events)
+        }
+    }
+
+    private func startPortForwardLocked(
+        kind: PortForwardKind,
+        namespace: String,
+        name: String,
+        local: Int,
+        remote: Int,
+        events: inout [EngineEvent]
+    ) -> EngineReply {
+        switch state {
+        case .running, .degraded:
+            break
+        default:
+            return .error(.conflict, message: PortForwardError.notRunning.errorDescription)
+        }
+        do {
+            let session = try portForwards.start(
+                kind: kind, namespace: namespace, name: name, local: local, remote: remote)
+            events.append(
+                .log(
+                    source: .engine,
+                    line:
+                        "port-forward \(session.id) \(session.kind.rawValue)/\(session.name) \(session.address):\(session.local)->\(session.remote)"
+                )
+            )
+            return .started(id: session.id)
+        } catch let error as PortForwardError {
+            return portForwardReply(error)
+        } catch {
+            return .error(.invalidRequest, message: error.localizedDescription)
+        }
+    }
+
+    private func stopPortForwardLocked(id: String, events: inout [EngineEvent]) -> EngineReply {
+        do {
+            try portForwards.stop(id: id)
+            events.append(.log(source: .engine, line: "port-forward stop \(id)"))
+            return .ok
+        } catch let error as PortForwardError {
+            return portForwardReply(error)
+        } catch {
+            return .error(.invalidRequest, message: error.localizedDescription)
+        }
+    }
+
+    private func portForwardReply(_ error: PortForwardError) -> EngineReply {
+        let message = error.errorDescription
+        switch error {
+        case .notRunning:
+            return .error(.conflict, message: message)
+        case .virtctlMissing:
+            return .error(.unavailable, message: message)
+        case .forbiddenHostPort, .invalidPort, .invalidTarget, .unsupportedKind:
+            return .error(.invalidRequest, message: message)
         }
     }
 
@@ -467,6 +531,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 runtime.cancelInFlightStart()
                 bringUp.cancel()
             }
+            portForwards.stopAll()
             work = { [weak self] in
                 self?.beginStop(generation: gen)
             }

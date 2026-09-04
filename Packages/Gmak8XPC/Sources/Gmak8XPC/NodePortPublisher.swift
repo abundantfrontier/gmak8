@@ -76,6 +76,7 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
     private var log: (@Sendable (String) -> Void)?
     private var snapshotStorage: [PublishedPort] = []
     private var owned: [String: OwnedBinding] = [:]
+    private var baselineOwned: [String: OwnedBinding] = [:]
     private var reexposeRequested = false
 
     private struct OwnedBinding {
@@ -124,8 +125,9 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
             task = nil
             onChange = nil
             log = nil
-            let current = Array(owned.values)
+            let current = Array(owned.values) + Array(baselineOwned.values)
             owned = [:]
+            baselineOwned = [:]
             snapshotStorage = []
             return current
         }
@@ -204,6 +206,8 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
 
         let defaults = baseline()
         let previousOwned = withLock { owned }
+        let previousBaseline = withLock { baselineOwned }
+        let (defaultRows, nextBaseline) = bindBaseline(defaults, previous: previousBaseline)
         let desired = enabled ? publishablePorts(from: services) : []
         var reserved = Set(defaults.map(\.hostPort))
         reserved.formUnion(Self.forbiddenHostPorts)
@@ -224,6 +228,7 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
         for item in desired {
             if withLock({ cancelled }) {
                 rollback(nextOwned: nextOwned, previousOwned: previousOwned)
+                rollbackBaseline(next: nextBaseline, previous: previousBaseline)
                 return
             }
             if Self.forbiddenHostPorts.contains(item.nodePort) {
@@ -262,22 +267,25 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
 
         if withLock({ cancelled }) {
             rollback(nextOwned: nextOwned, previousOwned: previousOwned)
+            rollbackBaseline(next: nextBaseline, previous: previousBaseline)
             return
         }
 
-        let snapshot = defaults + rows
+        let snapshot = defaultRows + rows
         let callbacks: (changed: Bool, notify: (@Sendable () -> Void)?, logger: (@Sendable (String) -> Void)?) =
             withLock {
                 if cancelled {
                     return (false, nil, nil)
                 }
                 owned = nextOwned
+                baselineOwned = nextBaseline
                 let changed = snapshotStorage != snapshot
                 snapshotStorage = snapshot
                 return (changed, onChange, log)
             }
         if callbacks.notify == nil, withLock({ cancelled }) {
             rollback(nextOwned: nextOwned, previousOwned: previousOwned)
+            rollbackBaseline(next: nextBaseline, previous: previousBaseline)
             return
         }
         if hitCap {
@@ -289,12 +297,45 @@ public final class NodePortPublisher: PortPublisher, @unchecked Sendable {
     }
 
     private func reapplyOwned() {
-        let bindings = withLock { Array(owned.values) }
+        let bindings = withLock { Array(owned.values) + Array(baselineOwned.values) }
         for binding in bindings {
             if withLock({ cancelled }) {
                 return
             }
             _ = applyExpose(hostPort: binding.hostPort, guestPort: binding.guestPort)
+        }
+    }
+
+    private func bindBaseline(
+        _ defaults: [PublishedPort],
+        previous: [String: OwnedBinding]
+    ) -> ([PublishedPort], [String: OwnedBinding]) {
+        var nextBaseline: [String: OwnedBinding] = [:]
+        var rows: [PublishedPort] = []
+        for port in defaults {
+            var row = port
+            if port.service == L1SSHBridge.service {
+                let key = "baseline:\(port.service):\(port.hostPort)"
+                if Self.forbiddenHostPorts.contains(port.hostPort) {
+                    row.collision = .forbidden
+                } else if applyExpose(hostPort: port.hostPort, guestPort: port.guestPort) {
+                    nextBaseline[key] = OwnedBinding(hostPort: port.hostPort, guestPort: port.guestPort)
+                    row.collision = .published
+                } else {
+                    row.collision = .collision
+                }
+            }
+            rows.append(row)
+        }
+        for (key, binding) in previous where nextBaseline[key] == nil {
+            try? exposer.unexpose(hostPort: binding.hostPort)
+        }
+        return (rows, nextBaseline)
+    }
+
+    private func rollbackBaseline(next: [String: OwnedBinding], previous: [String: OwnedBinding]) {
+        for (key, binding) in next where previous[key] == nil {
+            try? exposer.unexpose(hostPort: binding.hostPort)
         }
     }
 

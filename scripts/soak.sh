@@ -571,6 +571,7 @@ run_deferred_1_0() {
   skip "aarch64 VMI Ready: ${VIRTCTL_DEFERRED}"
   skip "SA virtiofs: ${VIRTCTL_DEFERRED}"
   skip "virtctl stdio port-forward: ${VIRTCTL_DEFERRED}"
+  skip "gmak8 port-forward SSH handshake to 127.0.0.1: ${VIRTCTL_DEFERRED}"
 }
 
 run_live() {

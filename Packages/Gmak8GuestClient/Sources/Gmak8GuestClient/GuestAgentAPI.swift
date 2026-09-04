@@ -49,6 +49,14 @@ public struct GuestDisks: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestSSHD: Codable, Equatable, Sendable {
+    public var running: Bool
+
+    public init(running: Bool = false) {
+        self.running = running
+    }
+}
+
 public struct GuestKubeVirt: Codable, Equatable, Sendable {
     public var installed: Bool
     public var phase: String
