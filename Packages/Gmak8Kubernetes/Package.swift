@@ -16,6 +16,7 @@ let package = Package(
     dependencies: [
         .package(path: "../Gmak8Kit"),
         .package(url: "https://github.com/swiftkube/client.git", from: "0.25.0"),
+        .package(url: "https://github.com/apple/swift-nio", from: "2.86.2"),
     ],
     targets: [
         .target(
@@ -23,6 +24,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Gmak8Kit", package: "Gmak8Kit"),
                 .product(name: "SwiftkubeClient", package: "client"),
+                .product(name: "NIO", package: "swift-nio"),
             ]
         ),
         .testTarget(

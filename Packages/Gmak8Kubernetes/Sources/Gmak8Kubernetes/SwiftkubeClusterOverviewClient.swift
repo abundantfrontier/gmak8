@@ -29,7 +29,8 @@ public struct SwiftkubeClusterOverviewClient: ClusterOverviewClient {
         } catch {
             throw ClusterOverviewError.requestFailed(error.localizedDescription)
         }
-        guard let client = KubernetesClient(kubeConfig: kubeConfig, contextName: contextName) else {
+        guard let client = SwiftkubeClientFactory.make(kubeConfig: kubeConfig, contextName: contextName)
+        else {
             throw ClusterOverviewError.clientUnavailable
         }
         defer { try? client.syncShutdown() }
