@@ -64,6 +64,9 @@ public final class ManualEngineScheduler: EngineScheduler, @unchecked Sendable {
 }
 
 public final class ClusterEngine: @unchecked Sendable {
+    public static let guestStoppedDuringStartMessage =
+        "Virtual machine stopped before the guest was ready."
+
     private let lock = NSLock()
     private let scheduler: any EngineScheduler
     private let nestedVirt: Bool
@@ -549,6 +552,11 @@ public final class ClusterEngine: @unchecked Sendable {
                     lastError = error.localizedDescription
                     apiEndpoint = nil
                     imageJob = nil
+                } else if state == .starting {
+                    state = .failed
+                    lastError = Self.guestStoppedDuringStartMessage
+                    apiEndpoint = nil
+                    imageJob = nil
                 } else {
                     state = .stopped
                     step = nil
@@ -560,7 +568,7 @@ public final class ClusterEngine: @unchecked Sendable {
                 events.append(
                     .log(
                         source: .engine,
-                        line: error?.localizedDescription ?? "guest stopped"
+                        line: lastError ?? "guest stopped"
                     )
                 )
             case .stopped, .stopping, .failed:

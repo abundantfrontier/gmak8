@@ -63,10 +63,8 @@ public struct SignedAssetStore: Sendable {
             return nil
         }
         let sig = signatureURL
-        guard fileManager.fileExists(atPath: sig.path(percentEncoded: false)) else {
-            throw SignedAssetError.missingSignature(label: label)
-        }
-        try verify(file: file, signatureFile: sig)
+        let sigExists = fileManager.fileExists(atPath: sig.path(percentEncoded: false))
+        try verify(file: file, signatureFile: sigExists ? sig : nil)
         return file
     }
 
@@ -76,12 +74,15 @@ public struct SignedAssetStore: Sendable {
         guard fileManager.fileExists(atPath: source.path(percentEncoded: false)) else {
             throw SignedAssetError.missingArchive(label: label, path: source.path(percentEncoded: false))
         }
-        guard fileManager.fileExists(atPath: sig.path(percentEncoded: false)) else {
+        let sigExists = fileManager.fileExists(atPath: sig.path(percentEncoded: false))
+        if pin.requiresCosign, !sigExists {
             throw SignedAssetError.missingSignature(label: label)
         }
-        try verify(file: source, signatureFile: sig)
+        try verify(file: source, signatureFile: sigExists ? sig : nil)
         try AtomicFileReplace.copy(from: source, to: archiveURL, posixPermissions: 0o600, fileManager: fileManager)
-        try AtomicFileReplace.copy(from: sig, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        if sigExists {
+            try AtomicFileReplace.copy(from: sig, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        }
         return archiveURL
     }
 
@@ -97,26 +98,47 @@ public struct SignedAssetStore: Sendable {
         }
         defer { try? fileManager.removeItem(at: tmp) }
         let sigRemote = remoteSignature ?? pin.url.appendingPathExtension("sig")
-        let (sigTmp, sigResponse) = try await session.download(from: sigRemote)
-        defer { try? fileManager.removeItem(at: sigTmp) }
-        let sigStatus = (sigResponse as? HTTPURLResponse)?.statusCode ?? 200
-        if sigStatus < 200 || sigStatus >= 300 {
-            throw SignedAssetError.missingSignature(label: label)
+        let sigTmp = try await downloadSignatureIfPresent(from: sigRemote, session: session, fileManager: fileManager)
+        defer {
+            if let sigTmp {
+                try? fileManager.removeItem(at: sigTmp)
+            }
         }
         try verify(file: tmp, signatureFile: sigTmp)
         try AtomicFileReplace.copy(from: tmp, to: archiveURL, posixPermissions: 0o600, fileManager: fileManager)
-        try AtomicFileReplace.copy(from: sigTmp, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        if let sigTmp {
+            try AtomicFileReplace.copy(
+                from: sigTmp, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        }
         return archiveURL
     }
 
-    private func verify(file: URL, signatureFile: URL) throws {
+    private func downloadSignatureIfPresent(
+        from url: URL,
+        session: URLSession,
+        fileManager: FileManager
+    ) async throws -> URL? {
+        let (sigTmp, sigResponse) = try await session.download(from: url)
+        let sigStatus = (sigResponse as? HTTPURLResponse)?.statusCode ?? 200
+        if sigStatus >= 200, sigStatus < 300 {
+            return sigTmp
+        }
+        try? fileManager.removeItem(at: sigTmp)
+        if pin.requiresCosign {
+            throw SignedAssetError.missingSignature(label: label)
+        }
+        return nil
+    }
+
+    private func verify(file: URL, signatureFile: URL?) throws {
         do {
             try AirgapVerifier.verify(
                 file: file,
                 signatureFile: signatureFile,
                 sha256: pin.sha256,
                 maxBytes: pin.maxBytes,
-                publicKeyPEM: publicKeyPEM
+                publicKeyPEM: publicKeyPEM,
+                requireCosign: pin.requiresCosign
             )
         } catch let error as AirgapError {
             throw mapAirgapError(error)

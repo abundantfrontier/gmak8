@@ -1,26 +1,32 @@
 import Foundation
 
 public enum OnboardingCopy {
-    public static let welcomeHeadline = "gmak8 runs Kubernetes on this Mac. Not Docker."
+    public static let welcomeHeadline = "gmak8 runs Kubernetes on this Mac."
     public static let welcomeBody = "One local cluster, owned end-to-end on this Mac."
 
     public static let whatYouGetTitle = "What you get"
     public static let localCluster = "A local Kubernetes cluster on this Mac."
     public static let kubectlContext = "A kubectl context named gmak8."
     public static let menuBarExtra = "A menu bar extra for cluster status."
-    public static let noDockerFootnote = "gmak8 is not Docker. There is no Docker Engine, Compose, or Docker socket."
     public static let eurekaFootnote = "Eureka and KubeVirt are an optional profile."
 
     public static let assetsTitle = "Cluster assets"
     public static let assetsBody =
-        "Each file is verified with SHA-256 and keyful Cosign (public key pinned in the app)."
+        "k3s needs container images to run Kubernetes (DNS, ingress, storage, metrics). gmak8 downloads those from GitHub. The guest disk is the Linux VM."
     public static let chooseFile = "Choose a file…"
     public static let download = "Download"
+    public static let downloadThisPack = "Download Kubernetes images"
+    public static let useLocalFile = "Use a file I already have…"
+    public static let k3sAirgapHint =
+        "These are container images k3s uses to run the cluster: DNS, ingress, storage, and metrics. gmak8 gets them from GitHub and checks the SHA-256."
     public static let downloadUnavailable =
-        "Remote download waits for a gmak8-signed GitHub Release (archive + .sig). Choose a file… for a local signed pair."
+        "Download is available when the pin is a GitHub release with a real SHA-256."
     public static let guestDigestUnpublished =
-        "The guest disk SHA-256 is not published yet. Continue without it until a signed guest is available."
-    public static let offlineHint = "Choose a file… next to its .sig."
+        "Guest download waits on a published gmak8 image. Use a local Linux .img or .raw for the VM disk."
+    public static let guestLocalFileHint =
+        "The VM disk is a Linux .img or .raw. Kubernetes images are a separate download."
+    public static let offlineHint =
+        "Choose a file… for a local archive. A sibling .sig is checked with Cosign when present."
     public static let sizeBudget500MiB = "≤ 500 MiB"
 
     public static let permissionsTitle = "Permissions"
@@ -30,6 +36,7 @@ public enum OnboardingCopy {
     public static let nestedVirtUnavailable =
         "Nested virtualization is not available on this Mac (needs Apple Silicon M3 or later and macOS 15+). Kubernetes and Eureka API-only still work."
     public static let moveToApplications = "Move gmak8 to /Applications and re-open."
+    public static let installToApplications = "Install to /Applications"
     public static let noFullDiskAccess = "gmak8 does not need Full Disk Access or Accessibility."
     public static let notificationsOptional = "Notifications are optional."
 
@@ -52,9 +59,45 @@ public enum OnboardingCopy {
     public static let kubernetesVersion = "Kubernetes version"
     public static var kubernetesVersionValue: String { K3sPin.displayVersion }
     public static let currentContextCheckbox = "Set gmak8 as kubectl current-context"
-    public static let createAndStart = "Create and start"
+    public static let createAndStart = "Start cluster"
     public static let timeMachine = "VM disks are excluded from Time Machine. Reset is destructive."
     public static let continueTitle = "Continue"
+
+    public static let setupTitle = "Setup"
+    public static let getStartedSection = "Get started"
+    public static let getStartedBody =
+        "Kubernetes runs inside a Linux VM on this Mac, not natively on macOS. Container images (DNS, ingress, storage) are one download. The VM still needs a Linux disk."
+    public static let stepFolder = "1. Files go in ~/gmak8."
+    public static let stepK3s = "Download the container images k3s uses to run Kubernetes."
+    public static let stepGuestWaiting =
+        "Start needs a Linux disk for the VM. This Mac does not build that disk."
+    public static let stepGuestReady = "Linux disk for the VM is ready."
+    public static let guestHowToBuild =
+        "On a Linux arm64 machine, from this repo:\n\ncd guest/mkosi\nmkosi\n\nCopy guest/mkosi/mkosi.output/os.img into ~/gmak8/guest/ then come back here."
+    public static let stepStart = "Start the cluster."
+    public static let linuxBooting = "Linux is booting. This can take a minute."
+    public static let k3sImagesReady = "Kubernetes images are ready."
+    public static let k3sImagesNeeded = "k3s needs container images for DNS, ingress, storage, and metrics."
+    public static let guestRuntimeWaiting = "Waiting on a published guest image."
+    public static let guestAdvancedFile = "I already have a Linux disk…"
+    public static let folderSection = "Folder"
+    public static let guestSection = "Linux disk"
+    public static let k3sSection = "Images"
+    public static let macSection = "Mac"
+    public static let clusterSection = "Cluster"
+    public static let folderBody =
+        "Downloads and disks you add show up here. The running VM stays in Application Support."
+    public static let chooseFolder = "Choose folder…"
+    public static let revealInFinder = "Reveal in Finder"
+    public static let openTerminal = "Open Terminal"
+    public static let chooseMkosiRepo = "Choose the gmak8 repo (the folder that contains guest/mkosi)."
+    public static let mkosiRepoMissing = "That folder has no guest/mkosi. Choose the gmak8 repo."
+    public static let guestListEmpty = "No Linux VM disk in this folder yet."
+    public static let k3sListEmpty = "Download Kubernetes images to continue."
+    public static let useThis = "Use this"
+    public static let inUse = "In use"
+    public static let guestDownloadUnpublished =
+        "Start needs a Linux disk built with mkosi on Linux. Copy os.img into ~/gmak8/guest/."
 
     public static var userFacingStrings: [String] {
         [
@@ -64,14 +107,17 @@ public enum OnboardingCopy {
             localCluster,
             kubectlContext,
             menuBarExtra,
-            noDockerFootnote,
             eurekaFootnote,
             assetsTitle,
             assetsBody,
             chooseFile,
             download,
+            downloadThisPack,
+            useLocalFile,
+            k3sAirgapHint,
             downloadUnavailable,
             guestDigestUnpublished,
+            guestLocalFileHint,
             offlineHint,
             sizeBudget500MiB,
             permissionsTitle,
@@ -79,6 +125,7 @@ public enum OnboardingCopy {
             nestedVirtAvailable,
             nestedVirtUnavailable,
             moveToApplications,
+            installToApplications,
             noFullDiskAccess,
             notificationsOptional,
             profileTitle,
@@ -98,6 +145,36 @@ public enum OnboardingCopy {
             createAndStart,
             timeMachine,
             continueTitle,
+            setupTitle,
+            getStartedSection,
+            getStartedBody,
+            stepFolder,
+            stepK3s,
+            stepGuestWaiting,
+            guestHowToBuild,
+            stepGuestReady,
+            stepStart,
+            linuxBooting,
+            k3sImagesReady,
+            k3sImagesNeeded,
+            guestRuntimeWaiting,
+            guestAdvancedFile,
+            folderSection,
+            guestSection,
+            k3sSection,
+            macSection,
+            clusterSection,
+            folderBody,
+            chooseFolder,
+            revealInFinder,
+            openTerminal,
+            chooseMkosiRepo,
+            mkosiRepoMissing,
+            guestListEmpty,
+            k3sListEmpty,
+            useThis,
+            inUse,
+            guestDownloadUnpublished,
         ]
     }
 
@@ -105,6 +182,8 @@ public enum OnboardingCopy {
         switch error {
         case let signed as SignedAssetError:
             return signed.errorDescription ?? signed.localizedDescription
+        case let guest as GuestOSDiskInstall.Failure:
+            return guest.errorDescription ?? guest.localizedDescription
         case AirgapError.missingArchive(let path):
             return "k3s airgap archive missing at \(path). Choose a file…"
         case AirgapError.missingSignature:

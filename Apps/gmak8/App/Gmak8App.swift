@@ -13,7 +13,7 @@ struct Gmak8App: App {
                 .environmentObject(appDelegate.session)
                 .environmentObject(appDelegate.settingsStore)
         }
-        .defaultSize(width: 640, height: 520)
+        .defaultSize(width: 880, height: 560)
 
         Window(ProductWindowIdentity.recoveryTitle, id: Gmak8SceneID.recovery) {
             RecoveryView()

@@ -13,6 +13,7 @@ if [[ ! -x "${SRC}" ]]; then
 fi
 
 cp -f "${SRC}" "${DEST}"
+chmod u+w "${DEST}"
 IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-}"
 if [[ -n "${IDENTITY}" && "${IDENTITY}" != "-" ]]; then
     codesign --force --sign "${IDENTITY}" --options runtime --timestamp=none "${DEST}"

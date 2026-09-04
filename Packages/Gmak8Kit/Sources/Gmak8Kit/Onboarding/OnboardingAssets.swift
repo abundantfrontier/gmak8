@@ -10,9 +10,21 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
         case .guest:
             return "Guest disk"
         case .k3sAirgap:
-            return "k3s airgap"
+            return "Kubernetes images"
         case .kubevirtAirgap:
-            return "KubeVirt airgap"
+            return "KubeVirt images"
+        }
+    }
+
+    /// Named default the user picks; Download fetches this, not an arbitrary file.
+    public var defaultSource: String {
+        switch self {
+        case .guest:
+            return "Linux VM image from mkosi (add when you have a build)"
+        case .k3sAirgap:
+            return "From GitHub k3s-io · Kubernetes 1.33.3 · Apple Silicon"
+        case .kubevirtAirgap:
+            return "KubeVirt images · add with the Eureka profile"
         }
     }
 
@@ -76,7 +88,7 @@ public enum OnboardingAssets {
     public static func chooseFileEnabled(_ kind: OnboardingAssetKind) -> Bool {
         switch kind {
         case .guest:
-            return GuestAssetPin.bundled.signed.chooseFileEnabled
+            return true
         case .k3sAirgap:
             return AirgapPin.bundled.signed.chooseFileEnabled
         case .kubevirtAirgap:

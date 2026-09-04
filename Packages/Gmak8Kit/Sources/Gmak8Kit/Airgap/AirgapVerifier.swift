@@ -76,20 +76,51 @@ public enum AirgapVerifier {
 
     public static func verify(
         file: URL,
-        signatureFile: URL,
+        signatureFile: URL?,
         sha256: String,
         maxBytes: Int64,
-        publicKeyPEM: String
+        publicKeyPEM: String,
+        requireCosign: Bool
     ) throws {
         _ = try verifySize(file: file, maxBytes: maxBytes)
         try verifySHA256(file: file, expected: sha256)
-        let signature = try Data(contentsOf: signatureFile)
-        try verifyCosign(file: file, signature: signature, pem: publicKeyPEM)
+        let sigURL = signatureFile
+        let sigExists =
+            sigURL.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
+        if requireCosign {
+            guard let sigURL, sigExists else {
+                throw AirgapError.missingSignature
+            }
+            let signature = try Data(contentsOf: sigURL)
+            try verifyCosign(file: file, signature: signature, pem: publicKeyPEM)
+            return
+        }
+        if let sigURL, sigExists {
+            let signature = try Data(contentsOf: sigURL)
+            try verifyCosign(file: file, signature: signature, pem: publicKeyPEM)
+        }
     }
 
     public static func verify(
         file: URL,
         signatureFile: URL,
+        sha256: String,
+        maxBytes: Int64,
+        publicKeyPEM: String
+    ) throws {
+        try verify(
+            file: file,
+            signatureFile: signatureFile,
+            sha256: sha256,
+            maxBytes: maxBytes,
+            publicKeyPEM: publicKeyPEM,
+            requireCosign: true
+        )
+    }
+
+    public static func verify(
+        file: URL,
+        signatureFile: URL?,
         pin: AirgapPin,
         publicKeyPEM: String
     ) throws {
@@ -98,7 +129,8 @@ public enum AirgapVerifier {
             signatureFile: signatureFile,
             sha256: pin.sha256,
             maxBytes: pin.maxBytes,
-            publicKeyPEM: publicKeyPEM
+            publicKeyPEM: publicKeyPEM,
+            requireCosign: pin.signed.requiresCosign
         )
     }
 

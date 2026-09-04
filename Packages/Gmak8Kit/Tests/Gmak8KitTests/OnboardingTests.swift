@@ -5,11 +5,10 @@ import Testing
 
 struct OnboardingTests {
     @Test func pageCopyMatchesDesign() {
-        #expect(OnboardingCopy.welcomeHeadline == "gmak8 runs Kubernetes on this Mac. Not Docker.")
+        #expect(OnboardingCopy.welcomeHeadline == "gmak8 runs Kubernetes on this Mac.")
         #expect(OnboardingCopy.localCluster.contains("local Kubernetes cluster"))
         #expect(OnboardingCopy.kubectlContext.contains("gmak8"))
         #expect(OnboardingCopy.menuBarExtra.lowercased().contains("menu bar"))
-        #expect(OnboardingCopy.noDockerFootnote.contains("not Docker"))
         #expect(OnboardingCopy.eurekaFootnote.lowercased().contains("optional"))
         #expect(OnboardingCopy.chooseFile == "Choose a file…")
         #expect(OnboardingCopy.eurekaExplanation.contains("stock env.py"))
@@ -17,10 +16,19 @@ struct OnboardingTests {
         #expect(OnboardingCopy.eurekaExplanation.contains("u1.nano"))
         #expect(OnboardingCopy.eurekaExplanation.contains("LoadBalancer"))
         #expect(OnboardingCopy.currentContextCheckbox == "Set gmak8 as kubectl current-context")
-        #expect(OnboardingCopy.createAndStart == "Create and start")
+        #expect(OnboardingCopy.createAndStart == "Start cluster")
         #expect(OnboardingCopy.gmak8HelperMissing.contains("Contents/Helpers"))
-        #expect(OnboardingCopy.downloadUnavailable.contains("gmak8-signed"))
+        #expect(OnboardingCopy.k3sAirgapHint.contains("SHA-256"))
+        #expect(OnboardingCopy.k3sAirgapHint.lowercased().contains("container images"))
         #expect(!OnboardingCopy.guestDigestUnpublished.contains(OnboardingCopy.chooseFile))
+        #expect(OnboardingCopy.guestLocalFileHint.lowercased().contains("img"))
+        #expect(OnboardingCopy.getStartedSection == "Get started")
+        #expect(OnboardingCopy.stepK3s.lowercased().contains("container images"))
+        #expect(OnboardingCopy.stepGuestWaiting.lowercased().contains("linux disk"))
+        #expect(OnboardingCopy.guestHowToBuild.contains("mkosi"))
+        #expect(OnboardingCopy.guestHowToBuild.contains("os.img"))
+        #expect(OnboardingCopy.guestSection == "Linux disk")
+        #expect(OnboardingCopy.k3sSection == "Images")
         #expect(OnboardingCopy.kubernetesVersionValue == "1.33.3")
         #expect(OnboardingCopy.kubernetesVersionValue == K3sPin.displayVersion)
         #expect(OnboardingCopy.pathExportSnippet == #"export PATH="$HOME/.local/bin:$PATH""#)
@@ -49,6 +57,9 @@ struct OnboardingTests {
             SignedAssetError.missingArchive(label: "guest disk", path: "/tmp/guest.zst")
         )
         #expect(!OnboardingCopy.mentionsDockerHub(signed))
+        let pack = OnboardingCopy.userFacingAssetError(GuestOSDiskInstall.Failure.k3sImagePack)
+        #expect(pack.lowercased().contains("kubernetes"))
+        #expect(pack.lowercased().contains("img") || pack.lowercased().contains("raw"))
     }
 
     @Test func currentContextDefaultsOffAndClusterNameIsGmak8() throws {
@@ -71,12 +82,12 @@ struct OnboardingTests {
         #expect(Settings(profile: .kubernetes, cpu: 4, memoryGiB: 6, dataDiskGiB: 60).setCurrentContextOnStart == false)
     }
 
-    @Test func firstRunShowsWhenSettingsFileIsMissing() {
-        #expect(FirstRunGate.shouldShowOnboarding(settingsFileExists: false))
+    @Test func firstRunUsesSetupRailNotABlockingWizard() {
+        #expect(!FirstRunGate.shouldShowOnboarding(settingsFileExists: false))
         #expect(!FirstRunGate.shouldShowOnboarding(settingsFileExists: true))
-        #expect(!FirstRunGate.shouldPersistSettings(needsOnboarding: true))
+        #expect(FirstRunGate.shouldPersistSettings(needsOnboarding: true))
         #expect(FirstRunGate.shouldPersistSettings(needsOnboarding: false))
-        #expect(!FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
+        #expect(FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
         #expect(FirstRunGate.clusterActionsEnabled(needsOnboarding: false))
     }
 
@@ -87,15 +98,20 @@ struct OnboardingTests {
         #expect(!OnboardingAssets.visible(for: .eureka).contains(.kubevirtAirgap))
         #expect(OnboardingAssetKind.guest.fileName.hasPrefix("gmak8-guest-"))
         #expect(OnboardingAssetKind.k3sAirgap.fileName == AirgapPin.archiveFileName)
+        #expect(OnboardingAssetKind.k3sAirgap.title == "Kubernetes images")
+        #expect(OnboardingAssetKind.k3sAirgap.defaultSource.contains("GitHub"))
+        #expect(OnboardingAssetKind.k3sAirgap.defaultSource.contains("1.33.3"))
+        #expect(OnboardingCopy.downloadThisPack == "Download Kubernetes images")
+        #expect(OnboardingCopy.useLocalFile.contains("already have"))
         #expect(!OnboardingAssets.isRequiredToContinue(.guest))
         #expect(OnboardingAssets.isRequiredToContinue(.k3sAirgap))
         #expect(!OnboardingAssets.remoteDownloadEnabled(.guest))
-        #expect(!OnboardingAssets.remoteDownloadEnabled(.k3sAirgap))
-        #expect(!OnboardingAssets.chooseFileEnabled(.guest))
+        #expect(OnboardingAssets.remoteDownloadEnabled(.k3sAirgap))
+        #expect(OnboardingAssets.chooseFileEnabled(.guest))
         #expect(OnboardingAssets.chooseFileEnabled(.k3sAirgap))
     }
 
-    @Test func isSupportedHardFailIsNotALockAndNestedVirtIsInformational() {
+    @Test func isSupportedHardFailIsNotALockAndNestedVirtIsInformational() throws {
         let unsupported = PermissionsProbe.evaluate(
             virtualizationSupported: false,
             nestedVirtualizationSupported: true,
@@ -134,6 +150,27 @@ struct OnboardingTests {
         #expect(translocated == .translocated)
         #expect(!translocated.canContinue)
         #expect(PermissionsProbe.message(translocated) == OnboardingCopy.moveToApplications)
+        #expect(OnboardingCopy.installToApplications == "Install to /Applications")
+        #expect(!ApplicationsBundleInstall.isInstalled(at: URL(fileURLWithPath: "/tmp/gmak8.app")))
+        #expect(ApplicationsBundleInstall.isInstalled(at: ApplicationsBundleInstall.destination))
+
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-install-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appending(path: "gmak8.app")
+        let dest = root.appending(path: "Applications/gmak8.app")
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "ok".write(to: source.appending(path: "Marker"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(
+            at: dest.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try ApplicationsBundleInstall.install(from: source, to: dest)
+        #expect(
+            (try? String(contentsOf: dest.appending(path: "Marker"), encoding: .utf8)) == "ok"
+        )
 
         #expect(!NestedVirtualizationProbe.isSupported(macOSMajor: 14, platformReportsSupported: true))
         #expect(NestedVirtualizationProbe.isSupported(macOSMajor: 15, platformReportsSupported: true))
@@ -255,7 +292,7 @@ struct OnboardingTests {
         #expect(stub.hasStubDigest)
         #expect(!stub.remoteDownloadEnabled)
         #expect(!stub.chooseFileEnabled)
-        #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
+        #expect(AirgapPin.bundled.signed.remoteDownloadEnabled)
         let published = SignedAssetPin(
             fileName: AirgapPin.archiveFileName,
             url: URL(string: "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(AirgapPin.archiveFileName)")!,

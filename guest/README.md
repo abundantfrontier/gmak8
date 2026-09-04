@@ -5,8 +5,11 @@ Virtualization.framework attaches two NVMe disks:
 
 | Role | Guest device | Host file |
 | --- | --- | --- |
-| OS (replaceable) | `/dev/nvme0n1` | `~/Library/Application Support/dev.gmak8.app/vm/os.img` |
-| Data (persistent) | `/dev/nvme1n1` | `~/Library/Application Support/dev.gmak8.app/vm/data.img` |
+| OS (replaceable) | the NVMe that contains the root GPT | `~/Library/Application Support/dev.gmak8.app/vm/os.img` |
+| Data (persistent) | the other NVMe, whole-disk ext4 label `GMAK8_DATA` | `~/Library/Application Support/dev.gmak8.app/vm/data.img` |
+
+Apple Virtualization.framework may number those as `nvme0n1`/`nvme1n1` in either order.
+`format-data-disk.sh` formats the unpartitioned NVMe that is not the root device.
 
 EFI NVRAM lives on the host as `vm/efi-nvram.bin` (`VZEFIVariableStore`).
 
@@ -26,7 +29,8 @@ Boot order:
 1. `gmak8-data-format.service` (oneshot, `Before=mnt-data.mount`) runs
    `/usr/local/lib/gmak8/format-data-disk.sh` if the whole-disk label is
    not `GMAK8_DATA` (blank `data.img` **or** a stray filesystem). That
-   path is `mkfs.ext4 -F` and wipes the device.
+   path is `mkfs.ext4 -F` and wipes the device. It must not format the
+   OS disk even when Linux names the OS `nvme1n1`.
 2. `mnt-data.mount` mounts `/dev/disk/by-label/GMAK8_DATA` at `/mnt/data`.
 3. `mnt-data-prep.service` (`After=mnt-data.mount`, `Before=k3s.service`)
    creates `/mnt/data/{rancher,buildkit,tmp,log,local-path}`.

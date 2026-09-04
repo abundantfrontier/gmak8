@@ -15,13 +15,32 @@ enum TerminalLauncher {
             """
     }
 
+    static func appleScriptSource(workingDirectory: String) -> String {
+        let quoted = shellQuoted(workingDirectory)
+        return """
+            tell application "Terminal"
+                activate
+                do script "cd \(quoted) && echo 'Run: mkosi'"
+            end tell
+            """
+    }
+
     static func shellQuoted(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     @MainActor
     static func open(kubeconfig: URL = HostPaths.current().kubeconfigFile) {
-        let source = appleScriptSource(kubeconfigPath: kubeconfig.path(percentEncoded: false))
+        runAppleScript(appleScriptSource(kubeconfigPath: kubeconfig.path(percentEncoded: false)))
+    }
+
+    @MainActor
+    static func open(workingDirectory: URL) {
+        runAppleScript(appleScriptSource(workingDirectory: workingDirectory.path(percentEncoded: false)))
+    }
+
+    @MainActor
+    private static func runAppleScript(_ source: String) {
         if let script = NSAppleScript(source: source) {
             var error: NSDictionary?
             script.executeAndReturnError(&error)

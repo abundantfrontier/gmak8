@@ -127,6 +127,9 @@ struct Gmak8AppTests {
         let source = TerminalLauncher.appleScriptSource(kubeconfigPath: path)
         #expect(source.contains("tell application \"Terminal\""))
         #expect(source.contains("export KUBECONFIG='\(path)'"))
+        let mkosi = TerminalLauncher.appleScriptSource(workingDirectory: "/tmp/guest/mkosi")
+        #expect(mkosi.contains("cd '/tmp/guest/mkosi'"))
+        #expect(mkosi.contains("mkosi"))
         #expect(TerminalLauncher.shellQuoted("a'b") == "'a'\\''b'")
         #expect(TerminalLauncher.terminalBundleIdentifier == "com.apple.Terminal")
     }
@@ -189,9 +192,9 @@ struct Gmak8AppTests {
     }
 
     @Test func onboardingCopyCurrentContextAndPermissions() {
-        #expect(OnboardingCopy.welcomeHeadline == "gmak8 runs Kubernetes on this Mac. Not Docker.")
+        #expect(OnboardingCopy.welcomeHeadline == "gmak8 runs Kubernetes on this Mac.")
         #expect(OnboardingCopy.currentContextCheckbox == "Set gmak8 as kubectl current-context")
-        #expect(OnboardingCopy.createAndStart == "Create and start")
+        #expect(OnboardingCopy.createAndStart == "Start cluster")
         #expect(OnboardingCopy.kubernetesVersionValue == "1.33.3")
         #expect(OnboardingCopy.pathExportSnippet == #"export PATH="$HOME/.local/bin:$PATH""#)
         let host = HostSnapshot(
@@ -218,12 +221,13 @@ struct Gmak8AppTests {
         )
         #expect(!unsupported.canContinue)
         #expect(CoreLaunchAgent.twoLoginItemsExplanation.contains("two Login Items"))
-        #expect(!FirstRunGate.shouldPersistSettings(needsOnboarding: true))
-        #expect(!FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
+        #expect(FirstRunGate.shouldPersistSettings(needsOnboarding: true))
+        #expect(FirstRunGate.clusterActionsEnabled(needsOnboarding: true))
         #expect(GuestAssetPin.bundled.signed.hasStubDigest)
         #expect(!GuestAssetPin.bundled.signed.remoteDownloadEnabled)
         #expect(!GuestAssetPin.bundled.signed.chooseFileEnabled)
-        #expect(!AirgapPin.bundled.signed.remoteDownloadEnabled)
+        #expect(OnboardingAssets.chooseFileEnabled(.guest))
+        #expect(AirgapPin.bundled.signed.remoteDownloadEnabled)
         #expect(AirgapPin.bundled.signed.chooseFileEnabled)
         #expect(!OnboardingCopy.guestDigestUnpublished.contains(OnboardingCopy.chooseFile))
     }

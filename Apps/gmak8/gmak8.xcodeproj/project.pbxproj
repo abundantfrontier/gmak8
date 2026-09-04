@@ -51,6 +51,10 @@
 		A80000000000000000000002 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000001 /* OnboardingView.swift */; };
 		A80000000000000000000004 /* OnboardingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000003 /* OnboardingSession.swift */; };
 		A80000000000000000000006 /* RecoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000005 /* RecoveryView.swift */; };
+		A80000000000000000000008 /* ClusterAssetSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000007 /* ClusterAssetSession.swift */; };
+		A8000000000000000000000A /* ClusterAssetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000009 /* ClusterAssetsView.swift */; };
+		A8000000000000000000000C /* SetupSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8000000000000000000000B /* SetupSession.swift */; };
+		A8000000000000000000000E /* SetupSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8000000000000000000000D /* SetupSplitView.swift */; };
 		A90000000000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* Sparkle */; };
 		A90000000000000000000005 /* SparkleUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000004 /* SparkleUpdateController.swift */; };
 /* End PBXBuildFile section */
@@ -145,6 +149,10 @@
 		A80000000000000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A80000000000000000000003 /* OnboardingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSession.swift; sourceTree = "<group>"; };
 		A80000000000000000000005 /* RecoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryView.swift; sourceTree = "<group>"; };
+		A80000000000000000000007 /* ClusterAssetSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClusterAssetSession.swift; sourceTree = "<group>"; };
+		A80000000000000000000009 /* ClusterAssetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClusterAssetsView.swift; sourceTree = "<group>"; };
+		A8000000000000000000000B /* SetupSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupSession.swift; sourceTree = "<group>"; };
+		A8000000000000000000000D /* SetupSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupSplitView.swift; sourceTree = "<group>"; };
 		A90000000000000000000004 /* SparkleUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateController.swift; sourceTree = "<group>"; };
 		A90000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -218,6 +226,10 @@
 				A7000000000000000000000F /* SettingsStore.swift */,
 				A70000000000000000000013 /* SettingsView.swift */,
 				A80000000000000000000003 /* OnboardingSession.swift */,
+				A80000000000000000000007 /* ClusterAssetSession.swift */,
+				A80000000000000000000009 /* ClusterAssetsView.swift */,
+				A8000000000000000000000B /* SetupSession.swift */,
+				A8000000000000000000000D /* SetupSplitView.swift */,
 				A80000000000000000000001 /* OnboardingView.swift */,
 				A80000000000000000000005 /* RecoveryView.swift */,
 				A90000000000000000000004 /* SparkleUpdateController.swift */,
@@ -488,6 +500,10 @@
 				A70000000000000000000017 /* EngineClient.swift in Sources */,
 				A70000000000000000000018 /* StatusText.swift in Sources */,
 				A80000000000000000000004 /* OnboardingSession.swift in Sources */,
+				A80000000000000000000008 /* ClusterAssetSession.swift in Sources */,
+				A8000000000000000000000A /* ClusterAssetsView.swift in Sources */,
+				A8000000000000000000000C /* SetupSession.swift in Sources */,
+				A8000000000000000000000E /* SetupSplitView.swift in Sources */,
 				A80000000000000000000002 /* OnboardingView.swift in Sources */,
 				A90000000000000000000005 /* SparkleUpdateController.swift in Sources */,
 			);

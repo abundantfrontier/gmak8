@@ -76,8 +76,8 @@ private func engineErrorCode(for error: VirtualMachineError) -> EngineErrorCode 
         return .virtualizationUnsupported
     case .diskImagesLocked:
         return .locked
-    case .osImageMissing, .posix, .configurationFailed, .startFailed, .stoppedDuringStart, .stopFailed,
-        .socketPathTooLong, .gvproxyMissing, .networkFailed:
+    case .osImageMissing, .osImageEmpty, .posix, .configurationFailed, .startFailed, .stoppedDuringStart,
+        .stopFailed, .socketPathTooLong, .gvproxyMissing, .networkFailed:
         return .invalidRequest
     }
 }

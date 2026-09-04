@@ -292,6 +292,18 @@ struct ClusterEngineTests {
         #expect(engine.submit(.start) == .ok)
     }
 
+    @Test func unexpectedGuestStopDuringStartLeavesFailedStatus() {
+        let scheduler = ManualEngineScheduler()
+        let runtime = StubVirtualMachineRuntime()
+        let engine = ClusterEngine(scheduler: scheduler, runtime: runtime)
+        #expect(engine.submit(.start) == .ok)
+        #expect(engine.currentStatus().state == .starting)
+        runtime.fireUnexpectedStop(nil)
+        #expect(engine.currentStatus().state == .failed)
+        #expect(engine.currentStatus().lastError == ClusterEngine.guestStoppedDuringStartMessage)
+        #expect(engine.submit(.start) == .ok)
+    }
+
     @Test func gvproxyRestartMarksRunningClusterDegraded() {
         let scheduler = ManualEngineScheduler()
         let runtime = StubVirtualMachineRuntime()

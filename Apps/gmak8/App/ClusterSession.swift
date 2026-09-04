@@ -207,9 +207,11 @@ final class ClusterSession: ObservableObject, @unchecked Sendable {
 
     private func ensureCoreAgentRegistered() {
         do {
-            try LaunchAtLoginPolicy.apply(
-                LaunchAtLoginPolicy.extraDidLaunch(),
-                bundleURL: Bundle.main.bundleURL
+            try CoreLaunchAgent.ensureRunning(
+                bundleURL: Bundle.main.bundleURL,
+                socketIsLive: EngineSocketProbe.isLive(socketURL),
+                isLive: { EngineSocketProbe.isLive(socketURL) },
+                launch: BundledCoreLauncher.launch
             )
         } catch {
             return

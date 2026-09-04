@@ -24,19 +24,26 @@ test -f "$fmt" || fail "missing format-data-disk.sh"
 test -x "$fmt" || fail "format-data-disk.sh must be executable"
 test -x "$extra/usr/local/lib/gmak8/modprobe-kvm.sh" || fail "modprobe-kvm.sh must be executable"
 
-grep -q 'DISK=${DISK:-/dev/nvme1n1}' "$fmt" || fail "format script must default DISK to /dev/nvme1n1"
+grep -q 'DISK=${DISK:-}' "$fmt" || fail "format script must allow DISK= override"
+grep -q 'find_data_disk' "$fmt" || fail "format script must discover the data NVMe (VZ may swap nvme0/nvme1)"
 grep -q 'mkfs.ext4 -F -L GMAK8_DATA' "$fmt" || fail "format script must mkfs.ext4 -F -L GMAK8_DATA"
 grep -q 'gmak8-data-format: labeled GMAK8_DATA' "$fmt" || fail "format script must log the serial contract line"
+if grep -q 'DISK=${DISK:-/dev/nvme1n1}' "$fmt"; then
+  fail "format script must not hardcode /dev/nvme1n1 (Apple VZ may reverse NVMe order)"
+fi
 
 grep -q 'Before=mnt-data.mount' "$format_unit" || fail "format unit must be Before=mnt-data.mount"
-grep -q 'Wants=dev-nvme1n1.device' "$format_unit" || fail "format unit must Wants=dev-nvme1n1.device"
 grep -q 'Conflicts=umount.target' "$format_unit" || fail "format unit must Conflicts=umount.target"
-grep -q 'ConditionPathExists=/dev/nvme1n1' "$format_unit" || fail "format unit must ConditionPathExists=/dev/nvme1n1"
+if grep -q 'ConditionPathExists=/dev/nvme1n1' "$format_unit"; then
+  fail "format unit must not ConditionPathExists=/dev/nvme1n1 only"
+fi
 grep -q 'ExecStart=/usr/local/lib/gmak8/format-data-disk.sh' "$format_unit" || fail "format unit ExecStart"
 grep -q udevadm "$fmt" || fail "format script must udevadm settle after mkfs"
 
 grep -q 'Requires=gmak8-data-format.service' "$mount_unit" || fail "mount must Require format unit"
-grep -q 'dev-disk-by-label-GMAK8_DATA.device' "$mount_unit" || fail "mount must wait on by-label device"
+if grep -q 'dev-disk-by-label-GMAK8_DATA.device' "$mount_unit"; then
+  fail "mnt-data.mount must not Requires= unescaped by-label device (systemd maps that to /dev/disk/by/label)"
+fi
 grep -q 'After=gmak8-data-format.service' "$mount_unit" || fail "mount must After format unit"
 grep -q 'Conflicts=umount.target' "$mount_unit" || fail "mount must Conflicts=umount.target"
 grep -q 'Before=local-fs.target umount.target gmak8-agent.service k3s.service' "$mount_unit" || fail "mount Before= local-fs/umount/agent/k3s"
@@ -58,6 +65,8 @@ test -f "$agent_unit" || fail "missing gmak8-agent.service"
 grep -q 'After=mnt-data.mount' "$agent_unit" || fail "agent After=mnt-data.mount"
 grep -q 'ExecStart=/usr/local/bin/gmak8-agent' "$agent_unit" || fail "agent ExecStart"
 grep -q 'vsock:1024' "$agent_unit" || fail "agent must listen on vsock:1024"
+grep -q 'wait-vsock.sh' "$agent_unit" || fail "agent must wait for /dev/vsock"
+test -x "$extra/usr/local/lib/gmak8/wait-vsock.sh" || fail "wait-vsock.sh must be executable"
 if grep -Eiq 'mkfs|format-data-disk' "$agent_unit"; then
   fail "agent unit must not format the data disk"
 fi
@@ -89,6 +98,10 @@ grep -qx 'cluster-dns: 10.43.0.10' "$k3s_cfg" || fail "k3s config cluster-dns"
 grep -qx 'node-name: gmak8' "$k3s_cfg" || fail "k3s config node-name"
 grep -qx 'https-listen-port: 6443' "$k3s_cfg" || fail "k3s config https-listen-port"
 grep -q '192.168.127.2' "$k3s_cfg" || fail "k3s config tls-san must include guest IP"
+net="$extra/etc/systemd/network/10-gmak8.network"
+test -f "$net" || fail "missing systemd-networkd 10-gmak8.network"
+grep -q '192.168.127.2' "$net" || fail "guest network must pin 192.168.127.2"
+grep -q 'enable systemd-networkd.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must enable systemd-networkd"
 if grep -E '^[[:space:]]*(disable-helm-controller|write-kubeconfig)[[:space:]]*:' "$k3s_cfg"; then
   fail "k3s template must not set disable-helm-controller or write-kubeconfig"
 fi
@@ -104,6 +117,9 @@ grep -q 'Requires=mnt-data.mount' "$k3s_unit" || fail "k3s.service must Requires
 grep -q 'gmak8-k3s-compat.service' "$k3s_unit" || fail "k3s.service must require data-dir compat oneshot"
 grep -q 'After=.*mnt-data.mount' "$k3s_unit" || fail "k3s.service must After=mnt-data.mount"
 grep -q 'ExecStart=/usr/local/bin/k3s server' "$k3s_unit" || fail "k3s.service ExecStart must be the pinned static binary"
+if grep -q 'network-online.target' "$k3s_unit"; then
+  fail "k3s.service must not After=network-online (wait-online hangs without DHCP)"
+fi
 grep -q "ExecStartPost=-/bin/sh" "$k3s_unit" || fail "k3s-version ExecStartPost must be prefixed with - so a write failure cannot restart k3s"
 grep -q 'Before=k3s.service' "$compat_unit" || fail "compat oneshot must be Before=k3s.service"
 grep -q -- '-check-data-dir' "$compat_unit" || fail "compat oneshot must run gmak8-agent -check-data-dir"
@@ -122,6 +138,7 @@ if grep -q 'systemctl enable k3s.service' "$root/guest/mkosi/mkosi.postinst.chro
   fail "postinst must not enable k3s.service at boot"
 fi
 grep -q 'systemctl disable k3s.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must disable k3s.service"
+grep -q 'systemd-firstboot.service' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must disable systemd-firstboot"
 grep -q 'install-k3s.sh' "$root/guest/mkosi/mkosi.postinst.chroot" || fail "postinst must install pinned k3s"
 
 k3s_pin="$root/guest/k3s/k3s.pin"
@@ -153,6 +170,7 @@ fi
 grep -q 'openssh-server' "$mkosi_conf" || fail "mkosi must include openssh-server"
 grep -q 'Ssh=never' "$mkosi_conf" || fail "mkosi must set Ssh=never (sshd disabled until PR 30)"
 grep -q 'systemd.ssh_auto=no' "$mkosi_conf" || fail "mkosi must set systemd.ssh_auto=no"
+grep -q 'systemd.firstboot=0' "$mkosi_conf" || fail "mkosi must set systemd.firstboot=0"
 if grep -E '^[[:space:]]+(k3s|docker|docker-ce|docker.io|containerd)([[:space:]]|$)' "$mkosi_conf"; then
   fail "must not install k3s/docker/containerd as Debian packages"
 fi

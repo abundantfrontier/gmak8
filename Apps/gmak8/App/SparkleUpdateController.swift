@@ -22,6 +22,7 @@ final class SparkleUpdateController: NSObject, SPUUpdaterDelegate {
             userDriver: userDriver,
             delegate: self
         )
+        updater.automaticallyChecksForUpdates = false
         updater.automaticallyDownloadsUpdates = false
         do {
             try updater.start()

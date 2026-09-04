@@ -97,6 +97,70 @@ struct CoreLaunchAgentTests {
         try CoreLaunchAgent.unregister(service: service)
         #expect(service.unregisterCount == 1)
     }
+
+    @Test func ensureRegisteredSkipsUnregisterWhenSocketIsLive() throws {
+        let service = MockLaunchAgent()
+        try CoreLaunchAgent.ensureRegistered(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            socketIsLive: true,
+            service: service
+        )
+        #expect(service.unregisterCount == 0)
+        #expect(service.registerCount == 1)
+    }
+
+    @Test func ensureRegisteredUnregistersWhenSocketIsDead() throws {
+        let service = MockLaunchAgent()
+        try CoreLaunchAgent.ensureRegistered(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            socketIsLive: false,
+            service: service
+        )
+        #expect(service.unregisterCount == 1)
+        #expect(service.registerCount == 1)
+    }
+
+    @Test func ensureRegisteredRefusesTranslocatedApp() throws {
+        let service = MockLaunchAgent()
+        #expect(throws: EngineErrorCode.translocated) {
+            try CoreLaunchAgent.ensureRegistered(
+                bundleURL: URL(fileURLWithPath: "/Users/tester/Downloads/gmak8.app"),
+                socketIsLive: false,
+                service: service
+            )
+        }
+        #expect(service.registerCount == 0)
+        #expect(service.unregisterCount == 0)
+    }
+
+    @Test func ensureRunningLaunchesWhenSocketStaysDead() throws {
+        let service = MockLaunchAgent()
+        var launched = 0
+        try CoreLaunchAgent.ensureRunning(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            socketIsLive: false,
+            service: service,
+            isLive: { false },
+            launch: { _ in launched += 1 }
+        )
+        #expect(service.unregisterCount == 1)
+        #expect(service.registerCount == 1)
+        #expect(launched == 1)
+    }
+
+    @Test func ensureRunningSkipsLaunchWhenSocketIsLive() throws {
+        let service = MockLaunchAgent()
+        var launched = 0
+        try CoreLaunchAgent.ensureRunning(
+            bundleURL: URL(fileURLWithPath: "/Applications/gmak8.app"),
+            socketIsLive: true,
+            service: service,
+            isLive: { true },
+            launch: { _ in launched += 1 }
+        )
+        #expect(service.unregisterCount == 0)
+        #expect(launched == 0)
+    }
 }
 
 struct ExtraLoginItemTests {

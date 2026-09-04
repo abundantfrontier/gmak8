@@ -18,6 +18,25 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         let settingsExist = fileManager.fileExists(atPath: paths.settingsFile.path(percentEncoded: false))
         self.needsOnboarding = FirstRunGate.shouldShowOnboarding(settingsFileExists: settingsExist)
         self.settings = SettingsStore.loadOrDefault(paths: paths, fileManager: fileManager)
+        if !settingsExist {
+            try? self.settings.save(to: paths.settingsFile, fileManager: fileManager)
+            try? AssetLibrary.ensureLayout(
+                at: self.settings.libraryRoot(home: fileManager.homeDirectoryForCurrentUser),
+                fileManager: fileManager
+            )
+            try? TimeMachineExclusion.excludeVMDirectory(at: paths.vmDirectory, fileManager: fileManager)
+        }
+    }
+
+    func update(_ mutate: (inout Settings) -> Void) {
+        mutate(&settings)
+        persist()
+    }
+
+    func setLibraryFolder(_ url: URL) {
+        settings.libraryFolderPath = url.path(percentEncoded: false)
+        persist()
+        try? AssetLibrary.ensureLayout(at: url, fileManager: fileManager)
     }
 
     var keepClusterRunningOnQuit: Bool {
@@ -62,7 +81,20 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
     }
 
     func ensureCoreAgentRegistered() {
-        apply(LaunchAtLoginPolicy.extraDidLaunch())
+        let socketURL = paths.engineSocket
+        do {
+            try CoreLaunchAgent.ensureRunning(
+                bundleURL: Bundle.main.bundleURL,
+                socketIsLive: EngineSocketProbe.isLive(socketURL),
+                isLive: { EngineSocketProbe.isLive(socketURL) },
+                launch: BundledCoreLauncher.launch
+            )
+            lastError = nil
+        } catch EngineErrorCode.translocated {
+            lastError = RecoveryCopy.translocated
+        } catch {
+            lastError = RecoveryCopy.loginItemDenied
+        }
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) throws {

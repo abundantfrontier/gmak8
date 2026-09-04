@@ -105,6 +105,31 @@ struct LinuxEFIVirtualMachineRuntimeTests {
         #expect(!FileManager.default.fileExists(atPath: layout.osImage.path(percentEncoded: false)))
     }
 
+    @Test func emptySparseOSImageIsRejectedWhenCreateIsDisabled() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var layout = VMDiskLayout.under(vmDirectory: root)
+        layout.createOSImageIfMissing = false
+        try SparseDiskImage.createIfMissing(at: layout.osImage, size: 1_048_576)
+        #expect(!VMDiskLayout.containsGuestOS(at: layout.osImage))
+        #expect(throws: VirtualMachineError.osImageEmpty(layout.osImage)) {
+            try layout.ensureFiles(osSize: 1_048_576, dataSize: 1024)
+        }
+    }
+
+    @Test func gptHeaderCountsAsAGuestOSImage() throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var layout = VMDiskLayout.under(vmDirectory: root)
+        layout.createOSImageIfMissing = false
+        var prefix = Data(count: 1024)
+        prefix.replaceSubrange(512..<520, with: Data("EFI PART".utf8))
+        try prefix.write(to: layout.osImage)
+        #expect(VMDiskLayout.containsGuestOS(at: layout.osImage))
+        try layout.ensureFiles(osSize: 1024, dataSize: 1024)
+        #expect(FileManager.default.fileExists(atPath: layout.osImage.path(percentEncoded: false)))
+    }
+
     @Test func prepareFailsWhenVfkitSocketPathIsTooLong() throws {
         let env = try makeRuntimeHarness(isSupported: true)
         defer { env.cleanup() }

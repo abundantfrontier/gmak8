@@ -14,6 +14,10 @@ public struct Settings: Codable, Equatable, Sendable {
     public var launchAtLogin: Bool
     public var telemetry: Bool
     public var publishNodePorts: Bool
+    /// Visible inbox for guest disks and k3s packs. Empty means `~/gmak8`.
+    public var libraryFolderPath: String
+    /// Checkout that contains `guest/mkosi`. Empty means auto-detect.
+    public var sourceRepoPath: String
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -26,7 +30,9 @@ public struct Settings: Codable, Equatable, Sendable {
         keepClusterRunningOnQuit: Bool = true,
         launchAtLogin: Bool = false,
         telemetry: Bool = false,
-        publishNodePorts: Bool = true
+        publishNodePorts: Bool = true,
+        libraryFolderPath: String = "",
+        sourceRepoPath: String = ""
     ) {
         self.schemaVersion = schemaVersion
         self.profile = profile
@@ -39,6 +45,8 @@ public struct Settings: Codable, Equatable, Sendable {
         self.launchAtLogin = launchAtLogin
         self.telemetry = telemetry
         self.publishNodePorts = publishNodePorts
+        self.libraryFolderPath = libraryFolderPath
+        self.sourceRepoPath = sourceRepoPath
     }
 
     enum CodingKeys: String, CodingKey {
@@ -53,6 +61,8 @@ public struct Settings: Codable, Equatable, Sendable {
         case launchAtLogin
         case telemetry
         case publishNodePorts
+        case libraryFolderPath
+        case sourceRepoPath
     }
 
     public init(from decoder: Decoder) throws {
@@ -68,6 +78,8 @@ public struct Settings: Codable, Equatable, Sendable {
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         telemetry = try container.decode(Bool.self, forKey: .telemetry)
         publishNodePorts = try container.decodeIfPresent(Bool.self, forKey: .publishNodePorts) ?? true
+        libraryFolderPath = try container.decodeIfPresent(String.self, forKey: .libraryFolderPath) ?? ""
+        sourceRepoPath = try container.decodeIfPresent(String.self, forKey: .sourceRepoPath) ?? ""
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -83,6 +95,12 @@ public struct Settings: Codable, Equatable, Sendable {
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(telemetry, forKey: .telemetry)
         try container.encode(publishNodePorts, forKey: .publishNodePorts)
+        try container.encode(libraryFolderPath, forKey: .libraryFolderPath)
+        try container.encode(sourceRepoPath, forKey: .sourceRepoPath)
+    }
+
+    public func libraryRoot(home: URL) -> URL {
+        AssetLibrary.resolvedRoot(libraryFolderPath: libraryFolderPath, home: home)
     }
 
     public static func makeDefault(profile: Profile = .kubernetes, host: HostSnapshot) throws -> Settings {

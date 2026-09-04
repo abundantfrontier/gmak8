@@ -113,6 +113,7 @@ struct SettingsTests {
         let loaded = try Settings.load(from: url)
         #expect(loaded.publishNodePorts == true)
         #expect(loaded.launchAtLogin == false)
+        #expect(loaded.libraryFolderPath == "")
     }
 
     @Test func makeDefaultThrowsStructuredEurekaRefusal() {

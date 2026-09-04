@@ -36,22 +36,18 @@ enum AssetRowStatus: Equatable {
 final class OnboardingSession: ObservableObject {
     @Published var page = OnboardingPage.welcome
     @Published var draft: OnboardingDraft
-    @Published var assetStatus: [OnboardingAssetKind: AssetRowStatus] = [
-        .guest: .missing,
-        .k3sAirgap: .missing,
-        .kubevirtAirgap: .missing,
-    ]
     @Published var lastError: String?
     @Published var cliPlan: CLIInstallPlan
     @Published var finishing = false
 
+    let assets: ClusterAssetSession
     let host: HostSnapshot
     let permissions: PermissionsOutcome
 
     private let paths: HostPaths
-    private let publicKeyPEM: String
     private let bundleURL: URL
     private let fileManager: FileManager
+    private var assetsCancellable: AnyCancellable?
 
     init(
         paths: HostPaths = .current(),
@@ -61,7 +57,7 @@ final class OnboardingSession: ObservableObject {
         self.paths = paths
         self.bundleURL = bundleURL
         self.fileManager = fileManager
-        self.publicKeyPEM = (try? CosignPin.loadPublicKeyPEM()) ?? ""
+        self.assets = ClusterAssetSession(paths: paths, fileManager: fileManager)
         let host = SettingsStore.currentHostSnapshot()
         self.host = host
         self.draft = OnboardingDraft(host: host)
@@ -76,10 +72,17 @@ final class OnboardingSession: ObservableObject {
             bundleURL: bundleURL,
             fileManager: fileManager
         )
+        assetsCancellable = assets.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
     var visibleAssets: [OnboardingAssetKind] {
-        OnboardingAssets.visible(for: draft.profile)
+        assets.visibleAssets
+    }
+
+    var assetStatus: [OnboardingAssetKind: AssetRowStatus] {
+        assets.assetStatus
     }
 
     var canAdvance: Bool {
@@ -92,6 +95,21 @@ final class OnboardingSession: ObservableObject {
             guestRequired: OnboardingAssets.isRequiredToContinue(.guest),
             airgapRequired: OnboardingAssets.isRequiredToContinue(.k3sAirgap)
         )
+    }
+
+    var showsInstallToApplications: Bool {
+        permissions == .translocated
+    }
+
+    func installToApplications() {
+        do {
+            try ApplicationsBundleInstall.install(from: bundleURL, fileManager: fileManager)
+            lastError = nil
+            NSWorkspace.shared.open(ApplicationsBundleInstall.destination)
+            NSApp.terminate(nil)
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     var primaryTitle: String {
@@ -119,61 +137,17 @@ final class OnboardingSession: ObservableObject {
     }
 
     func refreshCachedAssets() {
-        for kind in visibleAssets {
-            if assetStatus[kind] == .working {
-                continue
-            }
-            do {
-                if try store(for: kind)?.cachedFileIfValid(fileManager: fileManager) != nil {
-                    assetStatus[kind] = .ready
-                } else {
-                    assetStatus[kind] = .missing
-                }
-            } catch {
-                assetStatus[kind] = .failed(OnboardingCopy.userFacingAssetError(error))
-            }
-        }
+        assets.refresh()
     }
 
     func download(_ kind: OnboardingAssetKind) {
-        guard let store = store(for: kind), store.pin.remoteDownloadEnabled else {
-            return
-        }
-        assetStatus[kind] = .working
-        lastError = nil
-        Task {
-            do {
-                _ = try await store.download()
-                assetStatus[kind] = .ready
-            } catch {
-                let message = OnboardingCopy.userFacingAssetError(error)
-                assetStatus[kind] = .failed(message)
-                lastError = message
-            }
-        }
+        assets.download(kind)
+        lastError = assets.lastError
     }
 
     func chooseFile(_ kind: OnboardingAssetKind) {
-        guard let store = store(for: kind), store.pin.chooseFileEnabled else {
-            return
-        }
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = OnboardingCopy.chooseFile
-        guard panel.runModal() == .OK, let url = panel.url else {
-            return
-        }
-        do {
-            _ = try store.importLocalFile(url)
-            assetStatus[kind] = .ready
-            lastError = nil
-        } catch {
-            let message = OnboardingCopy.userFacingAssetError(error)
-            assetStatus[kind] = .failed(message)
-            lastError = message
-        }
+        assets.chooseFile(kind)
+        lastError = assets.lastError
     }
 
     func finish(settingsStore: SettingsStore, clusterSession: ClusterSession) {
@@ -210,24 +184,4 @@ final class OnboardingSession: ObservableObject {
         }
     }
 
-    private func store(for kind: OnboardingAssetKind) -> SignedAssetStore? {
-        switch kind {
-        case .guest:
-            return SignedAssetStore(
-                cacheDirectory: paths.guestCacheDirectory,
-                pin: GuestAssetPin.bundled.signed,
-                publicKeyPEM: publicKeyPEM,
-                label: kind.title
-            )
-        case .k3sAirgap:
-            return SignedAssetStore(
-                cacheDirectory: paths.airgapCacheDirectory,
-                pin: AirgapPin.bundled.signed,
-                publicKeyPEM: publicKeyPEM,
-                label: kind.title
-            )
-        case .kubevirtAirgap:
-            return nil
-        }
-    }
 }

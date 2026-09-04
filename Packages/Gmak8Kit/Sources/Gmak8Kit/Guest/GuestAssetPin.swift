@@ -22,9 +22,9 @@ public struct SignedAssetPin: Equatable, Sendable {
         return hex.allSatisfy { $0 == "0" }
     }
 
-    /// Remote fetch is only valid for a gmak8 GitHub Release that includes a keyful Cosign `.sig`.
+    /// Remote fetch: abundantfrontier/gmak8 GitHub Release (Cosign) or official k3s-io GitHub airgap (SHA-256).
     public var remoteDownloadEnabled: Bool {
-        !hasStubDigest && Self.isGmak8SignedReleaseURL(url)
+        !hasStubDigest && (Self.isGmak8SignedReleaseURL(url) || Self.isOfficialK3sReleaseURL(url))
     }
 
     /// Local import still verifies SHA-256; a placeholder digest can never match.
@@ -32,11 +32,23 @@ public struct SignedAssetPin: Equatable, Sendable {
         !hasStubDigest
     }
 
+    /// gmak8-built Release assets carry a keyful Cosign `.sig`. Official k3s-io airgap is SHA-256 only.
+    public var requiresCosign: Bool {
+        Self.isGmak8SignedReleaseURL(url)
+    }
+
     public static func isGmak8SignedReleaseURL(_ url: URL) -> Bool {
         let host = (url.host ?? "").lowercased()
         let path = url.path.lowercased()
         let github = host == "github.com" || host.hasSuffix(".github.com")
         return github && path.contains("/abundantfrontier/gmak8/") && !path.contains("/k3s-io/")
+    }
+
+    public static func isOfficialK3sReleaseURL(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        let path = url.path.lowercased()
+        let github = host == "github.com" || host.hasSuffix(".github.com")
+        return github && path.contains("/k3s-io/k3s/releases/download/")
     }
 }
 

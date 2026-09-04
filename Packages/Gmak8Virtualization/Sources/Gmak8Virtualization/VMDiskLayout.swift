@@ -68,8 +68,25 @@ public struct VMDiskLayout: Equatable, Sendable {
             try SparseDiskImage.createIfMissing(at: osImage, size: osSize, fileManager: fileManager)
         } else if !fileManager.fileExists(atPath: osImage.path(percentEncoded: false)) {
             throw VirtualMachineError.osImageMissing(osImage)
+        } else if !Self.containsGuestOS(at: osImage) {
+            throw VirtualMachineError.osImageEmpty(osImage)
         }
         try SparseDiskImage.createIfMissing(at: dataImage, size: dataSize, fileManager: fileManager)
         try SparseDiskImage.createEmptyIfMissing(at: serialLog, fileManager: fileManager)
+    }
+
+    /// True when the file has an MBR boot signature or a GPT header.
+    public static func containsGuestOS(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return false
+        }
+        defer { try? handle.close() }
+        guard let prefix = try? handle.read(upToCount: 1024), prefix.count >= 512 else {
+            return false
+        }
+        if prefix.count >= 520, prefix.subdata(in: 512..<520) == Data("EFI PART".utf8) {
+            return true
+        }
+        return prefix[510] == 0x55 && prefix[511] == 0xAA
     }
 }

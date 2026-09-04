@@ -26,27 +26,42 @@ public struct AirgapStore: Sendable {
             return nil
         }
         let sig = signatureURL
-        guard FileManager.default.fileExists(atPath: sig.path(percentEncoded: false)) else {
-            throw AirgapError.missingSignature
-        }
-        try AirgapVerifier.verify(file: file, signatureFile: sig, pin: pin, publicKeyPEM: publicKeyPEM)
+        let sigExists = FileManager.default.fileExists(atPath: sig.path(percentEncoded: false))
+        try AirgapVerifier.verify(
+            file: file,
+            signatureFile: sigExists ? sig : nil,
+            sha256: pin.sha256,
+            maxBytes: pin.maxBytes,
+            publicKeyPEM: publicKeyPEM,
+            requireCosign: pin.signed.requiresCosign
+        )
         return file
     }
 
-    /// Copy a user-chosen local archive into the host cache after SHA-256 and keyful Cosign verify.
+    /// Copy a user-chosen local archive into the host cache after SHA-256 (and Cosign when a `.sig` is present).
     public func importLocalFile(_ source: URL, signature: URL? = nil, fileManager: FileManager = .default) throws -> URL
     {
         let sig = signature ?? source.appendingPathExtension("sig")
         guard fileManager.fileExists(atPath: source.path(percentEncoded: false)) else {
             throw AirgapError.missingArchive(source.path(percentEncoded: false))
         }
-        guard fileManager.fileExists(atPath: sig.path(percentEncoded: false)) else {
+        let sigExists = fileManager.fileExists(atPath: sig.path(percentEncoded: false))
+        if pin.signed.requiresCosign, !sigExists {
             throw AirgapError.missingSignature
         }
-        try AirgapVerifier.verify(file: source, signatureFile: sig, pin: pin, publicKeyPEM: publicKeyPEM)
+        try AirgapVerifier.verify(
+            file: source,
+            signatureFile: sigExists ? sig : nil,
+            sha256: pin.sha256,
+            maxBytes: pin.maxBytes,
+            publicKeyPEM: publicKeyPEM,
+            requireCosign: pin.signed.requiresCosign
+        )
         try fileManager.createDirectory(at: paths.airgapCacheDirectory, withIntermediateDirectories: true)
         try AtomicFileReplace.copy(from: source, to: archiveURL, posixPermissions: 0o600, fileManager: fileManager)
-        try AtomicFileReplace.copy(from: sig, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        if sigExists {
+            try AtomicFileReplace.copy(from: sig, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        }
         return archiveURL
     }
 
@@ -65,13 +80,24 @@ public struct AirgapStore: Sendable {
         let (sigTmp, sigResponse) = try await session.download(from: sigRemote)
         defer { try? fileManager.removeItem(at: sigTmp) }
         let sigStatus = (sigResponse as? HTTPURLResponse)?.statusCode ?? 200
-        if sigStatus < 200 || sigStatus >= 300 {
+        let haveSig = sigStatus >= 200 && sigStatus < 300
+        if pin.signed.requiresCosign, !haveSig {
             throw AirgapError.missingSignature
         }
-        try AirgapVerifier.verify(file: tmp, signatureFile: sigTmp, pin: pin, publicKeyPEM: publicKeyPEM)
+        try AirgapVerifier.verify(
+            file: tmp,
+            signatureFile: haveSig ? sigTmp : nil,
+            sha256: pin.sha256,
+            maxBytes: pin.maxBytes,
+            publicKeyPEM: publicKeyPEM,
+            requireCosign: pin.signed.requiresCosign
+        )
         try fileManager.createDirectory(at: paths.airgapCacheDirectory, withIntermediateDirectories: true)
         try AtomicFileReplace.copy(from: tmp, to: archiveURL, posixPermissions: 0o600, fileManager: fileManager)
-        try AtomicFileReplace.copy(from: sigTmp, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        if haveSig {
+            try AtomicFileReplace.copy(
+                from: sigTmp, to: signatureURL, posixPermissions: 0o600, fileManager: fileManager)
+        }
         return archiveURL
     }
 }

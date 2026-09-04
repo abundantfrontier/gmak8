@@ -9,7 +9,10 @@ Wants=mnt-data.mount
 
 [Service]
 Type=simple
+ExecStartPre=/usr/local/lib/gmak8/wait-vsock.sh
 ExecStart=/usr/local/bin/gmak8-agent -listen vsock:1024
+StandardOutput=journal+console
+StandardError=journal+console
 Restart=on-failure
 RestartSec=1s
 

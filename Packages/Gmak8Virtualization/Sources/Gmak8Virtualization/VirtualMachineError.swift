@@ -4,6 +4,7 @@ public enum VirtualMachineError: Error, Equatable, Sendable {
     case unsupported
     case diskImagesLocked
     case osImageMissing(URL)
+    case osImageEmpty(URL)
     case posix(errno: Int32, path: String)
     case configurationFailed(String)
     case startFailed(String)
@@ -21,8 +22,10 @@ public enum VirtualMachineError: Error, Equatable, Sendable {
                 "This Mac cannot run a virtual machine (unsupported CPU, OS, or missing virtualization entitlement)."
         case .diskImagesLocked:
             return "Another gmak8 (engine.sock live) holds data.img. Quit that instance."
-        case .osImageMissing(let url):
-            return "OS disk image is missing: \(url.path(percentEncoded: false))"
+        case .osImageMissing:
+            return "Start needs a Linux disk for the VM. Download appears when gmak8 publishes it."
+        case .osImageEmpty:
+            return "Start needs a Linux disk for the VM. Download appears when gmak8 publishes it."
         case .posix(let errno, let path):
             return "Disk operation failed at \(path) (errno \(errno))."
         case .configurationFailed(let reason):

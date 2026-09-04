@@ -2,8 +2,8 @@
 Description=Lightweight Kubernetes
 Documentation=https://k3s.io
 Requires=mnt-data.mount gmak8-k3s-compat.service
-Wants=network-online.target mnt-data-prep.service mnt-config.mount k3s-config-sync.service
-After=network-online.target mnt-data.mount mnt-data-prep.service mnt-config.mount k3s-config-sync.service gmak8-k3s-compat.service
+Wants=network.target mnt-data-prep.service mnt-config.mount k3s-config-sync.service
+After=network.target mnt-data.mount mnt-data-prep.service mnt-config.mount k3s-config-sync.service gmak8-k3s-compat.service
 
 [Service]
 Type=notify
@@ -16,6 +16,8 @@ TasksMax=infinity
 TimeoutStartSec=0
 Restart=always
 RestartSec=5s
+StandardOutput=journal+console
+StandardError=journal+console
 ExecStartPre=-/sbin/modprobe br_netfilter
 ExecStartPre=-/sbin/modprobe overlay
 ExecStart=/usr/local/bin/k3s server

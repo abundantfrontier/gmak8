@@ -27,16 +27,20 @@ public enum OnboardingPage: Int, CaseIterable, Equatable, Sendable {
 }
 
 public enum FirstRunGate {
+    /// Setup is a persistent rail, not a blocking wizard.
     public static func shouldShowOnboarding(settingsFileExists: Bool) -> Bool {
-        !settingsFileExists
+        _ = settingsFileExists
+        return false
     }
 
     public static func shouldPersistSettings(needsOnboarding: Bool) -> Bool {
-        !needsOnboarding
+        _ = needsOnboarding
+        return true
     }
 
     public static func clusterActionsEnabled(needsOnboarding: Bool) -> Bool {
-        !needsOnboarding
+        _ = needsOnboarding
+        return true
     }
 }
 

@@ -24,9 +24,9 @@ do {
     try TimeMachineExclusion.excludeVMDirectory(at: paths.vmDirectory)
 
     var layout = VMDiskLayout.under(vmDirectory: paths.vmDirectory)
+    layout.createOSImageIfMissing = false
     if let osImage = VMDefaults.osImageURL() {
         layout.osImage = osImage
-        layout.createOSImageIfMissing = false
     }
 
     let hardware = loadHardware(paths: paths)

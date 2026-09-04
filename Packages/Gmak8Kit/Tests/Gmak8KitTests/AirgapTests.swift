@@ -20,7 +20,9 @@ struct AirgapTests {
         #expect(pin.url.absoluteString.contains("k3s-airgap-images-arm64.tar.zst"))
         #expect(!pin.signed.hasStubDigest)
         #expect(!SignedAssetPin.isGmak8SignedReleaseURL(pin.url))
-        #expect(!pin.signed.remoteDownloadEnabled)
+        #expect(SignedAssetPin.isOfficialK3sReleaseURL(pin.url))
+        #expect(pin.signed.remoteDownloadEnabled)
+        #expect(!pin.signed.requiresCosign)
         let pem = try CosignPin.loadPublicKeyPEM()
         #expect(pem.contains("BEGIN PUBLIC KEY"))
         #expect(!pem.contains("PRIVATE KEY"))
@@ -46,6 +48,47 @@ struct AirgapTests {
             )[.posixPermissions] as? NSNumber
         #expect(mode?.intValue == 0o600)
         #expect(try env.store.cachedFileIfValid() == env.store.archiveURL)
+    }
+
+    @Test func importLocalFileAcceptsOfficialK3sSHA256WithoutCosign() throws {
+        let env = try AirgapHarness()
+        defer { env.tearDown() }
+        let lone = env.root.appending(path: "k3s-airgap-images-arm64.tar.zst")
+        try FileManager.default.copyItem(at: env.archive, to: lone)
+        let pin = AirgapPin(
+            k3sVersion: env.pin.k3sVersion,
+            fileName: env.pin.fileName,
+            url: URL(
+                string: "https://github.com/k3s-io/k3s/releases/download/v1.33.3%2Bk3s1/k3s-airgap-images-arm64.tar.zst"
+            )!,
+            sha256: env.pin.sha256,
+            maxBytes: env.pin.maxBytes,
+            guestImagesDirectory: env.pin.guestImagesDirectory
+        )
+        let store = AirgapStore(paths: env.paths, pin: pin, publicKeyPEM: env.pem)
+        #expect(!pin.signed.requiresCosign)
+        _ = try store.importLocalFile(lone)
+        #expect(try store.cachedFileIfValid() == store.archiveURL)
+    }
+
+    @Test func downloadSHA256WhenSignatureIsMissing() async throws {
+        let env = try AirgapHarness()
+        defer { env.tearDown() }
+        let server = try AirgapHTTPServer(archive: env.archive, signature: env.signature)
+        defer { server.stop() }
+        let pin = AirgapPin(
+            k3sVersion: env.pin.k3sVersion,
+            fileName: env.pin.fileName,
+            url: server.archiveURL,
+            sha256: env.pin.sha256,
+            maxBytes: env.pin.maxBytes,
+            guestImagesDirectory: env.pin.guestImagesDirectory
+        )
+        let store = AirgapStore(paths: env.paths, pin: pin, publicKeyPEM: env.pem)
+        let missingSig = URL(string: "http://127.0.0.1:\(server.port)/missing.sig")!
+        let cached = try await store.download(signatureURL: missingSig)
+        #expect(cached == store.archiveURL)
+        #expect(try AirgapVerifier.sha256(ofFile: cached) == pin.sha256)
     }
 
     @Test func sha256MismatchIsRejected() throws {

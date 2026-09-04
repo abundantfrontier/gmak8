@@ -13,7 +13,7 @@ struct OnboardingView: View {
                 .font(.largeTitle)
                 .fontWeight(.semibold)
             pageContent
-            if let error = onboarding.lastError {
+            if let error = onboarding.lastError ?? onboarding.assets.lastError {
                 Text(error)
                     .foregroundStyle(.red)
                     .font(.caption)
@@ -84,9 +84,6 @@ struct OnboardingView: View {
             Text(OnboardingCopy.localCluster)
             Text(OnboardingCopy.kubectlContext)
             Text(OnboardingCopy.menuBarExtra)
-            Text(OnboardingCopy.noDockerFootnote)
-                .font(.caption)
-                .foregroundStyle(.secondary)
             Text(OnboardingCopy.eurekaFootnote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -94,58 +91,7 @@ struct OnboardingView: View {
     }
 
     private var assetsPage: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(OnboardingCopy.assetsTitle)
-                .font(.title2)
-                .fontWeight(.semibold)
-            Text(OnboardingCopy.assetsBody)
-                .foregroundStyle(.secondary)
-            Text(OnboardingCopy.downloadUnavailable)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if GuestAssetPin.bundled.signed.hasStubDigest {
-                Text(OnboardingCopy.guestDigestUnpublished)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(onboarding.visibleAssets, id: \.self) { kind in
-                assetRow(kind)
-            }
-            Text(OnboardingCopy.offlineHint)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func assetRow(_ kind: OnboardingAssetKind) -> some View {
-        let status = onboarding.assetStatus[kind] ?? .missing
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(kind.title)
-                    .fontWeight(.semibold)
-                Text(kind.fileName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                Text(kind.sizeBudget)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text(assetStatusText(status))
-                .font(.caption)
-                .foregroundStyle(assetStatusColor(status))
-            HStack {
-                Button(OnboardingCopy.download) {
-                    onboarding.download(kind)
-                }
-                .disabled(status == .working || !OnboardingAssets.remoteDownloadEnabled(kind))
-                Button(OnboardingCopy.chooseFile) {
-                    onboarding.chooseFile(kind)
-                }
-                .disabled(status == .working || !OnboardingAssets.chooseFileEnabled(kind))
-            }
-        }
-        .padding(.vertical, 4)
+        ClusterAssetsView(assets: onboarding.assets)
     }
 
     private var permissionsPage: some View {
@@ -155,6 +101,11 @@ struct OnboardingView: View {
                 .fontWeight(.semibold)
             Text(PermissionsProbe.message(onboarding.permissions))
                 .foregroundStyle(onboarding.permissions.canContinue ? Color.secondary : Color.red)
+            if onboarding.showsInstallToApplications {
+                Button(OnboardingCopy.installToApplications) {
+                    onboarding.installToApplications()
+                }
+            }
             Text(CoreLaunchAgent.twoLoginItemsExplanation)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -315,27 +266,4 @@ struct OnboardingView: View {
         )
     }
 
-    private func assetStatusText(_ status: AssetRowStatus) -> String {
-        switch status {
-        case .missing:
-            return "Not installed"
-        case .ready:
-            return "Verified"
-        case .working:
-            return "Downloading…"
-        case .failed(let message):
-            return message
-        }
-    }
-
-    private func assetStatusColor(_ status: AssetRowStatus) -> Color {
-        switch status {
-        case .missing, .working:
-            return .secondary
-        case .ready:
-            return .secondary
-        case .failed:
-            return .red
-        }
-    }
 }

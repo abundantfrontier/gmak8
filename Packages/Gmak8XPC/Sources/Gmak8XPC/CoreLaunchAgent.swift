@@ -52,6 +52,42 @@ public enum CoreLaunchAgent {
     public static func unregister(service: any LaunchAgentRegistering = SMAppServiceAgent()) throws {
         try service.unregister()
     }
+
+    /// When `engine.sock` is dead, unregister first so a new register refreshes launchd LWCR.
+    /// Ad-hoc Debug swaps can leave launchd in `EX_CONFIG`; then launch the bundled core directly.
+    public static func ensureRegistered(
+        bundleURL: URL,
+        socketIsLive: Bool,
+        checker: any TranslocationChecking = TranslocationChecker(),
+        service: any LaunchAgentRegistering = SMAppServiceAgent()
+    ) throws {
+        if checker.shouldRefuseRegister(bundleURL: bundleURL) {
+            throw EngineErrorCode.translocated
+        }
+        if !socketIsLive {
+            try service.unregister()
+        }
+        try service.register()
+    }
+
+    public static func ensureRunning(
+        bundleURL: URL,
+        socketIsLive: Bool,
+        checker: any TranslocationChecking = TranslocationChecker(),
+        service: any LaunchAgentRegistering = SMAppServiceAgent(),
+        isLive: () -> Bool,
+        launch: (URL) throws -> Void
+    ) throws {
+        try ensureRegistered(
+            bundleURL: bundleURL,
+            socketIsLive: socketIsLive,
+            checker: checker,
+            service: service
+        )
+        if !isLive() {
+            try launch(bundleURL)
+        }
+    }
 }
 
 public struct SMAppServiceMainApp: LaunchAgentRegistering, Sendable {

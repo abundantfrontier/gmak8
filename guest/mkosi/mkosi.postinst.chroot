@@ -1,17 +1,6 @@
 #!/bin/sh
 set -eu
 
-# Wants/ symlinks also ship in mkosi.extra; enable is idempotent.
-systemctl enable mnt-data.mount
-systemctl enable mnt-data-prep.service
-systemctl enable gmak8-kvm.service
-systemctl enable gmak8-agent.service
-systemctl enable mnt-config.mount
-systemctl enable k3s-config-sync.service
-systemctl disable k3s.service
-
-/usr/local/lib/gmak8/install-k3s.sh
-
 unit_present() {
   unit=$1
   for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
@@ -21,6 +10,26 @@ unit_present() {
   done
   return 1
 }
+
+# Wants/ symlinks also ship in mkosi.extra; enable is idempotent.
+systemctl enable mnt-data.mount
+systemctl enable mnt-data-prep.service
+systemctl enable gmak8-kvm.service
+systemctl enable gmak8-agent.service
+systemctl enable mnt-config.mount
+systemctl enable k3s-config-sync.service
+systemctl enable systemd-networkd.service
+systemctl disable systemd-networkd-wait-online.service
+systemctl disable k3s.service
+if unit_present systemd-firstboot.service; then
+  systemctl disable systemd-firstboot.service
+  systemctl mask systemd-firstboot.service
+fi
+if [ ! -s /etc/machine-id ] || [ "$(cat /etc/machine-id 2>/dev/null || true)" = uninitialized ]; then
+  systemd-machine-id-setup || true
+fi
+
+/usr/local/lib/gmak8/install-k3s.sh
 
 # openssh-server postinst enables ssh; keep the unit installed but not started.
 # Do not mask — PR 30 starts sshd. Do not || true: a missing unit is skipped,

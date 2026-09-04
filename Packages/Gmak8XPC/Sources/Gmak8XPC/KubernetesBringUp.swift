@@ -28,7 +28,7 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
         apiPort: @escaping @Sendable () -> Int,
         checkAPI: (@Sendable (Int) async -> Bool)? = nil,
         pollInterval: Duration = .milliseconds(200),
-        stepTimeout: Duration = .seconds(120)
+        stepTimeout: Duration = .seconds(180)
     ) {
         self.makeClient = makeClient
         self.kubeconfigStore = kubeconfigStore

@@ -1,0 +1,7 @@
+[Match]
+MACAddress=5a:94:ef:e4:0c:ee
+
+[Network]
+Address=192.168.127.2/24
+Gateway=192.168.127.1
+DNS=192.168.127.1
