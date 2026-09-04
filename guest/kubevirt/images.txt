@@ -1,12 +1,12 @@
-# Images packed into gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst (linux/arm64).
+# Images packed into gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst (linux/arm64).
 # Do not pull docker.io. virt-launcher includes virtiofsd.
-quay.io/kubevirt/virt-operator:v1.6.1
-quay.io/kubevirt/virt-api:v1.6.1
-quay.io/kubevirt/virt-controller:v1.6.1
-quay.io/kubevirt/virt-handler:v1.6.1
-quay.io/kubevirt/virt-launcher:v1.6.1
-quay.io/kubevirt/virt-exportproxy:v1.6.1
-quay.io/kubevirt/virt-exportserver:v1.6.1
+quay.io/kubevirt/virt-operator:v1.6.2
+quay.io/kubevirt/virt-api:v1.6.2
+quay.io/kubevirt/virt-controller:v1.6.2
+quay.io/kubevirt/virt-handler:v1.6.2
+quay.io/kubevirt/virt-launcher:v1.6.2
+quay.io/kubevirt/virt-exportproxy:v1.6.2
+quay.io/kubevirt/virt-exportserver:v1.6.2
 quay.io/kubevirt/cdi-operator:v1.62.0
 quay.io/kubevirt/cdi-controller:v1.62.0
 quay.io/kubevirt/cdi-apiserver:v1.62.0

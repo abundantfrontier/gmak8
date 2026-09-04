@@ -1,7 +1,7 @@
 import Foundation
 
 public enum KubeVirtPin {
-    public static let version = "v1.6.1"
+    public static let version = "v1.6.2"
     public static let cdiVersion = "v1.62.0"
     public static let instancetypesVersion = "v1.4.0"
     public static let featureGates = ["VMExport", "EnableVirtioFsConfigVolumes"]
@@ -87,7 +87,7 @@ public struct VirtctlPin: Equatable, Sendable {
 }
 
 public struct KubeVirtAirgapPin: Equatable, Sendable {
-    public static let archiveFileName = "gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst"
+    public static let archiveFileName = "gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst"
     public static let maxCompressedBytes: Int64 = 1_610_612_736
 
     public var kubevirtVersion: String

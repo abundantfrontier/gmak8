@@ -24,7 +24,7 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
         case .k3sAirgap:
             return "From GitHub k3s-io · Kubernetes 1.33.3 · Apple Silicon"
         case .kubevirtAirgap:
-            return "KubeVirt 1.6.1 + CDI · Eureka profile · Apple Silicon"
+            return "KubeVirt 1.6.2 + CDI · Eureka profile · Apple Silicon"
         }
     }
 

@@ -204,7 +204,7 @@ struct Gmak8AppTests {
 
     @Test func statusPresentationFormatsPinAndMetrics() {
         #expect(StatusPresentation.shortK3sVersion() == "1.33.3")
-        #expect(StatusPresentation.productLine() == "gmak8 · k3s 1.33.3 · KubeVirt 1.6.1")
+        #expect(StatusPresentation.productLine() == "gmak8 · k3s 1.33.3 · KubeVirt 1.6.2")
         #expect(StatusPresentation.productLine(includeKubeVirt: false) == "gmak8 · k3s 1.33.3")
         #expect(StatusPresentation.nestedVirtLine(true) == "Nested virt: Yes")
         #expect(StatusPresentation.nestedVirtLine(false) == "Nested virt: No")

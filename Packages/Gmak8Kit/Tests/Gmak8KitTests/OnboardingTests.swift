@@ -101,7 +101,7 @@ struct OnboardingTests {
         #expect(!OnboardingAssets.isRequiredToContinue(.kubevirtAirgap))
         #expect(!OnboardingAssets.remoteDownloadEnabled(.kubevirtAirgap))
         #expect(OnboardingAssetKind.kubevirtAirgap.fileName.contains("kubevirt"))
-        #expect(KubeVirtPin.version == "v1.6.1")
+        #expect(KubeVirtPin.version == "v1.6.2")
         #expect(KubeVirtPin.cdiVersion == "v1.62.0")
         #expect(KubeVirtPin.instancetypesVersion == "v1.4.0")
         #expect(KubeVirtPin.featureGates == ["VMExport", "EnableVirtioFsConfigVolumes"])

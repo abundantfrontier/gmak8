@@ -35,11 +35,11 @@ func TestImportAirgapRejectsOversize(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "size budget") {
 		t.Fatalf("err %v", err)
 	}
-	_, err = h.ImportAirgap("gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst", bytes.NewReader([]byte("x")), maxAirgapBytes+1)
+	_, err = h.ImportAirgap("gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst", bytes.NewReader([]byte("x")), maxAirgapBytes+1)
 	if err != nil && strings.Contains(err.Error(), "size budget") {
 		t.Fatalf("kubevirt airgap must allow more than k3s budget: %v", err)
 	}
-	_, err = h.ImportAirgap("gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst", bytes.NewReader([]byte("x")), maxKubevirtAirgapBytes+1)
+	_, err = h.ImportAirgap("gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst", bytes.NewReader([]byte("x")), maxKubevirtAirgapBytes+1)
 	if err == nil || !strings.Contains(err.Error(), "size budget") {
 		t.Fatalf("kubevirt oversize err %v", err)
 	}

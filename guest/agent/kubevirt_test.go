@@ -58,7 +58,7 @@ func TestInstallKubeVirtAppliesYAMLAndChecksU1Nano(t *testing.T) {
 func TestInstallKubeVirtImportsMatchingAirgapTar(t *testing.T) {
 	dir := t.TempDir()
 	images := t.TempDir()
-	if err := os.WriteFile(filepath.Join(images, "gmak8-kubevirt-airgap-1.6.1-arm64.tar"), []byte("tar"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(images, "gmak8-kubevirt-airgap-1.6.2-arm64.tar"), []byte("tar"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(images, "gmak8-k3s-airgap-v1.33.3-arm64.tar.zst"), []byte("k3s"), 0o600); err != nil {

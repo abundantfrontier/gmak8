@@ -1,5 +1,5 @@
 # Pinned Eureka-aligned KubeVirt pack. Do not curl GitHub at cluster start.
-KUBEVIRT_VERSION=v1.6.1
+KUBEVIRT_VERSION=v1.6.2
 CDI_VERSION=v1.62.0
 INSTANCETYPES_VERSION=v1.4.0
 FEATURE_GATES=VMExport,EnableVirtioFsConfigVolumes

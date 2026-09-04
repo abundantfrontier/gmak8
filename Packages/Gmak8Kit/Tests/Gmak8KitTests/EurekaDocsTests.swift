@@ -46,6 +46,29 @@ struct EurekaDocsTests {
             contentsOf: repoRoot().appending(path: SoakPlan.scriptFile), encoding: .utf8)
         #expect(script.contains(SoakPlan.virtctlDeferredReason))
     }
+
+    @Test func kubevirtPackAirgapSelfTest() throws {
+        let script = repoRoot().appending(path: "guest/kubevirt/pack-airgap.sh")
+        #expect(FileManager.default.isExecutableFile(atPath: script.path(percentEncoded: false)))
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path(percentEncoded: false), "--self-test"]
+        process.currentDirectoryURL = repoRoot()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let out = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        #expect(process.terminationStatus == 0, "\(out)\(err)")
+        #expect((out + err).contains("self-test ok"))
+        let text = try String(contentsOf: script, encoding: .utf8)
+        #expect(text.contains("skopeo"))
+        #expect(!text.lowercased().contains("docker engine"))
+        #expect(text.contains("--self-test"))
+    }
 }
 
 private func docs(_ name: String) -> URL {

@@ -9,8 +9,6 @@ mkdir -p "$dest"
 
 curl -fsSL -o "$dest/kubevirt-operator.yaml" \
   "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
-curl -fsSL -o "$dest/kubevirt-cr.yaml" \
-  "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
 curl -fsSL -o "$dest/cdi-operator.yaml" \
   "https://github.com/kubevirt/containerized-data-importer/releases/download/${CDI_VERSION}/cdi-operator.yaml"
 curl -fsSL -o "$dest/cdi-cr.yaml" \
@@ -20,4 +18,4 @@ curl -fsSL -o "$dest/common-clusterinstancetypes.yaml" \
 curl -fsSL -o "$dest/common-clusterpreferences.yaml" \
   "https://github.com/kubevirt/common-instancetypes/releases/download/${INSTANCETYPES_VERSION}/common-clusterpreferences-bundle-${INSTANCETYPES_VERSION}.yaml"
 
-echo "fetch-yaml: wrote $dest (re-apply feature gates in kubevirt-cr.yaml and local-path-storageprofile.yaml)"
+echo "fetch-yaml: wrote $dest (kept kubevirt-cr.yaml and local-path-storageprofile.yaml)"

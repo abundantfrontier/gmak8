@@ -27,7 +27,7 @@ export KUBECONFIG="$HOME/Library/Application Support/dev.gmak8.app/kubeconfig"
 export PATH="$HOME/.local/bin:$PATH"   # virtctl
 ```
 
-gmak8 copies bundled `virtctl` v1.6.1 (darwin-arm64) to `~/.local/bin/virtctl`. Eureka’s SSH ProxyCommand looks up `virtctl` on `PATH`:
+gmak8 copies bundled `virtctl` v1.6.1 (darwin-arm64) to `~/.local/bin/virtctl`. Operand images are **KubeVirt v1.6.2** because v1.6.1 published no linux/arm64. Eureka’s SSH ProxyCommand looks up `virtctl` on `PATH`:
 
 ```
 ProxyCommand virtctl port-forward --stdio=true vm/{name}/{namespace} %p
@@ -64,7 +64,8 @@ kubectl get virtualmachineclusterinstancetype u1.medium
 Airgapped **linux/arm64** containerDisk from the KubeVirt pack:
 
 - Reference: `quay.io/containerdisks/fedora:40`
-- Digest: unpublished until `gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst` is a GitHub Release with a real SHA-256. The pin in-tree is all zeros; pack-airgap.sh records the digest at pack time. Until then the addon pack is skipped.
+- Digest (linux/arm64, recorded by `pack-airgap.sh`): `sha256:71e9c7133ef05fdbfa5c4a559c1fe49a77aef5576db7a9c26ae6eacfc9307fa4`
+- Archive: `gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst` (KubeVirt v1.6.2 + CDI v1.62.0). The GitHub SHA-256 pin is still all zeros until Cosign-sign and Release upload. Until then gmak8-core skips the pack.
 
 **Not** `quay.io/kubevirt/cirros-container-disk-demo` (x86_64). **Not** Eureka GCE amd64 images.
 

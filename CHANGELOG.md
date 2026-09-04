@@ -7,6 +7,7 @@
 - Eureka and Eureka API-only profiles restamp CPU/RAM/disk from the host table in onboarding, Setup, and Settings.
 - Eureka start is refused on low RAM, missing nested virt, disabled local-storage, or missing `default-local-storage-path: /mnt/data/local-path`.
 - [docs/eureka-local.md](docs/eureka-local.md) — Mac/ARM instancetype, virtctl PATH, airgap disk, Builderdash config matrix.
+- `guest/kubevirt/pack-airgap.sh` packs linux/arm64 images with skopeo (no Docker). KubeVirt operand pin is **v1.6.2** because v1.6.1 has no arm64. The GitHub SHA stays all zeros until Cosign-sign + Release upload.
 - [docs/k3s-deltas.md](docs/k3s-deltas.md) — k3s config gmak8 actually writes.
 
 ### Notes

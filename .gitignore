@@ -67,6 +67,12 @@ dist/appcast.xml
 guest/agent/gmak8-agent
 guest/mkosi/mkosi.extra/usr/local/bin/gmak8-agent
 
+# Packed KubeVirt airgap (not vendored; pin + pack-airgap.sh live in-tree)
+guest/kubevirt/*.tar
+guest/kubevirt/*.tar.gz
+guest/kubevirt/*.tar.zst
+guest/kubevirt/*.tar.zst.sig
+
 # mkosi build artifacts — never vendor guest disk images
 guest/mkosi/mkosi.output/
 guest/mkosi/mkosi.cache/

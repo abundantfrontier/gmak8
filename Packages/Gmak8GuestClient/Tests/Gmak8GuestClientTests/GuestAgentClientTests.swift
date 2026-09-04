@@ -199,7 +199,7 @@ struct GuestAgentClientTests {
         #expect(kubevirt.u1Nano)
         #expect((try await client.installKubeVirt()).phase == "Deployed")
         let kubevirtAirgap = try await client.importKubevirtAirgap(
-            fileURL: fixture, name: "gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst")
+            fileURL: fixture, name: "gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst")
         #expect(kubevirtAirgap.present)
         #expect((try await client.hostMounts()).items.isEmpty)
         #expect((try await client.applyHostMounts()).items.isEmpty)

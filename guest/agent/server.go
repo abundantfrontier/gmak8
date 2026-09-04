@@ -169,7 +169,7 @@ func (s *Server) handleImagePrune(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleKubevirtAirgapImport(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Gmak8-Name") == "" && r.URL.Query().Get("name") == "" {
-		r.Header.Set("X-Gmak8-Name", "gmak8-kubevirt-airgap-1.6.1-arm64.tar.zst")
+		r.Header.Set("X-Gmak8-Name", "gmak8-kubevirt-airgap-1.6.2-arm64.tar.zst")
 	}
 	name := r.Header.Get("X-Gmak8-Name")
 	if q := r.URL.Query().Get("name"); q != "" {

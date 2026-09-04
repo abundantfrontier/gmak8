@@ -200,6 +200,7 @@ grep -q 'docker.io/rancher' "$readme" || fail "README must document first boot d
 grep -q 'check-data-dir' "$readme" || fail "README must document data-dir compat check"
 
 bash "$root/guest/airgap/assert-metadata.sh" || fail "airgap metadata"
+bash "$root/guest/kubevirt/pack-airgap.sh" --self-test || fail "kubevirt pack-airgap self-test"
 
 if ls "$root/.github/workflows"/*.yml >/dev/null 2>&1; then
   fail "GitHub Actions workflows must not be committed"
