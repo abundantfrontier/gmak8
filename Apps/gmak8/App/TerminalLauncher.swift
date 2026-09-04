@@ -54,7 +54,11 @@ enum TerminalLauncher {
         -> String
     {
         let args = kubectlExecArgs(namespace: namespace, pod: pod, container: container)
+        let podArgs = kubectlExecArgs(namespace: namespace, pod: pod, container: nil)
         var steps = ["export KUBECONFIG=\(shellQuoted(kubeconfigPath))"]
+        steps.append(
+            "phase=$(kubectl get pod \(podArgs) -o jsonpath='{.status.phase}' 2>/dev/null); if [ \"$phase\" != \"Running\" ]; then echo \(shellQuoted(WorkloadsCopy.podNotRunning)); exit 0; fi"
+        )
         for shell in execShells {
             let quoted = shellQuoted(shell)
             steps.append(

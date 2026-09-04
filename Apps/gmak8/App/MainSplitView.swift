@@ -8,6 +8,7 @@ struct MainSplitView: View {
     @EnvironmentObject private var appDelegate: Gmak8AppDelegate
     @StateObject private var overview: ClusterOverviewSession
     @State private var selection: ClusterSidebarItem? = .cluster
+    @State private var sidebarReselectEpoch = 0
 
     init() {
         _overview = StateObject(wrappedValue: ClusterOverviewSession())
@@ -16,7 +17,11 @@ struct MainSplitView: View {
     var body: some View {
         NavigationSplitView {
             List(visibleItems, selection: $selection) { item in
-                Text(item.title).tag(item)
+                Button(item.title) {
+                    activate(item)
+                }
+                .buttonStyle(.plain)
+                .tag(item)
             }
             .navigationSplitViewColumnWidth(min: 140, ideal: 168, max: 220)
             .navigationTitle("gmak8")
@@ -34,6 +39,7 @@ struct MainSplitView: View {
                 RecoveryView()
             }
         }
+        .environment(\.sidebarReselectEpoch, sidebarReselectEpoch)
         .background(shortcutButtons)
         .onAppear {
             overview.includeEureka = settingsStore.settings.profile != .kubernetes
@@ -53,7 +59,7 @@ struct MainSplitView: View {
             ForEach(ClusterSidebarItem.allCases) { item in
                 Button(item.title) {
                     if visibleItems.contains(item) {
-                        selection = item
+                        activate(item)
                     }
                 }
                 .keyboardShortcut(keyEquivalent(item), modifiers: .command)
@@ -70,6 +76,13 @@ struct MainSplitView: View {
         )
     }
 
+    private func activate(_ item: ClusterSidebarItem) {
+        if selection == item {
+            sidebarReselectEpoch += 1
+        }
+        selection = item
+    }
+
     private func keyEquivalent(_ item: ClusterSidebarItem) -> KeyEquivalent {
         switch item {
         case .cluster: "1"
@@ -80,4 +93,15 @@ struct MainSplitView: View {
         }
     }
 
+}
+
+private struct SidebarReselectEpochKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
+extension EnvironmentValues {
+    var sidebarReselectEpoch: Int {
+        get { self[SidebarReselectEpochKey.self] }
+        set { self[SidebarReselectEpochKey.self] = newValue }
+    }
 }

@@ -10,6 +10,8 @@ struct WorkloadsTests {
         #expect(WorkloadsCopy.pods == "Pods")
         #expect(WorkloadsCopy.noShell.contains("distroless"))
         #expect(WorkloadsCopy.noShell.contains("Logs"))
+        #expect(WorkloadsCopy.podNotRunning.contains("not running"))
+        #expect(WorkloadsCopy.podNotRunning.contains("Logs"))
         #expect(WorkloadKind.allCases.first == .pod)
     }
 

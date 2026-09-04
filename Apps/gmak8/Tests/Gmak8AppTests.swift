@@ -144,7 +144,10 @@ struct Gmak8AppTests {
         #expect(exec.contains("-- '/bin/bash'"))
         #expect(exec.contains("-c 'coredns'"))
         #expect(exec.contains(WorkloadsCopy.noShell))
+        #expect(exec.contains(WorkloadsCopy.podNotRunning))
+        #expect(exec.contains("jsonpath='{.status.phase}'"))
         #expect(WorkloadsCopy.noShell.contains("distroless"))
+        #expect(WorkloadsCopy.podNotRunning.contains("not running"))
         let forward = TerminalLauncher.portForwardCommand(
             kubeconfigPath: path,
             namespace: "default",

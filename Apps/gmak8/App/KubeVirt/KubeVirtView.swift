@@ -2,6 +2,7 @@ import Gmak8Kubernetes
 import SwiftUI
 
 struct KubeVirtView: View {
+    @Environment(\.sidebarReselectEpoch) private var sidebarReselectEpoch
     @EnvironmentObject private var cluster: ClusterSession
     @EnvironmentObject private var appDelegate: Gmak8AppDelegate
     @StateObject private var session: KubeVirtSession
@@ -65,6 +66,15 @@ struct KubeVirtView: View {
                 return
             }
             path.append(row)
+        }
+        .onChange(of: sidebarReselectEpoch) { _, _ in
+            path = NavigationPath()
+            selected = nil
+        }
+        .onChange(of: path.count) { _, count in
+            if count == 0 {
+                selected = nil
+            }
         }
     }
 

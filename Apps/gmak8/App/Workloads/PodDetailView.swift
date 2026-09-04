@@ -61,6 +61,8 @@ struct PodDetailView: View {
                 Button(WorkloadsCopy.openShell) {
                     TerminalLauncher.openExec(namespace: namespace, pod: name, container: selectedContainer)
                 }
+                .disabled(!isRunning)
+                .help(isRunning ? WorkloadsCopy.openShell : WorkloadsCopy.podNotRunning)
                 Button(ClusterOverviewCopy.refresh) {
                     Task { await refresh() }
                 }
@@ -133,6 +135,7 @@ struct PodDetailView: View {
                             remote: Int(remotePort) ?? 80
                         )
                     }
+                    .disabled(!isRunning)
                 }
             }
         } else {
@@ -179,6 +182,10 @@ struct PodDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var isRunning: Bool {
+        detail?.phase.compare("Running", options: .caseInsensitive) == .orderedSame
     }
 
     private func refresh() async {

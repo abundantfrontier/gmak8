@@ -2,6 +2,7 @@ import Gmak8Kubernetes
 import SwiftUI
 
 struct WorkloadsView: View {
+    @Environment(\.sidebarReselectEpoch) private var sidebarReselectEpoch
     @StateObject private var session: WorkloadsSession
     @FocusState private var filterFocused: Bool
     @State private var selected: WorkloadRow.ID?
@@ -56,6 +57,14 @@ struct WorkloadsView: View {
                 return
             }
             path.append(row)
+        }
+        .onChange(of: sidebarReselectEpoch) { _, _ in
+            popToList()
+        }
+        .onChange(of: path.count) { _, count in
+            if count == 0 {
+                selected = nil
+            }
         }
     }
 
@@ -127,5 +136,10 @@ struct WorkloadsView: View {
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle(row.name)
+    }
+
+    private func popToList() {
+        path = NavigationPath()
+        selected = nil
     }
 }
