@@ -6,6 +6,13 @@ enum StatusText {
         if let endpoint = status.apiEndpoint {
             lines.append("API: \(endpoint)")
         }
+        for port in status.publishedPorts {
+            var line = "Port: \(port.hostURL) \(port.service)"
+            if port.collision != .published {
+                line += " \(port.collision.rawValue)"
+            }
+            lines.append(line)
+        }
         return lines.joined(separator: "\n")
     }
 

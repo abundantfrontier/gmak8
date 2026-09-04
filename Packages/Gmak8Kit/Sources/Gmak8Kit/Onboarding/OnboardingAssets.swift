@@ -20,7 +20,7 @@ public enum OnboardingAssetKind: String, CaseIterable, Equatable, Hashable, Send
     public var defaultSource: String {
         switch self {
         case .guest:
-            return "Linux VM image from mkosi (add when you have a build)"
+            return "From GitHub abundantfrontier/gmak8 · Debian appliance · Apple Silicon"
         case .k3sAirgap:
             return "From GitHub k3s-io · Kubernetes 1.33.3 · Apple Silicon"
         case .kubevirtAirgap:

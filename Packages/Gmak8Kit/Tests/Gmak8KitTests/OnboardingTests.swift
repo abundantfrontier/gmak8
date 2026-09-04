@@ -103,9 +103,9 @@ struct OnboardingTests {
         #expect(OnboardingAssetKind.k3sAirgap.defaultSource.contains("1.33.3"))
         #expect(OnboardingCopy.downloadThisPack == "Download Kubernetes images")
         #expect(OnboardingCopy.useLocalFile.contains("already have"))
-        #expect(!OnboardingAssets.isRequiredToContinue(.guest))
+        #expect(OnboardingAssets.isRequiredToContinue(.guest))
         #expect(OnboardingAssets.isRequiredToContinue(.k3sAirgap))
-        #expect(!OnboardingAssets.remoteDownloadEnabled(.guest))
+        #expect(OnboardingAssets.remoteDownloadEnabled(.guest))
         #expect(OnboardingAssets.remoteDownloadEnabled(.k3sAirgap))
         #expect(OnboardingAssets.chooseFileEnabled(.guest))
         #expect(OnboardingAssets.chooseFileEnabled(.k3sAirgap))
@@ -288,10 +288,16 @@ struct OnboardingTests {
     }
 
     @Test func remoteDownloadOnlyForGmak8SignedReleaseWithRealDigest() {
-        let stub = GuestAssetPin.bundled.signed
+        let stub = SignedAssetPin(
+            fileName: GuestAssetPin.archiveFileName,
+            url: URL(string: "https://github.com/abundantfrontier/gmak8/releases/download/v0.0.1/\(GuestAssetPin.archiveFileName)")!,
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            maxBytes: GuestAssetPin.maxCompressedBytes
+        )
         #expect(stub.hasStubDigest)
         #expect(!stub.remoteDownloadEnabled)
         #expect(!stub.chooseFileEnabled)
+        #expect(GuestAssetPin.bundled.signed.remoteDownloadEnabled)
         #expect(AirgapPin.bundled.signed.remoteDownloadEnabled)
         let published = SignedAssetPin(
             fileName: AirgapPin.archiveFileName,

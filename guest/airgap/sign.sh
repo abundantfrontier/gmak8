@@ -20,6 +20,13 @@ test -n "${COSIGN_KEY:-}" || {
 sig=${SIGNATURE:-"$blob.sig"}
 cosign=${COSIGN:-cosign}
 
-"$cosign" sign-blob --key "$COSIGN_KEY" --tlog-upload=false --yes --output-signature "$sig" "$blob"
+# Cosign 3 defaults to a bundle+TUF signing config. Keyful airgap signatures
+# stay the classic base64 ECDSA blob the app verifies with CryptoKit.
+"$cosign" sign-blob \
+  --key "$COSIGN_KEY" \
+  --use-signing-config=false \
+  --new-bundle-format=false \
+  --yes \
+  "$blob" >"$sig"
 chmod 0600 "$sig"
 echo "sign.sh: wrote $sig"

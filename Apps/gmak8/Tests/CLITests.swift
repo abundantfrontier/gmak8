@@ -14,6 +14,23 @@ struct CLITests {
         #expect(StatusText.render(status) == "State: Stopped")
     }
 
+    @Test func statusTextListsPublishedLoopbackPorts() {
+        let port = PublishedPort(
+            service: "traefik",
+            namespace: "kube-system",
+            port: 80,
+            nodePort: 31666,
+            hostPort: 31666,
+            guestPort: 31666,
+            hostURL: "http://127.0.0.1:31666"
+        )
+        let status = EngineStatus(state: .running, apiEndpoint: "https://127.0.0.1:6443", publishedPorts: [port])
+        #expect(
+            StatusText.render(status)
+                == "State: Running\nAPI: https://127.0.0.1:6443\nPort: http://127.0.0.1:31666 traefik"
+        )
+    }
+
     @Test func statusTextDisplayNamesMatchClusterStates() {
         #expect(StatusText.displayName(.stopped) == "Stopped")
         #expect(StatusText.displayName(.starting) == "Starting")

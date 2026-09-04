@@ -19,7 +19,7 @@ Double-click `scripts/dev-install.command` in Finder (rebuilds Debug, installs `
 bash scripts/dev-install.sh
 ```
 
-If the running copy is outside `/Applications`, first-run **Permissions** has **Install to /Applications**. Walk first-run (Welcome → Create and start). Current-context stays **off** unless you check it. Guest download is disabled until a real SHA-256 pin exists; you can continue without a guest image.
+If the running copy is outside `/Applications`, first-run **Permissions** has **Install to /Applications**. Walk first-run (Welcome → Create and start). Current-context stays **off** unless you check it. Guest download is the Cosign-verified GitHub Release pin (`gmak8-guest-0.0.1-arm64.raw.zst`).
 
 What you can test **without** `os.img`:
 
@@ -27,7 +27,7 @@ What you can test **without** `os.img`:
 - Menu extra, close last window vs Quit, Settings, Recovery / Diagnostics zip
 - Start failing with a missing OS disk (honest, not a hang)
 
-What you **cannot** test until a guest disk exists (built with mkosi on Linux arm64, not vendored here):
+What you **cannot** test until a guest disk exists (download the Release pin, or build with mkosi on Linux arm64 — not vendored here):
 
 - VM boot, k3s Ready, kubeconfig splice, NodePort curl
 

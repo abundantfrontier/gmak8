@@ -34,11 +34,12 @@ die() {
 
 usage() {
   cat <<EOF
-Usage: bash scripts/soak.sh --self-test|--plan|--live [--cycles N] [--gate 0.9|1.0]
+Usage: bash scripts/soak.sh --self-test|--plan|--live|--nodeport [--cycles N] [--gate 0.9|1.0]
 
   --self-test  Unit-test plan/helpers. Does not boot a VM.
   --plan       Print the soak plan. Does not boot a VM.
   --live       Run VZ soak on a self-hosted ${RUNNER_LABEL} runner.
+  --nodeport   Curl an already-Running NodePort on ${NODEPORT_HOST} (no start/stop).
 
 Nightly default is ${DEFAULT_CYCLES} start/stop cycles. 1.0 KubeVirt steps are listed
 but skipped until PRs 25-28. Never pulls from Docker Hub. NodePort curl is ${NODEPORT_HOST} only.
@@ -510,13 +511,57 @@ load_image_or_skip() {
   skip "loadImage: engine loadImage is not available; ${IMAGE_SKIP_REASON}"
 }
 
+pick_tcp_node_port() {
+  python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+items = data.get("items") or []
+for svc in items:
+    spec = svc.get("spec") or {}
+    kind = spec.get("type")
+    if kind not in ("NodePort", "LoadBalancer"):
+        continue
+    for port in spec.get("ports") or []:
+        proto = str(port.get("protocol") or "TCP").upper()
+        node_port = port.get("nodePort")
+        if proto != "TCP":
+            continue
+        if not isinstance(node_port, int) or node_port <= 0:
+            continue
+        print(node_port)
+        sys.exit(0)
+sys.exit(1)
+'
+}
+
 nginx_nodeport_or_skip() {
-  local blob=${GMAK8_SOAK_IMAGE:-}
-  if [[ -z "${blob}" || ! -f "${blob}" ]]; then
-    skip "nginx NodePort: ${IMAGE_SKIP_REASON}"
-    return 0
+  host_paths
+  if [[ ! -f "${KUBECONFIG_FILE}" ]]; then
+    die "kubeconfig missing at ${KUBECONFIG_FILE}"
   fi
-  skip "nginx NodePort: no loaded image; ${IMAGE_SKIP_REASON}"
+  if ! command -v kubectl >/dev/null 2>&1; then
+    die "kubectl is required for NodePort curl (kubeconfig ${KUBECONFIG_FILE}; never PATH docker)"
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    die "curl is required for NodePort soak"
+  fi
+  local json port url code
+  if ! json=$(kubectl --kubeconfig="${KUBECONFIG_FILE}" get svc -A -o json); then
+    die "kubectl get svc failed"
+  fi
+  if ! port=$(printf '%s' "${json}" | pick_tcp_node_port); then
+    die "no TCP NodePort or LoadBalancer nodePort on the cluster"
+  fi
+  url=$(node_port_url "${port}")
+  assert_loopback_url "${url}"
+  echo "soak: NodePort curl ${url}"
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 10 "${url}/" || true)
+  if [[ -z "${code}" || "${code}" == "000" ]]; then
+    die "NodePort curl ${url} did not connect"
+  fi
+  echo "soak: NodePort ${url} HTTP ${code}"
 }
 
 run_deferred_1_0() {
@@ -649,6 +694,15 @@ test_nodeport() {
   assert_loopback_url "http://127.0.0.1:30080"
   assert_fails assert_loopback_url "http://0.0.0.0:30080"
   assert_fails assert_loopback_url "http://192.168.127.2:30080"
+  local got
+  got=$(
+    printf '%s' '{"items":[{"spec":{"type":"LoadBalancer","ports":[{"protocol":"TCP","port":80,"nodePort":31666}]}}]}' \
+      | pick_tcp_node_port
+  )
+  assert_eq "${got}" "31666" "pick traefik nodePort"
+  if printf '%s' '{"items":[{"spec":{"type":"ClusterIP","ports":[{"protocol":"TCP","port":80}]}}]}' | pick_tcp_node_port; then
+    die "ClusterIP must not yield a NodePort"
+  fi
 }
 
 test_cli_helpers_not_path() {
@@ -1009,6 +1063,10 @@ while [[ $# -gt 0 ]]; do
       CMD=live
       shift
       ;;
+    --nodeport)
+      CMD=nodeport
+      shift
+      ;;
     --cycles)
       RAW_CYCLES=$2
       shift 2
@@ -1048,6 +1106,10 @@ case "${CMD}" in
     ;;
   live)
     run_live
+    ;;
+  nodeport)
+    refuse_github_hosted_live
+    nginx_nodeport_or_skip
     ;;
   *)
     usage

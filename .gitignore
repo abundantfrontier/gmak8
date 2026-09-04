@@ -49,6 +49,10 @@ ThirdParty/gvproxy/src/
 .vscode/
 .env
 
+# Cosign private material (public key is guest/airgap/cosign.pub)
+cosign.key
+cosign.password
+
 # Packaged artifacts (the cask formula stays in-tree)
 dist/*.dmg
 dist/*.app
