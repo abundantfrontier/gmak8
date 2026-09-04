@@ -23,6 +23,8 @@ type Host interface {
 	ListImages() (ImageListReport, error)
 	ImportImage(name string, r io.Reader, size int64) (ImageImportReport, error)
 	PruneImages() (ImagePruneReport, error)
+	HostMounts() (HostMountReport, error)
+	ApplyHostMounts() (HostMountReport, error)
 	Services() (ServiceListReport, error)
 	SetTime(t time.Time) error
 	Shutdown() error
@@ -55,6 +57,8 @@ type realHost struct {
 	tmpDir         string
 	importing      atomic.Bool
 	runCtr         func(timeout time.Duration, args ...string) ([]byte, error)
+	hostMountsPath string
+	runMount       func(args ...string) error
 }
 
 func defaultHost() *realHost {
@@ -70,6 +74,7 @@ func defaultHost() *realHost {
 		k3sVersionFile: k3sVersionFile,
 		imagesDir:      k3sImagesDir,
 		tmpDir:         dataTmpDir,
+		hostMountsPath: hostMountsFile,
 	}
 }
 

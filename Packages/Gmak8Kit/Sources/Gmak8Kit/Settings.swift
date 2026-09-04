@@ -18,6 +18,18 @@ public struct Settings: Codable, Equatable, Sendable {
     public var libraryFolderPath: String
     /// Checkout that contains `guest/mkosi`. Empty means auto-detect.
     public var sourceRepoPath: String
+    public var startClusterAtLogin: Bool
+    public var balloonEnabled: Bool
+    public var kubeVirtAddon: Bool
+    public var disableTraefik: Bool
+    public var disableServiceLB: Bool
+    public var disableLocalStorage: Bool
+    public var disableMetricsServer: Bool
+    public var apiPort: Int
+    public var guestSSHDebug: Bool
+    public var registriesYAML: String
+    public var registryHosts: [RegistryHost]
+    public var hostMounts: [HostMount]
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -32,7 +44,19 @@ public struct Settings: Codable, Equatable, Sendable {
         telemetry: Bool = false,
         publishNodePorts: Bool = true,
         libraryFolderPath: String = "",
-        sourceRepoPath: String = ""
+        sourceRepoPath: String = "",
+        startClusterAtLogin: Bool = false,
+        balloonEnabled: Bool = false,
+        kubeVirtAddon: Bool = false,
+        disableTraefik: Bool = false,
+        disableServiceLB: Bool = false,
+        disableLocalStorage: Bool = false,
+        disableMetricsServer: Bool = false,
+        apiPort: Int = 6443,
+        guestSSHDebug: Bool = false,
+        registriesYAML: String = "",
+        registryHosts: [RegistryHost] = [],
+        hostMounts: [HostMount] = []
     ) {
         self.schemaVersion = schemaVersion
         self.profile = profile
@@ -43,10 +67,35 @@ public struct Settings: Codable, Equatable, Sendable {
         self.setCurrentContextOnStart = setCurrentContextOnStart
         self.keepClusterRunningOnQuit = keepClusterRunningOnQuit
         self.launchAtLogin = launchAtLogin
-        self.telemetry = telemetry
+        self.telemetry = false
         self.publishNodePorts = publishNodePorts
         self.libraryFolderPath = libraryFolderPath
         self.sourceRepoPath = sourceRepoPath
+        self.startClusterAtLogin = startClusterAtLogin
+        self.balloonEnabled = false
+        self.kubeVirtAddon = kubeVirtAddon || profile != .kubernetes
+        self.disableTraefik = disableTraefik
+        self.disableServiceLB = disableServiceLB
+        self.disableLocalStorage = disableLocalStorage
+        self.disableMetricsServer = disableMetricsServer
+        self.apiPort = apiPort
+        self.guestSSHDebug = guestSSHDebug
+        self.registriesYAML = registriesYAML
+        self.registryHosts = registryHosts
+        self.hostMounts = hostMounts
+    }
+
+    public var kubeVirtEnabled: Bool {
+        profile != .kubernetes || kubeVirtAddon
+    }
+
+    public var k3sDisable: [String] {
+        K3sConfig.disableList(
+            traefik: disableTraefik,
+            servicelb: disableServiceLB,
+            localStorage: disableLocalStorage,
+            metricsServer: disableMetricsServer
+        )
     }
 
     enum CodingKeys: String, CodingKey {
@@ -63,6 +112,18 @@ public struct Settings: Codable, Equatable, Sendable {
         case publishNodePorts
         case libraryFolderPath
         case sourceRepoPath
+        case startClusterAtLogin
+        case balloonEnabled
+        case kubeVirtAddon
+        case disableTraefik
+        case disableServiceLB
+        case disableLocalStorage
+        case disableMetricsServer
+        case apiPort
+        case guestSSHDebug
+        case registriesYAML
+        case registryHosts
+        case hostMounts
     }
 
     public init(from decoder: Decoder) throws {
@@ -76,10 +137,25 @@ public struct Settings: Codable, Equatable, Sendable {
         setCurrentContextOnStart = try container.decode(Bool.self, forKey: .setCurrentContextOnStart)
         keepClusterRunningOnQuit = try container.decode(Bool.self, forKey: .keepClusterRunningOnQuit)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
-        telemetry = try container.decode(Bool.self, forKey: .telemetry)
+        telemetry = false
         publishNodePorts = try container.decodeIfPresent(Bool.self, forKey: .publishNodePorts) ?? true
         libraryFolderPath = try container.decodeIfPresent(String.self, forKey: .libraryFolderPath) ?? ""
         sourceRepoPath = try container.decodeIfPresent(String.self, forKey: .sourceRepoPath) ?? ""
+        startClusterAtLogin = try container.decodeIfPresent(Bool.self, forKey: .startClusterAtLogin) ?? false
+        balloonEnabled = false
+        kubeVirtAddon = try container.decodeIfPresent(Bool.self, forKey: .kubeVirtAddon) ?? (profile != .kubernetes)
+        disableTraefik = try container.decodeIfPresent(Bool.self, forKey: .disableTraefik) ?? false
+        disableServiceLB = try container.decodeIfPresent(Bool.self, forKey: .disableServiceLB) ?? false
+        disableLocalStorage = try container.decodeIfPresent(Bool.self, forKey: .disableLocalStorage) ?? false
+        disableMetricsServer = try container.decodeIfPresent(Bool.self, forKey: .disableMetricsServer) ?? false
+        apiPort = try container.decodeIfPresent(Int.self, forKey: .apiPort) ?? 6443
+        guestSSHDebug = try container.decodeIfPresent(Bool.self, forKey: .guestSSHDebug) ?? false
+        registriesYAML = try container.decodeIfPresent(String.self, forKey: .registriesYAML) ?? ""
+        registryHosts = try container.decodeIfPresent([RegistryHost].self, forKey: .registryHosts) ?? []
+        hostMounts = try container.decodeIfPresent([HostMount].self, forKey: .hostMounts) ?? []
+        if profile != .kubernetes {
+            kubeVirtAddon = true
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -93,10 +169,22 @@ public struct Settings: Codable, Equatable, Sendable {
         try container.encode(setCurrentContextOnStart, forKey: .setCurrentContextOnStart)
         try container.encode(keepClusterRunningOnQuit, forKey: .keepClusterRunningOnQuit)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
-        try container.encode(telemetry, forKey: .telemetry)
+        try container.encode(false, forKey: .telemetry)
         try container.encode(publishNodePorts, forKey: .publishNodePorts)
         try container.encode(libraryFolderPath, forKey: .libraryFolderPath)
         try container.encode(sourceRepoPath, forKey: .sourceRepoPath)
+        try container.encode(startClusterAtLogin, forKey: .startClusterAtLogin)
+        try container.encode(false, forKey: .balloonEnabled)
+        try container.encode(profile != .kubernetes || kubeVirtAddon, forKey: .kubeVirtAddon)
+        try container.encode(disableTraefik, forKey: .disableTraefik)
+        try container.encode(disableServiceLB, forKey: .disableServiceLB)
+        try container.encode(disableLocalStorage, forKey: .disableLocalStorage)
+        try container.encode(disableMetricsServer, forKey: .disableMetricsServer)
+        try container.encode(apiPort, forKey: .apiPort)
+        try container.encode(guestSSHDebug, forKey: .guestSSHDebug)
+        try container.encode(registriesYAML, forKey: .registriesYAML)
+        try container.encode(registryHosts, forKey: .registryHosts)
+        try container.encode(hostMounts, forKey: .hostMounts)
     }
 
     public func libraryRoot(home: URL) -> URL {

@@ -1,0 +1,14 @@
+[Unit]
+Description=Mount user-selected virtio-fs host folders
+DefaultDependencies=no
+After=mnt-config.mount
+Before=k3s.service
+ConditionPathExists=/mnt/config/host-mounts.json
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/gmak8-agent -mount-host-shares
+
+[Install]
+WantedBy=multi-user.target

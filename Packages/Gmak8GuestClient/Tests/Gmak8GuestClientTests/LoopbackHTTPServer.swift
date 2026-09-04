@@ -241,6 +241,8 @@ func makeGuestAgentFixture() throws -> (LoopbackHTTPServer, FixtureState) {
             state.imagesJSON = #"{"items":[]}"#
             return .json(
                 200, #"{"deleted":["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}"#)
+        case ("GET", "/host-mounts"), ("POST", "/host-mounts/apply"):
+            return .json(200, #"{"items":[]}"#)
         case ("PUT", "/time"):
             if request.body.isEmpty {
                 return .json(400, #"{"ok":false,"error":"expected unix timestamp or RFC3339"}"#)

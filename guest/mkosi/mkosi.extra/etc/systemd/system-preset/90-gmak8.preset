@@ -9,4 +9,5 @@ enable gmak8-kvm.service
 enable gmak8-agent.service
 enable mnt-config.mount
 enable k3s-config-sync.service
+enable gmak8-host-mounts.service
 disable k3s.service

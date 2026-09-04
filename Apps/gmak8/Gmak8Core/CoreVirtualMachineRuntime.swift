@@ -11,7 +11,9 @@ struct CoreVirtualMachineRuntime: VirtualMachineRuntime {
 
     func preflight() -> VirtualMachinePreflightError? {
         do {
-            try K3sConfig.writeHostFile(directory: configDirectory)
+            let settings = loadCoreSettings(from: .current())
+            try writeClusterConfig(directory: configDirectory, settings: settings)
+            controller.hostShares = hostDirectoryShares(from: settings)
             try controller.prepare()
             return nil
         } catch let error as VirtualMachineError {
@@ -67,6 +69,41 @@ struct GVProxyHostPortExposer: HostPortExposer {
 
     func unexpose(hostPort: Int) throws {
         try UnixHTTPClient(socketURL: socketURL, timeout: 2).unexpose(hostPort: hostPort)
+    }
+}
+
+func loadCoreSettings(from paths: HostPaths) -> Settings {
+    guard FileManager.default.fileExists(atPath: paths.settingsFile.path(percentEncoded: false)),
+        let loaded = try? Settings.load(from: paths.settingsFile)
+    else {
+        return Settings(profile: .kubernetes, cpu: 4, memoryGiB: 6, dataDiskGiB: 60)
+    }
+    return loaded
+}
+
+func writeClusterConfig(directory: URL, settings: Settings) throws {
+    try ClusterConfigFiles.write(
+        directory: directory,
+        settings: settings,
+        proxy: SystemProxy.fromSystem()
+    )
+    if settings.profile == .eureka {
+        let yamlURL = directory.appending(path: "k3s/config.yaml")
+        let yaml = (try? String(contentsOf: yamlURL, encoding: .utf8)) ?? ""
+        if !K3sConfig.hasDataDiskLocalPath(yaml) {
+            throw ClusterBringUpError(
+                message: "Eureka profile requires default-local-storage-path: /mnt/data/local-path")
+        }
+    }
+}
+
+func hostDirectoryShares(from settings: Settings) -> [HostDirectoryShare] {
+    settings.hostMounts.map {
+        HostDirectoryShare(
+            tag: $0.tag,
+            url: URL(fileURLWithPath: $0.path),
+            readOnly: $0.readOnly
+        )
     }
 }
 

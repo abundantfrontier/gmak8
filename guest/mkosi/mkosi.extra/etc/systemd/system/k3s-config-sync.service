@@ -8,7 +8,7 @@ ConditionPathExists=/mnt/config/k3s/config.yaml
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=-/bin/sh -c 'mkdir -p /etc/rancher/k3s && cat /mnt/config/k3s/config.yaml > /etc/rancher/k3s/config.yaml'
+ExecStart=-/bin/sh -c 'mkdir -p /etc/rancher/k3s && cat /mnt/config/k3s/config.yaml > /etc/rancher/k3s/config.yaml; if [ -f /mnt/config/registries.yaml ]; then cat /mnt/config/registries.yaml > /etc/rancher/k3s/registries.yaml; fi'
 
 [Install]
 WantedBy=k3s.service

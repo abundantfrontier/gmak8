@@ -7,6 +7,7 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
     public let isSupported: Bool
     public let network: GVProxyNetworkStack?
     public let configShareDirectory: URL?
+    public var hostShares: [HostDirectoryShare]
 
     private let flock = DiskFlock()
     private let mutex = NSLock()
@@ -28,13 +29,15 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
         hardware: VMHardware,
         isSupported: Bool = VZVirtualMachine.isSupported,
         network: GVProxyNetworkStack? = nil,
-        configShareDirectory: URL? = nil
+        configShareDirectory: URL? = nil,
+        hostShares: [HostDirectoryShare] = []
     ) {
         self.layout = layout
         self.hardware = hardware
         self.isSupported = isSupported
         self.network = network
         self.configShareDirectory = configShareDirectory
+        self.hostShares = hostShares
         vmDelegate.owner = self
         self.network?.onDegraded = { [weak self] message in
             self?.notifyDegraded(message)
@@ -249,7 +252,8 @@ public final class LinuxEFIVirtualMachineRuntime: @unchecked Sendable {
                 layout: layout,
                 hardware: hardware,
                 networkAttachment: networkAttachment,
-                configShareDirectory: self.configShareDirectory
+                configShareDirectory: self.configShareDirectory,
+                hostShares: self.hostShares
             )
             do {
                 try config.validate()

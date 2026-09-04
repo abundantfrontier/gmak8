@@ -34,4 +34,18 @@ struct K3sConfigTests {
         let dest = root.appending(path: "k3s/config.yaml")
         #expect(try String(contentsOf: dest, encoding: .utf8) == K3sConfig.yaml)
     }
+
+    @Test func disableListOmitsCoreDNSAndHelmController() {
+        let flags = K3sConfig.disableList(traefik: true, servicelb: true, localStorage: false, metricsServer: true)
+        #expect(flags == ["traefik", "servicelb", "metrics-server"])
+        let yaml = K3sConfig.rendered(disable: flags)
+        #expect(yaml.contains("disable:"))
+        #expect(!yaml.contains("coredns"))
+        #expect(!yaml.contains("disable-helm-controller:"))
+        #expect(K3sConfig.hasDataDiskLocalPath(yaml))
+        let filtered = K3sConfig.rendered(disable: ["coredns", "traefik"])
+        #expect(filtered.contains("traefik"))
+        #expect(!filtered.contains("coredns"))
+        #expect(K3sConfig.rendered(disable: flags, httpsListenPort: 16443).contains("https-listen-port: 16443"))
+    }
 }

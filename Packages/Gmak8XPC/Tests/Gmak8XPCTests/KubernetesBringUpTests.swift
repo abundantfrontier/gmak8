@@ -726,6 +726,8 @@ private func response(for request: (String, String, Data), state: BringUpAgentSt
             )
         }
         return (200, Data(#"{"present":false,"files":[],"bytes":0}"#.utf8), "application/json")
+    case ("GET", "/host-mounts"), ("POST", "/host-mounts/apply"):
+        return (200, Data(#"{"items":[]}"#.utf8), "application/json")
     case ("PUT", "/airgap/k3s"):
         state.noteAirgapPutStartedAndWaitIfHeld()
         state.airgapImports += 1

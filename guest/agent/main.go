@@ -12,11 +12,19 @@ import (
 func main() {
 	listen := flag.String("listen", fmt.Sprintf("vsock:%d", AgentVsockPort), "vsock:PORT, tcp:HOST:PORT, or HOST:PORT")
 	checkDataDir := flag.Bool("check-data-dir", false, "exit 0 if k3s data dir is empty or compatible with v1.33")
+	mountHostShares := flag.Bool("mount-host-shares", false, "mount virtio-fs host folders from /mnt/config/host-mounts.json")
 	flag.Parse()
 
 	if *checkDataDir {
 		if err := checkDataDirCompatible(defaultHost()); err != nil {
 			log.Printf("k3s data-dir: %v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	if *mountHostShares {
+		if _, err := defaultHost().ApplyHostMounts(); err != nil {
+			log.Printf("host mounts: %v", err)
 			os.Exit(1)
 		}
 		os.Exit(0)

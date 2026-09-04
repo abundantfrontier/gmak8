@@ -88,6 +88,24 @@ struct GuestAgentClientTests {
         #expect(imported.digest == "sha256:abc")
         let pruned = try JSONDecoder().decode(GuestImagePrune.self, from: Data(#"{}"#.utf8))
         #expect(pruned.deleted.isEmpty)
+
+        let mounts = try JSONDecoder().decode(
+            GuestHostMountList.self,
+            from: Data(
+                #"{"items":[{"name":"src","tag":"gmak8-host-src","path":"/mnt/host/src","read_only":true,"mounted":true,"uid":501,"gid":20}]}"#
+                    .utf8
+            )
+        )
+        #expect(mounts.items.count == 1)
+        #expect(mounts.items[0].readOnly)
+        #expect(mounts.items[0].uid == 501)
+        #expect(mounts.items[0].gid == 20)
+        let sparse = try JSONDecoder().decode(
+            GuestHostMountList.self,
+            from: Data(#"{"items":[{"name":"src","tag":"gmak8-host-src","path":"/mnt/host/src"}]}"#.utf8)
+        )
+        #expect(!sparse.items[0].mounted)
+        #expect(sparse.items[0].uid == 0)
     }
 
     @Test func healthJSONDoesNotCarryDiskKeys() throws {
@@ -176,6 +194,8 @@ struct GuestAgentClientTests {
         let pruned = try await client.pruneImages()
         #expect(pruned.deleted.count == 1)
         #expect(try await client.images().items.isEmpty)
+        #expect((try await client.hostMounts()).items.isEmpty)
+        #expect((try await client.applyHostMounts()).items.isEmpty)
 
         state.kubeconfig = nil
         do {

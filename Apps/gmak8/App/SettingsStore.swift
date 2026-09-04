@@ -3,6 +3,8 @@ import Foundation
 import Gmak8Kit
 import Gmak8XPC
 
+typealias ClusterSettings = Settings
+
 @MainActor
 final class SettingsStore: ObservableObject, @unchecked Sendable {
     @Published private(set) var settings: Settings

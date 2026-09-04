@@ -31,6 +31,8 @@ func NewHandler(host Host) http.Handler {
 	mux.HandleFunc("GET /images", s.handleImages)
 	mux.HandleFunc("PUT /images/import", s.handleImageImport)
 	mux.HandleFunc("POST /images/prune", s.handleImagePrune)
+	mux.HandleFunc("GET /host-mounts", s.handleHostMounts)
+	mux.HandleFunc("POST /host-mounts/apply", s.handleHostMountsApply)
 	mux.HandleFunc("GET /services", s.handleServices)
 	mux.HandleFunc("PUT /time", s.handleTime)
 	mux.HandleFunc("POST /shutdown", s.handleShutdown)
@@ -151,6 +153,24 @@ func (s *Server) handleImageImport(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleImagePrune(w http.ResponseWriter, _ *http.Request) {
 	report, err := s.host.PruneImages()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleHostMounts(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.HostMounts()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleHostMountsApply(w http.ResponseWriter, _ *http.Request) {
+	report, err := s.host.ApplyHostMounts()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return

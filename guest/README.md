@@ -106,6 +106,8 @@ Source: [`agent/`](agent/). HTTP/1.1 over virtio-vsock, **not** gvproxy.
 | `GET` | `/images` | containerd `k8s.io` images (`k3s ctr -n k8s.io images ls`). System images are `docker.io/rancher/*`. |
 | `PUT` | `/images/import` | Stream an OCI/Docker tar to `/mnt/data/tmp`, `k3s ctr -n k8s.io images import`, unlink temp. Query `name=`. |
 | `POST` | `/images/prune` | `k3s ctr -n k8s.io images prune`. |
+| `GET` | `/host-mounts` | User virtio-fs shares from `/mnt/config/host-mounts.json`, with `stat` uid/gid. |
+| `POST` | `/host-mounts/apply` | `mount -t virtiofs` each share at `/mnt/host/<name>`. |
 | `PUT` | `/time` | SET_TIME / `chrony makestep` equivalent. Body: `{"unix":…}` or `{"rfc3339":"…"}`. |
 | `POST` | `/shutdown` | ACPI-friendly `systemctl poweroff --no-block`. |
 

@@ -10,7 +10,8 @@ public enum VMConfigurationBuilder {
         layout: VMDiskLayout,
         hardware: VMHardware,
         networkAttachment: VZNetworkDeviceAttachment? = nil,
-        configShareDirectory: URL? = nil
+        configShareDirectory: URL? = nil,
+        hostShares: [HostDirectoryShare] = []
     ) throws -> VZVirtualMachineConfiguration {
         let config = VZVirtualMachineConfiguration()
         config.cpuCount = clampedCPUCount(hardware.cpuCount)
@@ -34,14 +35,26 @@ public enum VMConfigurationBuilder {
         // virtio-vsock: guest agent 1024, buildkitd 1025 later. gvproxy is vfkit unixgram, not vsock.
         config.socketDevices = [VZVirtioSocketDeviceConfiguration()]
 
+        var shares: [VZDirectorySharingDeviceConfiguration] = []
         if let configShareDirectory,
             FileManager.default.fileExists(atPath: configShareDirectory.path(percentEncoded: false))
         {
             let share = VZSharedDirectory(url: configShareDirectory, readOnly: true)
             let device = VZVirtioFileSystemDeviceConfiguration(tag: configShareTag)
             device.share = VZSingleDirectoryShare(directory: share)
-            config.directorySharingDevices = [device]
+            shares.append(device)
         }
+        for host in hostShares {
+            let path = host.url.path(percentEncoded: false)
+            guard FileManager.default.fileExists(atPath: path) else {
+                continue
+            }
+            let share = VZSharedDirectory(url: host.url, readOnly: host.readOnly)
+            let device = VZVirtioFileSystemDeviceConfiguration(tag: host.tag)
+            device.share = VZSingleDirectoryShare(directory: share)
+            shares.append(device)
+        }
+        config.directorySharingDevices = shares
 
         return config
     }

@@ -59,6 +59,9 @@ final class Gmak8AppDelegate: NSObject, NSApplicationDelegate, ObservableObject,
         if launchedAsLoginItem(), !settingsStore.needsOnboarding {
             DispatchQueue.main.async { [weak self] in
                 self?.keepExtraHideWindows()
+                if self?.settingsStore.settings.startClusterAtLogin == true {
+                    self?.session.startCluster(waitForEngine: true)
+                }
             }
         }
     }

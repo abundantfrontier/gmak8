@@ -157,6 +157,12 @@ func (f *fakeHost) PruneImages() (ImagePruneReport, error) {
 	f.images.Items = kept
 	return ImagePruneReport{Deleted: deleted}, nil
 }
+func (f *fakeHost) HostMounts() (HostMountReport, error) {
+	return HostMountReport{Items: []HostMountStatus{}}, nil
+}
+func (f *fakeHost) ApplyHostMounts() (HostMountReport, error) {
+	return f.HostMounts()
+}
 func (f *fakeHost) Services() (ServiceListReport, error) {
 	if f.servicesErr != nil {
 		return ServiceListReport{}, f.servicesErr
@@ -485,6 +491,8 @@ func TestWrongMethods(t *testing.T) {
 		{http.MethodPost, "/images"},
 		{http.MethodGet, "/images/import"},
 		{http.MethodGet, "/images/prune"},
+		{http.MethodPost, "/host-mounts"},
+		{http.MethodGet, "/host-mounts/apply"},
 		{http.MethodGet, "/nope"},
 	}
 	for _, tc := range cases {
@@ -625,6 +633,27 @@ func TestImagesListImportPrune(t *testing.T) {
 	}
 	if len(pruned.Deleted) != 1 {
 		t.Fatalf("pruned %+v", pruned)
+	}
+}
+
+func TestHostMountsHTTP(t *testing.T) {
+	h := NewHandler(&fakeHost{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/host-mounts", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+	}
+	var report HostMountReport
+	if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Items == nil {
+		t.Fatalf("nil items")
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/host-mounts/apply", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("apply status %d %s", rec.Code, rec.Body.String())
 	}
 }
 

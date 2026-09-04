@@ -40,20 +40,17 @@ do {
         at: paths.configDirectory,
         withIntermediateDirectories: true
     )
-    try K3sConfig.writeHostFile(directory: paths.configDirectory)
+    let settingsForConfig = loadCoreSettings(from: paths)
+    try writeClusterConfig(directory: paths.configDirectory, settings: settingsForConfig)
 
     let controller = LinuxEFIVirtualMachineRuntime(
         layout: layout,
         hardware: hardware,
         network: network,
-        configShareDirectory: paths.configDirectory
+        configShareDirectory: paths.configDirectory,
+        hostShares: hostDirectoryShares(from: settingsForConfig)
     )
-    let setCurrentContext: Bool = {
-        guard FileManager.default.fileExists(atPath: paths.settingsFile.path(percentEncoded: false)) else {
-            return false
-        }
-        return (try? Settings.load(from: paths.settingsFile))?.setCurrentContextOnStart ?? false
-    }()
+    let setCurrentContext = settingsForConfig.setCurrentContextOnStart
     let makeClient: @Sendable () async throws -> GuestAgentClient = {
         let device = try await controller.virtioSocketDevice()
         return VZGuestAgentConnector.makeClient(device: device, queue: VirtualMachineQueue.shared)

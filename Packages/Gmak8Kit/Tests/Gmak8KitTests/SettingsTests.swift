@@ -14,6 +14,12 @@ struct SettingsTests {
         #expect(settings.launchAtLogin == false)
         #expect(settings.telemetry == false)
         #expect(settings.publishNodePorts == true)
+        #expect(settings.startClusterAtLogin == false)
+        #expect(settings.balloonEnabled == false)
+        #expect(!settings.kubeVirtEnabled)
+        #expect(settings.k3sDisable.isEmpty)
+        #expect(settings.hostMounts.isEmpty)
+        #expect(settings.apiPort == 6443)
     }
 
     @Test func roundTripPreservesFieldsAndMode0600() throws {
@@ -34,8 +40,12 @@ struct SettingsTests {
             setCurrentContextOnStart: true,
             keepClusterRunningOnQuit: false,
             launchAtLogin: true,
-            telemetry: true,
-            publishNodePorts: false
+            telemetry: false,
+            publishNodePorts: false,
+            startClusterAtLogin: true,
+            kubeVirtAddon: true,
+            disableTraefik: true,
+            hostMounts: [HostMount(name: "src", path: "/tmp/src")]
         )
         try original.save(to: url)
         try original.save(to: url)
@@ -114,6 +124,49 @@ struct SettingsTests {
         #expect(loaded.publishNodePorts == true)
         #expect(loaded.launchAtLogin == false)
         #expect(loaded.libraryFolderPath == "")
+        #expect(loaded.startClusterAtLogin == false)
+        #expect(loaded.balloonEnabled == false)
+        #expect(loaded.hostMounts.isEmpty)
+    }
+
+    @Test func balloonAndTelemetryNeverPersistOn() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "gmak8-settings-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let url = directory.appending(path: "settings.json")
+        let original = Settings(
+            profile: .kubernetes,
+            cpu: 4,
+            memoryGiB: 6,
+            dataDiskGiB: 60,
+            telemetry: true,
+            balloonEnabled: true
+        )
+        #expect(!original.telemetry)
+        #expect(!original.balloonEnabled)
+        try original.save(to: url)
+        let loaded = try Settings.load(from: url)
+        #expect(!loaded.telemetry)
+        #expect(!loaded.balloonEnabled)
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        #expect(object?["telemetry"] as? Bool == false)
+        #expect(object?["balloonEnabled"] as? Bool == false)
+    }
+
+    @Test func eurekaProfilesForceKubeVirtAddon() {
+        let settings = Settings(
+            profile: .eurekaAPIOnly,
+            cpu: 4,
+            memoryGiB: 4,
+            dataDiskGiB: 60,
+            kubeVirtAddon: false
+        )
+        #expect(settings.kubeVirtAddon)
+        #expect(settings.kubeVirtEnabled)
     }
 
     @Test func makeDefaultThrowsStructuredEurekaRefusal() {

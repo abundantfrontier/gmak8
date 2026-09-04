@@ -226,6 +226,72 @@ public struct GuestImageImport: Codable, Equatable, Sendable {
     }
 }
 
+public struct GuestHostMountList: Codable, Equatable, Sendable {
+    public var items: [GuestHostMount]
+
+    public init(items: [GuestHostMount] = []) {
+        self.items = items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([GuestHostMount].self, forKey: .items) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case items
+    }
+}
+
+public struct GuestHostMount: Codable, Equatable, Sendable {
+    public var name: String
+    public var tag: String
+    public var path: String
+    public var readOnly: Bool
+    public var mounted: Bool
+    public var uid: UInt32
+    public var gid: UInt32
+
+    public init(
+        name: String,
+        tag: String,
+        path: String,
+        readOnly: Bool = false,
+        mounted: Bool = false,
+        uid: UInt32 = 0,
+        gid: UInt32 = 0
+    ) {
+        self.name = name
+        self.tag = tag
+        self.path = path
+        self.readOnly = readOnly
+        self.mounted = mounted
+        self.uid = uid
+        self.gid = gid
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        tag = try container.decode(String.self, forKey: .tag)
+        path = try container.decode(String.self, forKey: .path)
+        readOnly = try container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
+        mounted = try container.decodeIfPresent(Bool.self, forKey: .mounted) ?? false
+        uid = try container.decodeIfPresent(UInt32.self, forKey: .uid) ?? 0
+        gid = try container.decodeIfPresent(UInt32.self, forKey: .gid) ?? 0
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case tag
+        case path
+        case readOnly = "read_only"
+        case mounted
+        case uid
+        case gid
+    }
+}
+
 public struct GuestImagePrune: Codable, Equatable, Sendable {
     public var deleted: [String]
 

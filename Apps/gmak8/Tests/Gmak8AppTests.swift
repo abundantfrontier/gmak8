@@ -273,6 +273,10 @@ struct Gmak8AppTests {
         #expect(ClusterOverviewCopy.imagesEmpty == ImagesCopy.empty)
         #expect(SystemImageMatcher.isSystem(refs: ["docker.io/rancher/mirrored-pause:3.6"]))
         #expect(!SystemImageMatcher.isSystem(refs: ["nginx:dev"]))
+        #expect(SettingsCopy.balloonUnsupported.contains("not supported"))
+        #expect(SettingsCopy.virtctlHelp.contains("virtctl"))
+        #expect(SettingsCopy.telemetryOff.contains("Docker Hub"))
+        #expect(HostUserIdentity.warning.contains("501") || HostUserIdentity.warning.contains("runAsUser"))
     }
 
     @Test func recoveryCopiesMatchLockedDiskAndTranslocation() {

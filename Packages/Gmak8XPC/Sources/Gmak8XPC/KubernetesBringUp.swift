@@ -118,6 +118,18 @@ public final class KubernetesBringUp: ClusterBringUp, @unchecked Sendable {
             return try await client.disks().isDataMounted
         }
 
+        do {
+            _ = try await makeClient().applyHostMounts()
+        } catch let error as GuestAgentError {
+            if case .httpStatus(let code, _) = error, code == 404 {
+                log("host mounts: guest image has no /host-mounts")
+            } else {
+                log("host mounts: \(error.localizedDescription)")
+            }
+        } catch {
+            log("host mounts: \(error.localizedDescription)")
+        }
+
         try Task.checkCancellation()
         guard isCurrent(generation) else {
             throw CancellationError()

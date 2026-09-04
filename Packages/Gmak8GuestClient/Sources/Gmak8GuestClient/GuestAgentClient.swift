@@ -113,6 +113,14 @@ public struct GuestAgentClient: Sendable {
         try await send(method: "POST", path: "/images/prune", body: nil, as: GuestImagePrune.self)
     }
 
+    public func hostMounts() async throws -> GuestHostMountList {
+        try await send(method: "GET", path: "/host-mounts", body: nil, as: GuestHostMountList.self)
+    }
+
+    public func applyHostMounts() async throws -> GuestHostMountList {
+        try await send(method: "POST", path: "/host-mounts/apply", body: nil, as: GuestHostMountList.self)
+    }
+
     public func setTime(_ time: GuestTime) async throws {
         _ = try await send(method: "PUT", path: "/time", body: try time.encodeBody(), as: GuestOK.self)
     }

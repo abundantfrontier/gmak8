@@ -88,6 +88,21 @@ struct VMConfigurationBuilderTests {
         #expect(VMConfigurationBuilder.configShareTag == "gmak8-config")
     }
 
+    @Test func hostDirectorySharesUseVirtioFSTags() throws {
+        let env = try makeLayoutHarness()
+        defer { env.cleanup() }
+        let shareDir = env.root.appending(path: "projects", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        let config = try VMConfigurationBuilder.make(
+            layout: env.layout,
+            hardware: env.hardware,
+            hostShares: [HostDirectoryShare(tag: "gmak8-host-projects", url: shareDir)]
+        )
+        #expect(config.directorySharingDevices.count == 1)
+        let fs = config.directorySharingDevices[0] as? VZVirtioFileSystemDeviceConfiguration
+        #expect(fs?.tag == "gmak8-host-projects")
+    }
+
     @Test func configurationPinsGuestMACOnFileHandleNIC() throws {
         let env = try makeLayoutHarness()
         defer { env.cleanup() }
